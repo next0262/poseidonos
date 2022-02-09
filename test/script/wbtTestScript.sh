@@ -13,6 +13,7 @@ BIN_DIR=${ROOT_DIR}/bin
 
 VM_IP_RANGE_1="10.1.11."
 VM_IP_RANGE_2="10.100.11."
+VM_IP_RANGE_3="127.0.0.1"
 
 ARRAYNAME=POSArray
 
@@ -308,7 +309,7 @@ do
     ${BIN_DIR}/poseidonos-cli wbt write_raw --dev unvme-ns-${count} --lba ${lbaIdx} --count ${lbaCnt} --pattern 0xdeadbeef --json-res > ${cliOutput}
     check_result 
 
-    if [[ "$ip" =~ "$VM_IP_RANGE_1" ]] || [[ "$ip" =~ "$VM_IP_RANGE_2" ]]; then
+    if [[ "$ip" =~ "$VM_IP_RANGE_1" ]] || [[ "$ip" =~ "$VM_IP_RANGE_2" ]] || [[ "$ip" == "$VM_IP_RANGE_3" ]]; then
         
         echo -[IO Path : unvme-ns-${count} : wbt write_uncorrectable_lba]------------------------------------------
         echo -[ wbt write_uncorrectable_lba is not supported at VM Test ]------------------------------------------        
@@ -328,7 +329,7 @@ do
     ${BIN_DIR}/poseidonos-cli wbt read_raw --dev unvme-ns-${count} --lba ${lbaIdx} --count ${lbaCnt} --output dump.bin --json-res > ${cliOutput}
 
 
-    if [[ "$ip" =~ "$VM_IP_RANGE_1" ]] || [[ "$ip" =~ "$VM_IP_RANGE_2" ]]; then
+    if [[ "$ip" =~ "$VM_IP_RANGE_1" ]] || [[ "$ip" =~ "$VM_IP_RANGE_2" ]] || [[ "$ip" == "$VM_IP_RANGE_3" ]]; then
         check_result
     else 
         check_result_expected_fail

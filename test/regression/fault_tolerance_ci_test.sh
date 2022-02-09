@@ -45,8 +45,8 @@ EOF
 manual_ibofos_run_mode=0
 #---------------------------------
 # manual configuration (edit below according to yours)
-ibof_phy_volume_size_mb=102400
-test_volume_size_mb=102400
+ibof_phy_volume_size_mb=51200
+test_volume_size_mb=51200
 max_io_range_mb=512
 dummy_size_mb=$((${max_io_range_mb}*2))
 cwd=`pwd`
@@ -210,12 +210,21 @@ establish_nvmef_target()
 discover_n_connect_nvme_from_initiator()
 {
     notice "Discovering remote NVMe drives..."
+
     ${nvme_cli} discover -t ${trtype} -a ${target_fabric_ip} -s ${port}  #>> ${logfile};
     notice "Discovery has been finished!"
-    
+
     notice "Connecting remote NVMe drives..."
     ${nvme_cli} connect -t ${trtype} -n ${nss} -a ${target_fabric_ip} -s ${port}  #>> ${logfile};
+    
+    sleep 1
+
     target_nvme=`sudo nvme list | grep -E 'SPDK|POS|pos' | awk '{print $1}' | head -n 1`
+
+    notice "${target_nvme}"
+    echo "${target_nvme}"
+    notice "wjkim target_nvme"
+    
 
     if [[ "${target_nvme}" == "" ]] || ! ls ${target_nvme} > /dev/null ; then
         error "NVMe drive is not found..."
