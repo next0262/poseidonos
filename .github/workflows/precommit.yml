@@ -7,7 +7,7 @@ name: C-Precommit_VM_Test
 on:
   # Triggers the workflow on push or pull request events but only for the main branch
   push:
-    branches: [ main ]
+    branches: [ add_workflows ]
   pull_request:
     branches: [ main ]
 
