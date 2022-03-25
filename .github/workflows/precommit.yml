@@ -135,7 +135,7 @@ jobs:
         .github/workflows/script/rotational_rebuild/rotational_rebuild.sh ${{github.workspace}}
 
   Unit_Test:
-    runs-on: self-hosted
+    runs-on: VM
     steps:
 
     - run: |
