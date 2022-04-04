@@ -1,5 +1,5 @@
 
-name: M8-72H_VM_Test
+name: M9-LongTerm_PSD_Test
 
 # Controls when the workflow will run
 on:
@@ -13,9 +13,9 @@ on:
 # A workflow run is made up of one or more jobs that can run sequentially or in parallel
 jobs:
   # This workflow contains a single job called "build"
-  Three_Days_Test:
-    runs-on: VM
-    timeout-minutes: 4320
+  longterm_test:
+    runs-on: PSD
+    timeout-minutes: 1440
     steps:
     
     - run: |
@@ -27,16 +27,16 @@ jobs:
       working-directory: ${{github.workspace}}
       run: | 
         chmod +x .github/workflows/script/build_setup.sh
-        .github/workflows/script/build_setup.sh -r ${{github.sha}} -d ${{github.workspace}} -c --with-fpic # delete -i ${bamboo.capability.target_ip} -t VM
+        .github/workflows/script/build_setup.sh -t PM -r ${{github.sha}} -d ${{github.workspace}}
 
-    - name: 72 Hour VM Test
+    - name: Long Term VM Test
       working-directory: ${{github.workspace}}
       run: |
-        chmod +x .github/workflows/script/72_hour.sh
-        .github/workflows/script/72_hour.sh ${{github.workspace}}
+        chmod +x .github/workflows/script/longterm.sh
+        .github/workflows/script/longterm.sh ${{github.workspace}}
 
-    - name: CleanUp Script
+    - name: Clean Backup Script
       working-directory: ${{github.workspace}}
       run: |
-        chmod +x .github/workflows/script/cleanup.sh
-        .github/workflows/script/cleanup.sh ${{github.workspace}}
+        chmod +x .github/workflows/script/clean_backup.sh
+        .github/workflows/script/clean_backup.sh -i "127.0.0.1" -p "M9-LongTerm_PM1_VM_Test" -n "longterm_pm" -r ${{github.sha}} -d ${{github.workspace}}

@@ -75,7 +75,7 @@ jobs:
       working-directory: ${{github.workspace}}
       run: |
         chmod +x .github/workflows/script/qos/qos.sh
-        .github/workflows/script/qos/qos.sh ${{github.workspace}}
+        .github/workflows/script/qos/qos.sh ${{github.workspace}} VM
 
     - name: NVMe Flush Test
       working-directory: ${{github.workspace}}
@@ -106,9 +106,3 @@ jobs:
       run: |
         chmod +x .github/workflows/script/code_coverage.sh
         .github/workflows/script/code_coverage.sh ${{github.workspace}}
-
-    - name: CleanUp Script
-      working-directory: ${{github.workspace}}
-      run: |
-        chmod +x .github/workflows/script/cleanup.sh
-        .github/workflows/script/cleanup.sh ${{github.workspace}} 

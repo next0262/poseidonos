@@ -1,23 +1,18 @@
 #!/bin/bash
 pos_working_dir=0
-pos_core="/psdData/core"
-pos_log="/psdData/log"
+pos_core="/mnt/rsa_nfs/core"
+pos_log="/mnt/rsa_nfs/log"
 target_ip=0
 trtype="tcp"
 port=1158
 
-texecc()
-{
-    echo "[target]" $@;
-    cd ${pos_working_dir}; sudo $@
-}
-
 processCheck()
 {
-    rm -rf processList_${target_ip}
-    ps -ef | grep poseidonos > processList_${target_ip}
-    cat processList_${target_ip}
-    rm -rf processList_${target_ip}
+    cd ${pos_working_dir}
+    rm -rf processList
+    ps -ef | grep poseidonos > processList
+    cat processList
+    rm -rf processList
 }
 
 printVariable()
@@ -44,7 +39,7 @@ printVariable()
 coreDump()
 {
     echo "Kill poseidonos to generate core dump files.."
-    texecc pkill -11 poseidonos
+    pkill -11 poseidonos
     cd $pos_working_dir/tool/dump/; sudo ./trigger_core_dump.sh crashed
 
     if [ -d $pos_core/$plan_name/$test_name/$test_rev ]
@@ -58,8 +53,8 @@ coreDump()
     cp -r $pos_working_dir/tool/dump/*.tar.gz* $pos_core/$plan_name/$test_name/$test_rev
 
     echo "Deleting core dump files in ${target_ip} since files are copied to service server"
-    texecc rm /etc/pos/core/*
-    texecc rm $pos_working_dir/tool/dump/*.tar.gz*
+    rm /etc/pos/core/*
+    rm $pos_working_dir/tool/dump/*.tar.gz*
 }
 
 backupLog()
