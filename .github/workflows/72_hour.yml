@@ -13,7 +13,7 @@ jobs:
   # This workflow contains a single job called "build"
   Three_Days_Test:
     runs-on: VM
-    timeout-minutes: 4320
+    timeout-minutes: 4500
     steps:
     
     - run: |
