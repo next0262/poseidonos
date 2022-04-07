@@ -39,11 +39,11 @@ jobs:
 
     - name: Upload POS log
 	    if: always()
-        uses: actions/upload-artifact@v3
-        with:
-          name: log
-          path: |
-            /var/log/pos
+      uses: actions/upload-artifact@v3
+      with:
+        name: log
+        path: |
+          /var/log/pos
 
   Normal_IO_NPOR_SPOR_Test:
     runs-on: VM
@@ -80,11 +80,11 @@ jobs:
 
     - name: Upload POS log
 	    if: always()
-        uses: actions/upload-artifact@v3
-        with:
-          name: log
-          path: |
-            /var/log/pos
+      uses: actions/upload-artifact@v3
+      with:
+        name: log
+        path: |
+          /var/log/pos
 
   Rebuild_SPOR_test:
     runs-on: VM
@@ -109,11 +109,11 @@ jobs:
 
     - name: Upload POS log
 	    if: always()
-        uses: actions/upload-artifact@v3
-        with:
-          name: log
-          path: |
-            /var/log/pos
+      uses: actions/upload-artifact@v3
+      with:
+        name: log
+        path: |
+          /var/log/pos
 
 
   Rebuild_Test:
@@ -139,11 +139,11 @@ jobs:
 
     - name: Upload POS log
 	    if: always()
-        uses: actions/upload-artifact@v3
-        with:
-          name: log
-          path: |
-            /var/log/pos
+      uses: actions/upload-artifact@v3
+      with:
+        name: log
+        path: |
+          /var/log/pos
 
 
   Rotational_Rebuild_Test:
@@ -169,11 +169,11 @@ jobs:
 
     - name: Upload POS log
 	    if: always()
-        uses: actions/upload-artifact@v3
-        with:
-          name: log
-          path: |
-            /var/log/pos
+      uses: actions/upload-artifact@v3
+      with:
+        name: log
+        path: |
+          /var/log/pos
 
   Unit_Test:
     runs-on: VM
@@ -209,11 +209,11 @@ jobs:
 
     - name: Upload POS log
 	    if: always()
-        uses: actions/upload-artifact@v3
-        with:
-          name: log
-          path: |
-            /var/log/pos
+      uses: actions/upload-artifact@v3
+      with:
+        name: log
+        path: |
+          /var/log/pos
 
   Volume_Test:
     runs-on: VM
@@ -238,11 +238,11 @@ jobs:
 
     - name: Upload POS log
 	    if: always()
-        uses: actions/upload-artifact@v3
-        with:
-          name: log
-          path: |
-            /var/log/pos
+      uses: actions/upload-artifact@v3
+      with:
+        name: log
+        path: |
+          /var/log/pos
 
   WBT_IO_ST:
     runs-on: VM
@@ -273,8 +273,8 @@ jobs:
 
     - name: Upload POS log
 	    if: always()
-        uses: actions/upload-artifact@v3
-        with:
-          name: log
-          path: |
-            /var/log/pos
+      uses: actions/upload-artifact@v3
+      with:
+        name: log
+        path: |
+          /var/log/pos
