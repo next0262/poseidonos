@@ -7,7 +7,7 @@ name: C-Precommit_VM_Test
 on:
   # Triggers the workflow on push or pull request events but only for the main branch
   push:
-    branches: [ add_workflows ]
+    branches: [ AWIBOF-5724-psd-bamboo-plan-github-migration ]
   pull_request:
     branches: [ main ]
 
@@ -37,6 +37,14 @@ jobs:
       run: |
         chmod +x .github/workflows/script/io_exception/io_exception.sh
         .github/workflows/script/io_exception/io_exception.sh ${{github.workspace}}
+
+    - name: Upload POS log
+	    if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: log
+          path: |
+            /var/log/pos
 
   Normal_IO_NPOR_SPOR_Test:
     runs-on: VM
@@ -71,6 +79,14 @@ jobs:
         chmod +x .github/workflows/script/normal_io_npor_spor/spor_precommit.sh
         .github/workflows/script/normal_io_npor_spor/spor_precommit.sh ${{github.workspace}}
 
+    - name: Upload POS log
+	    if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: log
+          path: |
+            /var/log/pos
+
   Rebuild_SPOR_test:
     runs-on: VM
     steps:
@@ -91,6 +107,15 @@ jobs:
       run: |
         chmod +x .github/workflows/script/rebuild_spor/rebuild_spor.sh
         .github/workflows/script/rebuild_spor/rebuild_spor.sh ${{github.workspace}}
+
+    - name: Upload POS log
+	    if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: log
+          path: |
+            /var/log/pos
+
 
   Rebuild_Test:
     runs-on: VM
@@ -113,6 +138,15 @@ jobs:
         chmod +x .github/workflows/script/rebuild/rebuild.sh
         .github/workflows/script/rebuild/rebuild.sh ${{github.workspace}}
 
+    - name: Upload POS log
+	    if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: log
+          path: |
+            /var/log/pos
+
+
   Rotational_Rebuild_Test:
     runs-on: VM
     steps:
@@ -133,6 +167,14 @@ jobs:
       run: |
         chmod +x .github/workflows/script/rotational_rebuild/rotational_rebuild.sh
         .github/workflows/script/rotational_rebuild/rotational_rebuild.sh ${{github.workspace}}
+
+    - name: Upload POS log
+	    if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: log
+          path: |
+            /var/log/pos
 
   Unit_Test:
     runs-on: VM
@@ -166,6 +208,14 @@ jobs:
       with:
         report_paths: 'UnitTestResult/*.xml'
 
+    - name: Upload POS log
+	    if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: log
+          path: |
+            /var/log/pos
+
   Volume_Test:
     runs-on: VM
     steps:
@@ -186,6 +236,14 @@ jobs:
       run: |
         chmod +x .github/workflows/script/volume/volume.sh
         .github/workflows/script/volume/volume.sh ${{github.workspace}}
+
+    - name: Upload POS log
+	    if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: log
+          path: |
+            /var/log/pos
 
   WBT_IO_ST:
     runs-on: VM
@@ -214,3 +272,10 @@ jobs:
         chmod +x .github/workflows/script/wb_io_st/io_system_level.sh
         .github/workflows/script/wb_io_st/io_system_level.sh ${{github.workspace}} ${{github.sha}}
 
+    - name: Upload POS log
+	    if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: log
+          path: |
+            /var/log/pos

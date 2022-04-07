@@ -5,7 +5,7 @@ name: M-UnitTest_VM
 on:
   # Triggers the workflow on push or pull request events but only for the main branch
   push:
-    branches: [ main, add_workflows ] 
+    branches: [ AWIBOF-5724-psd-bamboo-plan-github-migration ] 
 
   # Allows you to run this workflow manually from the Actions tab
   workflow_dispatch:
@@ -42,3 +42,11 @@ jobs:
       if: always() # always run even if the previous step fails
       with:
         report_paths: 'UnitTestResult/*.xml'
+
+    - name: Upload POS log
+	    if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: log
+          path: |
+            /var/log/pos

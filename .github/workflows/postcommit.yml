@@ -5,7 +5,7 @@ name: M1-PostVM_Test
 on:
   # Triggers the workflow on push or pull request events but only for the main branch
   push:
-    branches: [ main, add_workflows ]
+    branches: [ AWIBOF-5724-psd-bamboo-plan-github-migration ]
 
   # Allows you to run this workflow manually from the Actions tab
   workflow_dispatch:
@@ -124,3 +124,11 @@ jobs:
       run: |
         chmod +x .github/workflows/script/print_result.sh
         .github/workflows/script/print_result.sh ${{github.workspace}} ${{ steps.last_successful_commit.outputs.commit_hash }} ${{github.sha}}
+
+    - name: Upload POS log
+	    if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: log
+          path: |
+            /var/log/pos

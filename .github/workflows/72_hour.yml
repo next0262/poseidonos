@@ -5,7 +5,7 @@ name: M8-72H_VM_Test
 on:
   # Triggers the workflow on push or pull request events but only for the main branch
   push:
-    branches: [ main, add_workflows ] 
+    branches: [ AWIBOF-5724-psd-bamboo-plan-github-migration ] 
 
   # Allows you to run this workflow manually from the Actions tab
   workflow_dispatch:
@@ -40,3 +40,11 @@ jobs:
       run: |
         chmod +x .github/workflows/script/cleanup.sh
         .github/workflows/script/cleanup.sh ${{github.workspace}}
+
+    - name: Upload POS log
+	    if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: log
+          path: |
+            /var/log/pos
