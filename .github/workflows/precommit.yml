@@ -38,10 +38,10 @@ jobs:
         .github/workflows/script/io_exception/io_exception.sh ${{github.workspace}}
 
     - name: Upload POS log
-	    if: always()
+      if: always()
       uses: actions/upload-artifact@v3
       with:
-        name: log
+        name: IO_Exception_LOG
         path: |
           /var/log/pos
 
@@ -79,10 +79,10 @@ jobs:
         .github/workflows/script/normal_io_npor_spor/spor_precommit.sh ${{github.workspace}}
 
     - name: Upload POS log
-	    if: always()
+      if: always()
       uses: actions/upload-artifact@v3
       with:
-        name: log
+        name: Normal_IO_NPOR_SPOR_LOG
         path: |
           /var/log/pos
 
@@ -108,10 +108,10 @@ jobs:
         .github/workflows/script/rebuild_spor/rebuild_spor.sh ${{github.workspace}}
 
     - name: Upload POS log
-	    if: always()
+      if: always()
       uses: actions/upload-artifact@v3
       with:
-        name: log
+        name: Rebuild_SPOR_LOG
         path: |
           /var/log/pos
 
@@ -138,10 +138,10 @@ jobs:
         .github/workflows/script/rebuild/rebuild.sh ${{github.workspace}}
 
     - name: Upload POS log
-	    if: always()
+      if: always()
       uses: actions/upload-artifact@v3
       with:
-        name: log
+        name: Rebuild_LOG
         path: |
           /var/log/pos
 
@@ -168,10 +168,10 @@ jobs:
         .github/workflows/script/rotational_rebuild/rotational_rebuild.sh ${{github.workspace}}
 
     - name: Upload POS log
-	    if: always()
+      if: always()
       uses: actions/upload-artifact@v3
       with:
-        name: log
+        name: Rotational_Rebuild_LOG
         path: |
           /var/log/pos
 
@@ -208,10 +208,10 @@ jobs:
         report_paths: 'UnitTestResult/*.xml'
 
     - name: Upload POS log
-	    if: always()
+      if: always()
       uses: actions/upload-artifact@v3
       with:
-        name: log
+        name: Unit_LOG
         path: |
           /var/log/pos
 
@@ -237,10 +237,10 @@ jobs:
         .github/workflows/script/volume/volume.sh ${{github.workspace}}
 
     - name: Upload POS log
-	    if: always()
+      if: always()
       uses: actions/upload-artifact@v3
       with:
-        name: log
+        name: Volume_LOG
         path: |
           /var/log/pos
 
@@ -272,9 +272,9 @@ jobs:
         .github/workflows/script/wb_io_st/io_system_level.sh ${{github.workspace}} ${{github.sha}}
 
     - name: Upload POS log
-	    if: always()
+      if: always()
       uses: actions/upload-artifact@v3
       with:
-        name: log
+        name: WBT_IO_ST_LOG
         path: |
           /var/log/pos

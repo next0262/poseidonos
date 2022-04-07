@@ -40,9 +40,9 @@ jobs:
         .github/workflows/script/cleanup.sh ${{github.workspace}}
 
     - name: Upload POS log
-	    if: always()
+      if: always()
       uses: actions/upload-artifact@v3
       with:
-        name: log
+        name: Three_Days_LOG
         path: |
           /var/log/pos

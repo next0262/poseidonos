@@ -126,9 +126,9 @@ jobs:
         .github/workflows/script/print_result.sh ${{github.workspace}} ${{ steps.last_successful_commit.outputs.commit_hash }} ${{github.sha}}
 
     - name: Upload POS log
-	    if: always()
+      if: always()
       uses: actions/upload-artifact@v3
       with:
-        name: log
+        name: POST_LOG
         path: |
           /var/log/pos
