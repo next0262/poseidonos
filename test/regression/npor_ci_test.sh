@@ -56,8 +56,8 @@ test_iter_cnt=3
 manual_pos_run_mode=0
 #---------------------------------
 # manual configuration (edit below according to yours)
-ibof_phy_volume_size_mb=102400
-test_volume_size_mb=102400
+ibof_phy_volume_size_mb=51200
+test_volume_size_mb=51200
 max_io_range_mb=1024 #128
 cwd="/home/ibof/ibofos/script"
 target_ip="127.0.0.1"
@@ -287,6 +287,7 @@ discover_n_connect_nvme_from_initiator()
     
     notice "Connecting remote NVMe drives..."
     iexecc ${nvme_cli} connect -t ${trtype} -n ${nss} -a ${target_fabric_ip} -s ${port}  #>> ${logfile};
+    sleep 1
     target_nvme=`sudo nvme list | grep -E 'SPDK|pos|POS' | awk '{print $1}' | head -n 1`
 
     if [ ${exec_mode} -ne 2 ] && [[ "${target_nvme}" == "" ]] || ! ls ${target_nvme} > /dev/null ; then
