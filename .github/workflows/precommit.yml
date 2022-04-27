@@ -2,6 +2,9 @@
 name: C-Precommit_VM_Test
 
 on:
+  push:
+    branches: [rebuild_workflows]
+    
   pull_request:
     branches: [ main ]
 
