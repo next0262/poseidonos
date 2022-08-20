@@ -6,6 +6,7 @@ import (
 	"os"
 	"strconv"
 	"time"
+	"context"
 
 	"github.com/spf13/cast"
 	"github.com/spf13/cobra"
@@ -22,6 +23,7 @@ import (
 	"cli/cmd/systemcmds"
 	"cli/cmd/telemetrycmds"
 	"cli/cmd/volumecmds"
+	"cli/cmd/tracemgr"
 	"pnconnector/src/log"
 	"pnconnector/src/routers/m9k/model"
 	"pnconnector/src/setting"
@@ -110,6 +112,7 @@ func init() {
 	regGlobalFlags()
 	log.SetOutput(RootDir)
 	addCmd()
+	regTracer()
 }
 
 func regFlags() {
@@ -145,6 +148,15 @@ func addCmd() {
 	RootCmd.AddCommand(telemetrycmds.TelemetryCmd)
 	RootCmd.AddCommand(completionCmd)
 	RootCmd.AddCommand(clustercmds.ClusterCmd)
+}
+
+func regTracer() {
+        ctx := context.Background()
+	err := tracemgr.InitTracerProvider(ctx, "poseidonos-cli", getVersion())
+        if err != nil {
+        	fmt.Printf("fail to initialize TracerProvider")
+        }
+        RootCmd.SetContext(ctx)
 }
 
 // TODO(mj): this function remains for wbt and file commands. This needs to be revised.
