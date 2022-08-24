@@ -33,14 +33,14 @@ Syntax:
 		req, buildErr := buildSystemInfoReq(command)
 		if buildErr != nil {
 			fmt.Printf("failed to build request: %v", buildErr)
-			span.End()
+			span.RecordError(buildErr)
 			return buildErr
 		}
 
 		reqJson, err := protojson.Marshal(req)
 		if err != nil {
 			fmt.Printf("failed to marshal the protobuf request: %v", err)
-			span.End()
+			span.RecordError(err)
 			return err
 		}
 		displaymgr.PrintRequest(string(reqJson))
@@ -48,14 +48,14 @@ Syntax:
 		res, gRpcErr := grpcmgr.SendSystemInfo(ctx, req)
 		if gRpcErr != nil {
 			globals.PrintErrMsg(gRpcErr)
-			span.End()
+			span.RecordError(gRpcErr)
 			return gRpcErr
 		}
 
 		printErr := displaymgr.PrintProtoResponse(command, res)
 		if printErr != nil {
 			fmt.Printf("failed to print the response: %v", printErr)
-			span.End()
+			span.RecordError(printErr)
 			return printErr
 		}
 

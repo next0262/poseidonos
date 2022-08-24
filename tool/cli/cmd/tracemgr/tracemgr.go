@@ -62,19 +62,3 @@ func Shutdown(ctx context.Context) error {
 
 	return nil
 }
-
-// tracer := otel.Tracer("test-tracer")
-
-// // Attributes represent additional key-value descriptors that can be bound
-// // to a metric observer or recorder.
-// commonAttrs := []attribute.KeyValue{
-// 	attribute.String("attrA", "chocolate"),
-// 	attribute.String("attrB", "raspberry"),
-// 	attribute.String("attrC", "vanilla"),
-// }
-
-// // work begins
-// ctx, span := tracer.Start(
-// 	ctx,
-// 	"CollectorExporter-Example",
-// 	trace.WithAttributes(commonAttrs...))
