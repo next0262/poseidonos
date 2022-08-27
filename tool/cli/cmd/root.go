@@ -1,12 +1,12 @@
 package cmd
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
 	"strconv"
 	"time"
-	"context"
 
 	"github.com/spf13/cast"
 	"github.com/spf13/cobra"
@@ -22,8 +22,8 @@ import (
 	"cli/cmd/subsystemcmds"
 	"cli/cmd/systemcmds"
 	"cli/cmd/telemetrycmds"
+	"cli/cmd/otelmgr"
 	"cli/cmd/volumecmds"
-	"cli/cmd/tracemgr"
 	"pnconnector/src/log"
 	"pnconnector/src/routers/m9k/model"
 	"pnconnector/src/setting"
@@ -151,12 +151,12 @@ func addCmd() {
 }
 
 func regTracer() {
-        ctx := context.Background()
-	err := tracemgr.InitTracerProvider(ctx, "poseidonos-cli", getVersion())
-        if err != nil {
-        	fmt.Printf("fail to initialize TracerProvider")
-        }
-        RootCmd.SetContext(ctx)
+	ctx := context.Background()
+	err := TraceProviderManger{}.InitTracerProvider(ctx, "poseidonos-cli", getVersion())
+	if err != nil {
+		fmt.Printf("fail to initialize TracerProvider")
+	}
+	RootCmd.SetContext(ctx)
 }
 
 // TODO(mj): this function remains for wbt and file commands. This needs to be revised.

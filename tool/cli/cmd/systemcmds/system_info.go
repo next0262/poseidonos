@@ -4,7 +4,7 @@ import (
 	"cli/cmd/displaymgr"
 	"cli/cmd/globals"
 	"cli/cmd/grpcmgr"
-	"cli/cmd/tracemgr"
+	"cli/cmd/otelmgr"
 	"fmt"
 
 	pb "cli/api"
@@ -28,12 +28,16 @@ Syntax:
 		ctx, span := tracemgr.SetTrace(ctx, "systemcmds", "SystemInfoCmd")
 		defer span.End()
 
+		var mytrace = Tracer{ctx, "systemcmds", "systeminfocmd"}
+		defer mytrace.release() 
+
 		var command = "SYSTEMINFO"
 
 		req, buildErr := buildSystemInfoReq(command)
 		if buildErr != nil {
 			fmt.Printf("failed to build request: %v", buildErr)
 			span.RecordError(buildErr)
+			mytrace.error(buildErr)
 			return buildErr
 		}
 
