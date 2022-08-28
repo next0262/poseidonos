@@ -1,32 +1,42 @@
 package otelmgr
 
 import (
+	"cli/cmd/globals"
 	"context"
 	"go.opentelemetry.io/otel"
-	tracesdk "go.opentelemetry.io/otel/sdk/trace"
 	"go.opentelemetry.io/otel/trace"
 )
 
-type TracerManager struct {
-	tp   *tracesdk.TracerProvider
+type Tracer struct {
 	ctx  context.Context
 	span trace.Span
 }
 
-func (mgr *TracerManager) SetTrace(ctx context.Context, appName string, funcName string) {
-
-	mgr.ctx, mgr.span = otel.Tracer(appName).Start(ctx, funcName)
-
+func NewTracer() *Tracer {
+	return new(Tracer)
 }
 
-func (mgr *TracerManager) RecordError(err error) {
-
-	mgr.span.RecordError(err)
-
+func (mgr *Tracer) GetContext() context.Context {
+	return mgr.ctx
 }
 
-func (mgr *TracerManager) ReleaseTrace() {
+func (mgr *Tracer) SetTrace(ctx context.Context, appName string, funcName string) {
 
-	mgr.span.End()
+	if globals.EnableOtel {
+		mgr.ctx, mgr.span = otel.Tracer(appName).Start(ctx, funcName)
+	}
+}
 
+func (mgr *Tracer) RecordError(err error) {
+
+	if globals.EnableOtel {
+		mgr.span.RecordError(err)
+	}
+}
+
+func (mgr *Tracer) Release() {
+
+	if globals.EnableOtel {
+		mgr.span.End()
+	}
 }

@@ -23,43 +23,40 @@ Syntax:
 	poseidonos-cli system info
           `,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		ctx := cmd.Context()
-		defer tracemgr.Shutdown(ctx)
-		ctx, span := tracemgr.SetTrace(ctx, "systemcmds", "SystemInfoCmd")
-		defer span.End()
-
-		var mytrace = Tracer{ctx, "systemcmds", "systeminfocmd"}
-		defer mytrace.release() 
+		m := otelmgr.GetOtelManagerInstance()
+		defer m.Shutdown()
+		t := otelmgr.NewTracer()
+		t.SetTrace(m.GetRootContext(), "systemcmds", "systeminfocmd")
+		defer t.Release()
 
 		var command = "SYSTEMINFO"
 
 		req, buildErr := buildSystemInfoReq(command)
 		if buildErr != nil {
 			fmt.Printf("failed to build request: %v", buildErr)
-			span.RecordError(buildErr)
-			mytrace.error(buildErr)
+			t.RecordError(buildErr)
 			return buildErr
 		}
 
 		reqJson, err := protojson.Marshal(req)
 		if err != nil {
 			fmt.Printf("failed to marshal the protobuf request: %v", err)
-			span.RecordError(err)
+			t.RecordError(err)
 			return err
 		}
 		displaymgr.PrintRequest(string(reqJson))
 
-		res, gRpcErr := grpcmgr.SendSystemInfo(ctx, req)
+		res, gRpcErr := grpcmgr.SendSystemInfo(t.GetContext(), req)
 		if gRpcErr != nil {
 			globals.PrintErrMsg(gRpcErr)
-			span.RecordError(gRpcErr)
+			t.RecordError(gRpcErr)
 			return gRpcErr
 		}
 
 		printErr := displaymgr.PrintProtoResponse(command, res)
 		if printErr != nil {
 			fmt.Printf("failed to print the response: %v", printErr)
-			span.RecordError(printErr)
+			t.RecordError(printErr)
 			return printErr
 		}
 

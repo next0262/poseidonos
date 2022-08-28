@@ -2,7 +2,7 @@ package grpcmgr
 
 import (
 	"cli/cmd/globals"
-	"cli/cmd/tracemgr"
+	"cli/cmd/otelmgr"
 	"context"
 	"errors"
 	"fmt"
@@ -33,15 +33,16 @@ func dialToCliServer() (*grpc.ClientConn, error) {
 	return conn, err
 }
 
-func SendSystemInfo(ctx_t context.Context, req *pb.SystemInfoRequest) (*pb.SystemInfoResponse, error) {
-	_, span := tracemgr.SetTrace(ctx_t, "grpcmgr", "SendSystemInfo")
-	defer span.End()
+func SendSystemInfo(ctx context.Context, req *pb.SystemInfoRequest) (*pb.SystemInfoResponse, error) {
+	t := otelmgr.NewTracer()
+	t.SetTrace(ctx, "grpcmgr", "SendSystemInfo")
+	defer t.Release()
 
 	conn, err := dialToCliServer()
 	if err != nil {
 		err := errors.New(fmt.Sprintf("%s (internal error message: %s)",
 			dialErrorMsg, err.Error()))
-		span.End()
+		t.RecordError(err)
 		return nil, err
 	}
 	defer conn.Close()
@@ -53,7 +54,7 @@ func SendSystemInfo(ctx_t context.Context, req *pb.SystemInfoRequest) (*pb.Syste
 	res, err := c.SystemInfo(ctx, req)
 	if err != nil {
 		log.Error("error: ", err.Error())
-		span.End()
+		t.RecordError(err)
 		return nil, err
 	}
 

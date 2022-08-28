@@ -18,11 +18,11 @@ import (
 	"cli/cmd/devicecmds"
 	"cli/cmd/globals"
 	"cli/cmd/loggercmds"
+	"cli/cmd/otelmgr"
 	"cli/cmd/qoscmds"
 	"cli/cmd/subsystemcmds"
 	"cli/cmd/systemcmds"
 	"cli/cmd/telemetrycmds"
-	"cli/cmd/otelmgr"
 	"cli/cmd/volumecmds"
 	"pnconnector/src/log"
 	"pnconnector/src/routers/m9k/model"
@@ -151,12 +151,10 @@ func addCmd() {
 }
 
 func regTracer() {
-	ctx := context.Background()
-	err := TraceProviderManger{}.InitTracerProvider(ctx, "poseidonos-cli", getVersion())
+	err := otelmgr.GetOtelManagerInstance().InitTracerProvider(context.Background(), "poseidonos-cli", getVersion())
 	if err != nil {
 		fmt.Printf("fail to initialize TracerProvider")
 	}
-	RootCmd.SetContext(ctx)
 }
 
 // TODO(mj): this function remains for wbt and file commands. This needs to be revised.
