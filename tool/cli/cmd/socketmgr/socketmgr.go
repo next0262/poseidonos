@@ -3,11 +3,13 @@ package socketmgr
 import (
 	"bufio"
 	"cli/cmd/globals"
+	"cli/cmd/otelmgr"
 	"cli/cmd/messages"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net"
+	"context"
 	"pnconnector/src/log"
 )
 
@@ -39,6 +41,30 @@ func SendReqAndReceiveRes(reqJSON string) string {
 	res, err := bufio.NewReader(conn).ReadString('\n')
 	if err != nil && err != io.EOF {
 		log.Error("could not receive data from the cli sever:", err)
+		return buildConnErrResp(reqJSON, err.Error())
+	}
+
+	return res
+}
+
+func SendReqAndReceiveReswithCtx(ctx context.Context, reqJSON string) string {
+	t := otelmgr.NewTracer()
+	t.SetTrace(ctx, globals.SOCKET_MGR_APP_NAME, globals.SOCKET_SEND_RECEIVE_FUNC_NAME)
+	defer t.Release()
+
+	conn, err := connectToCliServer()
+	if err != nil {
+		log.Error("cannot send a request to cli server: not connected")
+		t.RecordError(err)
+		return buildConnErrResp(reqJSON, err.Error())
+	}
+	defer conn.Close()
+
+	fmt.Fprintf(conn, reqJSON)
+	res, err := bufio.NewReader(conn).ReadString('\n')
+	if err != nil && err != io.EOF {
+		log.Error("could not receive data from the cli sever:", err)
+		t.RecordError(err)
 		return buildConnErrResp(reqJSON, err.Error())
 	}
 

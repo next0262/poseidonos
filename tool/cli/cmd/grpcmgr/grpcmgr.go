@@ -423,11 +423,16 @@ func SendDeleteArray(req *pb.DeleteArrayRequest) (*pb.DeleteArrayResponse, error
 	return res, err
 }
 
-func SendMountArray(req *pb.MountArrayRequest) (*pb.MountArrayResponse, error) {
+func SendMountArray(ctx context.Context, req *pb.MountArrayRequest) (*pb.MountArrayResponse, error) {
+	t := otelmgr.NewTracer()
+	t.SetTrace(ctx, globals.GRPC_MGR_APP_NAME, globals.GRPC_ARRAY_MOUNT_FUNC_NAME)
+	defer t.Release()
+
 	conn, err := dialToCliServer()
 	if err != nil {
 		err := errors.New(fmt.Sprintf("%s (internal error message: %s)",
 			dialErrorMsg, err.Error()))
+		t.RecordError(err)
 		return nil, err
 	}
 	defer conn.Close()
@@ -439,17 +444,23 @@ func SendMountArray(req *pb.MountArrayRequest) (*pb.MountArrayResponse, error) {
 	res, err := c.MountArray(ctx, req)
 	if err != nil {
 		log.Error("error: ", err.Error())
+		t.RecordError(err)
 		return nil, err
 	}
 
 	return res, err
 }
 
-func SendUnmountArray(req *pb.UnmountArrayRequest) (*pb.UnmountArrayResponse, error) {
+func SendUnmountArray(ctx context.Context, req *pb.UnmountArrayRequest) (*pb.UnmountArrayResponse, error) {
+	t := otelmgr.NewTracer()
+	t.SetTrace(ctx, globals.GRPC_MGR_APP_NAME, globals.GRPC_ARRAY_UNMOUNT_FUNC_NAME)
+	defer t.Release()
+
 	conn, err := dialToCliServer()
 	if err != nil {
 		err := errors.New(fmt.Sprintf("%s (internal error message: %s)",
 			dialErrorMsg, err.Error()))
+		t.RecordError(err)
 		return nil, err
 	}
 	defer conn.Close()
@@ -461,6 +472,7 @@ func SendUnmountArray(req *pb.UnmountArrayRequest) (*pb.UnmountArrayResponse, er
 	res, err := c.UnmountArray(ctx, req)
 	if err != nil {
 		log.Error("error: ", err.Error())
+		t.RecordError(err)
 		return nil, err
 	}
 

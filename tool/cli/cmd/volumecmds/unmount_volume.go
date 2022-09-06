@@ -1,6 +1,7 @@
 package volumecmds
 
 import (
+	"cli/cmd/otelmgr"
 	"encoding/json"
 	"os"
 	"pnconnector/src/log"
@@ -28,6 +29,11 @@ Example:
 	
          `,
 	Run: func(cmd *cobra.Command, args []string) {
+		m := otelmgr.GetOtelManagerInstance()
+		defer m.Shutdown()
+		t := otelmgr.NewTracer()
+		t.SetTrace(m.GetRootContext(), globals.VOLUME_CMD_APP_NAME, globals.VOLUME_UNMOUNT_FUNC_NAME)
+		defer t.Release()
 
 		var warningMsg = "WARNING: After unmounting volume" + " " +
 			unmount_volume_volumeName + " " +
@@ -57,13 +63,14 @@ Example:
 		reqJSON, err := json.Marshal(req)
 		if err != nil {
 			log.Error("error:", err)
+			t.RecordError(err)
 		}
 
 		displaymgr.PrintRequest(string(reqJSON))
 
 		// Do not send request to server and print response when testing request build.
 		if !(globals.IsTestingReqBld) {
-			resJSON := socketmgr.SendReqAndReceiveRes(string(reqJSON))
+			resJSON := socketmgr.SendReqAndReceiveReswithCtx(t.GetContext(), string(reqJSON))
 			displaymgr.PrintResponse(command, resJSON, globals.IsDebug, globals.IsJSONRes, globals.DisplayUnit)
 		}
 	},
