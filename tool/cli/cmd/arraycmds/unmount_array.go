@@ -5,6 +5,7 @@ import (
 	"cli/cmd/displaymgr"
 	"cli/cmd/globals"
 	"cli/cmd/grpcmgr"
+	"cli/cmd/otelmgr"
 	"fmt"
 	"os"
 
@@ -25,6 +26,11 @@ Example:
 	poseidonos-cli array unmount --array-name Array0
           `,
 	RunE: func(cmd *cobra.Command, args []string) error {
+		m := otelmgr.GetOtelManagerInstance()
+		defer m.Shutdown()
+		t := otelmgr.NewTracer()
+		t.SetTrace(m.GetRootContext(), globals.ARRAY_CMD_APP_NAME, globals.ARRAY_UNMOUNT_FUNC_NAME)
+		defer t.Release()
 
 		var warningMsg = "WARNING: After unmounting array" + " " +
 			unmount_array_arrayName + "," + " " +
@@ -45,25 +51,29 @@ Example:
 		req, buildErr := buildUnmountArrayReq(command)
 		if buildErr != nil {
 			fmt.Printf("failed to build request: %v", buildErr)
+			t.RecordError(buildErr)
 			return buildErr
 		}
 
 		reqJson, err := protojson.Marshal(req)
 		if err != nil {
 			fmt.Printf("failed to marshal the protobuf request: %v", err)
+			t.RecordError(err)
 			return err
 		}
 		displaymgr.PrintRequest(string(reqJson))
 
-		res, gRpcErr := grpcmgr.SendUnmountArray(req)
+		res, gRpcErr := grpcmgr.SendUnmountArray(t.GetContext(), req)
 		if gRpcErr != nil {
 			globals.PrintErrMsg(gRpcErr)
+			t.RecordError(gRpcErr)
 			return gRpcErr
 		}
 
 		printErr := displaymgr.PrintProtoResponse(command, res)
 		if printErr != nil {
 			fmt.Printf("failed to print the response: %v", printErr)
+			t.RecordError(printErr)
 			return printErr
 		}
 

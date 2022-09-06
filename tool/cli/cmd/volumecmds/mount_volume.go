@@ -4,6 +4,7 @@ import (
 	"cli/cmd/displaymgr"
 	"cli/cmd/globals"
 	"cli/cmd/messages"
+	"cli/cmd/otelmgr"
 	"cli/cmd/socketmgr"
 	"encoding/json"
 	"os"
@@ -28,6 +29,12 @@ Example:
 	
          `,
 	Run: func(cmd *cobra.Command, args []string) {
+		m := otelmgr.GetOtelManagerInstance()
+		defer m.Shutdown()
+		t := otelmgr.NewTracer()
+		t.SetTrace(m.GetRootContext(), globals.VOLUME_CMD_APP_NAME, globals.VOLUME_MOUNT_FUNC_NAME)
+		defer t.Release()
+
 		var requestList []messages.Request
 		command := "CREATESUBSYSTEMAUTO"
 
@@ -97,6 +104,7 @@ Example:
 				reqJSON, err := json.Marshal(request)
 				if err != nil {
 					log.Error("error:", err)
+					t.RecordError(err)
 				}
 
 				displaymgr.PrintRequest(string(reqJSON))
