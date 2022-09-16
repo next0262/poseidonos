@@ -32,33 +32,67 @@
 
 #pragma once
 
-#include <string>
+#include "src/trace/trace_exporter.h"
+#include "opentelemetry/trace/provider.h"
 
-#include "src/trace/otlp_factory.h"
-#include "src/lib/singleton.h"
+using namespace opentelemetry;
 
 namespace pos
 {
 
-class TraceExporter
+class TraceSpan
 {
 public:
-    TraceExporter(OtlpFactory *otlpFactory);
-    virtual ~TraceExporter();
-    virtual void Init(std::string serviceName, std::string serviceVersion, std::string endPoint);
-    virtual bool IsEnabled(void);
-    virtual std::string GetServiceName(void);
-    virtual std::string GetServiceVersion(void);
-
+    TraceSpan();
+    void Start(std::string str);
+    void End();
+    void AddAttribute(nostd::string_view key, const common::AttributeValue &value);
+    nostd::shared_ptr<trace::Span> GetSpan(void);
+    nostd::shared_ptr<trace_api::Tracer> GetTracer(void);
 private:
-    void _Enable(void);
-
-    bool enabled;
-    OtlpFactory *otlpFactory {nullptr};
-    std::string serviceName {""};
-    std::string serviceVersion {""};
+    TraceExporter *te{nullptr};
+    nostd::shared_ptr<trace::TracerProvider> provider{nullptr};
+    nostd::shared_ptr<trace::Span> span{nullptr};
+    nostd::shared_ptr<trace_api::Tracer> tracer{nullptr};
 };
 
-using TraceExporterSingleton = Singleton<TraceExporter>;
+class TraceScope
+{
+public:
+    TraceScope(nostd::shared_ptr<trace_api::Tracer> tracer, nostd::shared_ptr<trace::Span> span);
+private:
+    trace::Scope scope;
+};
 
+#define POS_START_SPAN() \
+    TraceSpan *tspan {nullptr};   \
+    TraceScope *tscope {nullptr}; \
+    if(TraceExporterSingleton::Instance(nullptr)->IsEnabled())  \
+    {   \
+        tspan = new TraceSpan;  \
+        tspan->Start(std::string(__func__) + "@" + std::string(__FILE__));  \
+        tscope = new TraceScope(tspan->GetTracer(), tspan->GetSpan());  \
+    }
+
+#define POS_ADD_SPAN_ATTR(KEY, VALUE)   \
+    if(TraceExporterSingleton::Instance(nullptr)->IsEnabled())  \
+    {   \
+        if (nullptr != tspan){  \
+            tspan->AddAttribute(KEY, VALUE);    \
+        }   \
+    }
+
+#define POS_END_SPAN()  \
+    if(TraceExporterSingleton::Instance(nullptr)->IsEnabled())  \
+    {   \
+        if (nullptr != tspan)   \
+        {   \
+            tspan->End();   \
+            delete tspan;   \
+            if (nullptr != tscope)  \
+            {   \
+                delete tscope;  \
+            }   \
+        }   \
+    }
 } // namespace pos

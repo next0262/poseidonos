@@ -41,6 +41,7 @@
 #include "src/state/state_manager.h"
 #include "src/metadata/metadata.h"
 #include "src/admin/smart_log_mgr.h"
+#include "src/trace/trace_instrumentation.h"
 namespace pos
 {
 ArrayComponents::ArrayComponents(string arrayName, IArrayRebuilder* rebuilder, IAbrControl* abr)
@@ -164,6 +165,8 @@ ArrayComponents::GetInfo(void)
 int
 ArrayComponents::Create(DeviceSet<string> nameSet, string metaFt, string dataFt)
 {
+    POS_START_SPAN();
+
     POS_TRACE_INFO(EID(CREATE_ARRAY_DEBUG_MSG), "Creating array component for {}", arrayName);
     int ret = array->Create(nameSet, metaFt, dataFt);
     if (ret != 0)
@@ -175,6 +178,9 @@ ArrayComponents::Create(DeviceSet<string> nameSet, string metaFt, string dataFt)
     _SetMountSequence();
 
     POS_TRACE_INFO(EID(CREATE_ARRAY_DEBUG_MSG), "Array components for {} have been created.", arrayName);
+
+    POS_END_SPAN();
+
     return 0;
 }
 
@@ -198,6 +204,8 @@ ArrayComponents::Load(void)
 int
 ArrayComponents::Mount(bool isWTEnabled)
 {
+    POS_START_SPAN();
+
     POS_TRACE_INFO(EID(MOUNT_ARRAY_DEBUG_MSG), "Trying to mount Array {}, isWT:{}", arrayName, isWTEnabled);
     array->SetPreferences(isWTEnabled);
     int ret = arrayMountSequence->Mount();
@@ -205,12 +213,17 @@ ArrayComponents::Mount(bool isWTEnabled)
     {
         array->MountDone();
     }
+
+    POS_END_SPAN();
+    
     return ret;
 }
 
 int
 ArrayComponents::Unmount(void)
 {
+    POS_START_SPAN();
+
     int ret = array->CheckUnmountable();
     if (ret == 0)
     {
@@ -220,6 +233,8 @@ ArrayComponents::Unmount(void)
     {
         POS_TRACE_WARN(ret, "array_name:{}, array_state:{}", arrayName, array->GetState().ToString());
     }
+
+    POS_END_SPAN();
     return ret;
 }
 

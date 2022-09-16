@@ -48,6 +48,9 @@ TraceExporter::Init(std::string serviceName, std::string serviceVersion, std::st
     
     auto resource = otlpFactory->CreateResource(resourceAttributes);
 
+    this->serviceName = serviceName;
+    this->serviceVersion = serviceVersion;
+
     // Set trace provider
     auto provider = nostd::shared_ptr<trace::TracerProvider>(otlpFactory->CreateTracerProvider(processor, resource));
 
@@ -67,6 +70,18 @@ bool
 TraceExporter::IsEnabled(void)
 {
     return enabled;
+}
+
+std::string 
+TraceExporter::GetServiceName(void)
+{
+    return serviceName;
+}
+
+std::string
+TraceExporter::GetServiceVersion(void)
+{
+    return serviceVersion;
 }
 
 void

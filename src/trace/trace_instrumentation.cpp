@@ -30,35 +30,53 @@
  *   OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#pragma once
+#include "src/trace/trace_instrumentation.h"
 
-#include <string>
-
-#include "src/trace/otlp_factory.h"
-#include "src/lib/singleton.h"
+using namespace opentelemetry;
 
 namespace pos
 {
 
-class TraceExporter
+TraceSpan::TraceSpan()
+: te(TraceExporterSingleton::Instance(nullptr))
 {
-public:
-    TraceExporter(OtlpFactory *otlpFactory);
-    virtual ~TraceExporter();
-    virtual void Init(std::string serviceName, std::string serviceVersion, std::string endPoint);
-    virtual bool IsEnabled(void);
-    virtual std::string GetServiceName(void);
-    virtual std::string GetServiceVersion(void);
+    provider = trace::Provider::GetTracerProvider();
+    tracer = provider->GetTracer(te->GetServiceName(), te->GetServiceVersion());
+}
 
-private:
-    void _Enable(void);
+void
+TraceSpan::Start(std::string str)
+{
+    span = tracer->StartSpan(str);
+}
 
-    bool enabled;
-    OtlpFactory *otlpFactory {nullptr};
-    std::string serviceName {""};
-    std::string serviceVersion {""};
-};
+void
+TraceSpan::End()
+{
+    span->End();
+}
 
-using TraceExporterSingleton = Singleton<TraceExporter>;
+void
+TraceSpan::AddAttribute(nostd::string_view key, const common::AttributeValue &value)
+{
+    span->SetAttribute(key,value);
+}
 
-} // namespace pos
+nostd::shared_ptr<trace::Span>
+TraceSpan::GetSpan(void)
+{
+    return span;
+}
+
+nostd::shared_ptr<trace_api::Tracer>
+TraceSpan::GetTracer(void)
+{
+    return tracer;
+}
+
+TraceScope::TraceScope(nostd::shared_ptr<trace_api::Tracer> tracer, nostd::shared_ptr<trace::Span> span)
+: scope(tracer->WithActiveSpan(span))
+{
+}
+
+}

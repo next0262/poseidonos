@@ -47,6 +47,7 @@
 #include "src/logger/logger.h"
 #include "src/master_context/unique_id_generator.h"
 #include "src/io_scheduler/io_dispatcher.h"
+#include "src/trace/trace_instrumentation.h"
 
 namespace pos
 {
@@ -150,6 +151,8 @@ Array::_LoadImpl(void)
 int
 Array::Create(DeviceSet<string> nameSet, string metaFt, string dataFt)
 {
+    POS_START_SPAN();
+
     RaidType dataRaidType = RaidType(dataFt);
     RaidType metaRaidType = RaidType(metaFt);
     POS_TRACE_INFO(EID(CREATE_ARRAY_DEBUG_MSG), "Trying to create array({}), metaFt:{}, dataFt:{}",
@@ -224,6 +227,9 @@ Array::Create(DeviceSet<string> nameSet, string metaFt, string dataFt)
     state->SetCreate();
     pthread_rwlock_unlock(&stateLock);
     POS_TRACE_TRACE(EID(POS_TRACE_ARRAY_CREATED), "{}", Serialize());
+
+    POS_END_SPAN();
+    
     return 0;
 
 error:
@@ -303,6 +309,8 @@ Array::Flush(void)
 int
 Array::Delete(void)
 {
+    POS_START_SPAN();
+
     POS_TRACE_INFO(EID(DELETE_ARRAY_DEBUG_MSG), "Trying to delete array({})", name_);
     pthread_rwlock_wrlock(&stateLock);
     int ret = state->IsDeletable();
@@ -331,6 +339,9 @@ Array::Delete(void)
 
     pthread_rwlock_unlock(&stateLock);
     POS_TRACE_TRACE(EID(POS_TRACE_ARRAY_DELETED), "array_name:{}", name_);
+
+    POS_END_SPAN();
+
     return 0;
 
 error:
@@ -753,10 +764,14 @@ Array::SetPreferences(bool isWT)
 void
 Array::MountDone(void)
 {
+    POS_START_SPAN();
+
     POS_TRACE_TRACE(EID(POS_TRACE_ARRAY_MOUNTED), "{}", Serialize());
     _CheckRebuildNecessity();
     int ret = _Flush();
     assert(ret == 0);
+
+    POS_END_SPAN();
 }
 
 int

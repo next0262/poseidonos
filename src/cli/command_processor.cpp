@@ -23,6 +23,7 @@
 #include "src/helper/rpc/spdk_rpc_client.h"
 #include "src/device/device_manager.h"
 #include "src/resource_checker/smart_collector.h"
+#include "src/trace/trace_instrumentation.h"
 
 CommandProcessor::CommandProcessor(void)
 {
@@ -488,44 +489,55 @@ CommandProcessor::ExecuteReplaceArrayDeviceCommand(const ReplaceArrayDeviceReque
 grpc::Status
 CommandProcessor::ExecuteCreateArrayCommand(const CreateArrayRequest* request, CreateArrayResponse* reply)
 {
+    POS_START_SPAN();
+
     grpc_cli::CreateArrayRequest_Param param = request->param();
     
     DeviceSet<string> nameSet;
     string arrayName = param.name();
+    POS_ADD_SPAN_ATTR("param.array.name", arrayName);
     
     string dataFt = "RAID5";
     if (param.raidtype().empty() == false)
     {
         dataFt = param.raidtype();
     }
+    POS_ADD_SPAN_ATTR("param.array.dataFt", dataFt);
     
     string metaFt = "RAID10";
     if (dataFt == "RAID0" || dataFt == "NONE")
     {
         metaFt = dataFt;
     }
+    POS_ADD_SPAN_ATTR("param.array.metaFt", metaFt);
 
     if (param.buffer_size() != 0)
     {
+        int i = 0;
         for (const grpc_cli::DeviceNameList& buffer : (request->param()).buffer())
         {
             nameSet.nvm.push_back(buffer.devicename());
+            POS_ADD_SPAN_ATTR(("param.array.buffer_dev_" + to_string(i++)), buffer.devicename());
         }
     }
 
     if (param.data_size() != 0)
     {
+        int i = 0;
         for (const grpc_cli::DeviceNameList& data : (request->param()).data())
         {
             nameSet.data.push_back(data.devicename());
+            POS_ADD_SPAN_ATTR(("param.array.data_dev_" + to_string(i++)), data.devicename());
         }
     }
     
     if (param.spare_size() != 0)
     {
+        int i = 0;
         for (const grpc_cli::DeviceNameList& spare : (request->param()).spare())
         {
             nameSet.spares.push_back(spare.devicename());
+            POS_ADD_SPAN_ATTR(("param.array.spare_dev_" + to_string(i++)), spare.devicename());
         }
     }
 
@@ -535,14 +547,15 @@ CommandProcessor::ExecuteCreateArrayCommand(const CreateArrayRequest* request, C
     {
         _SetEventStatus(ret, reply->mutable_result()->mutable_status());
         _SetPosInfo(reply->mutable_info());
-        return grpc::Status::OK;
     }
     else
     {
         _SetEventStatus(EID(SUCCESS), reply->mutable_result()->mutable_status());
         _SetPosInfo(reply->mutable_info());
-        return grpc::Status::OK;
     }
+
+    POS_END_SPAN();
+    return grpc::Status::OK;
 }
 
 grpc::Status
@@ -608,8 +621,12 @@ CommandProcessor::ExecuteAutocreateArrayCommand(const AutocreateArrayRequest* re
 grpc::Status
 CommandProcessor::ExecuteDeleteArrayCommand(const DeleteArrayRequest* request, DeleteArrayResponse* reply)
 {
+    POS_START_SPAN();
+
     NvmfTarget* nvmfTarget = NvmfTargetSingleton::Instance();
     string arrayName = (request->param()).name();
+
+    POS_ADD_SPAN_ATTR("param.array.name",  arrayName);
 
     IArrayMgmt* array = ArrayMgr();
     int ret = array->Delete(arrayName);
@@ -632,15 +649,22 @@ CommandProcessor::ExecuteDeleteArrayCommand(const DeleteArrayRequest* request, D
 
     _SetEventStatus(EID(SUCCESS), reply->mutable_result()->mutable_status());
     _SetPosInfo(reply->mutable_info());
+
+    POS_END_SPAN();
+
     return grpc::Status::OK;
 }
 
 grpc::Status
 CommandProcessor::ExecuteMountArrayCommand(const MountArrayRequest* request, MountArrayResponse* reply)
 {
+    POS_START_SPAN();
+
     string arrayName = (request->param()).name();
     bool isWTenabled = (request->param()).enablewritethrough();
-    
+
+    POS_ADD_SPAN_ATTR("param.array.name",  arrayName); 
+
     if (isWTenabled == false)
     {
         bool isWTenabledAtConfig = false;
@@ -656,6 +680,8 @@ CommandProcessor::ExecuteMountArrayCommand(const MountArrayRequest* request, Mou
         }
     }
 
+    POS_ADD_SPAN_ATTR("param.array.write_through",  isWTenabled);
+
     IArrayMgmt* array = ArrayMgr();
     int ret = array->Mount(arrayName, isWTenabled);
     if (0 != ret)
@@ -668,13 +694,20 @@ CommandProcessor::ExecuteMountArrayCommand(const MountArrayRequest* request, Mou
     QosManagerSingleton::Instance()->UpdateArrayMap(arrayName);
     _SetEventStatus(EID(SUCCESS), reply->mutable_result()->mutable_status());
     _SetPosInfo(reply->mutable_info());
+
+    POS_END_SPAN();
+    
     return grpc::Status::OK;
 }
 
 grpc::Status
 CommandProcessor::ExecuteUnmountArrayCommand(const UnmountArrayRequest* request, UnmountArrayResponse* reply)
 {
+    POS_START_SPAN();
+
     string arrayName = (request->param()).name();
+
+    POS_ADD_SPAN_ATTR("param.array.name", arrayName);
 
     IArrayMgmt* array =  ArrayMgr();
     int ret = array->Unmount(arrayName);
@@ -687,6 +720,9 @@ CommandProcessor::ExecuteUnmountArrayCommand(const UnmountArrayRequest* request,
     QosManagerSingleton::Instance()->DeleteEntryArrayMap(arrayName);
     _SetEventStatus(EID(SUCCESS), reply->mutable_result()->mutable_status());
     _SetPosInfo(reply->mutable_info());
+
+    POS_END_SPAN();
+    
     return grpc::Status::OK;
 }
 

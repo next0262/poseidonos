@@ -36,6 +36,7 @@
 #include "src/include/pos_event_id.h"
 #include "src/logger/logger.h"
 #include "src/volume/volume_manager.h"
+#include "src/trace/trace_instrumentation.h"
 
 namespace pos
 {
@@ -84,6 +85,8 @@ ArrayMountSequence::~ArrayMountSequence(void)
 int
 ArrayMountSequence::Mount(void)
 {
+    POS_START_SPAN();
+
     POS_TRACE_DEBUG(EID(MOUNT_ARRAY_DEBUG_MSG), "Entering ArrayMountSequence.Mount for {}", arrayName);
     auto it = sequence.begin();
     int ret = EID(SUCCESS);
@@ -140,6 +143,9 @@ ArrayMountSequence::Mount(void)
     state->Invoke(normalState);
     state->Remove(mountState);
     POS_TRACE_DEBUG(EID(MOUNT_ARRAY_DEBUG_MSG), "Returning from ArrayMountSequence.Mount for {}", arrayName);
+
+    POS_END_SPAN();
+    
     return ret;
 
 error:
@@ -159,6 +165,8 @@ error:
 int
 ArrayMountSequence::Unmount(void)
 {
+    POS_START_SPAN();
+
     POS_TRACE_DEBUG(EID(MOUNT_ARRAY_DEBUG_MSG), "Entering ArrayMountSequence.Unmount for {}", arrayName);
     StateContext* currState = state->GetState();
     if (currState->ToStateType() == StateEnum::STOP)
@@ -203,6 +211,8 @@ ArrayMountSequence::Unmount(void)
     sequence.front()->Dispose();
     state->Remove(normalState);
     state->Remove(unmountState);
+
+    POS_END_SPAN();
 
     return EID(SUCCESS);
 }

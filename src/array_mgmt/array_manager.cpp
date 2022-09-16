@@ -38,6 +38,7 @@
 #include "src/include/pos_event_id.h"
 #include "src/logger/logger.h"
 #include "src/mbr/abr_manager.h"
+#include "src/trace/trace_instrumentation.h"
 
 namespace pos
 {
@@ -103,6 +104,8 @@ ArrayManager::~ArrayManager()
 int
 ArrayManager::Create(string name, DeviceSet<string> devs, string metaFt, string dataFt)
 {
+    POS_START_SPAN();
+    
     if (_FindArray(name) != nullptr)
     {
         int event = EID(CREATE_ARRAY_SAME_ARRAY_NAME_EXISTS);
@@ -130,12 +133,17 @@ ArrayManager::Create(string name, DeviceSet<string> devs, string metaFt, string 
             "ArrayManager is cleaning up ArrayComponents of {} because of array creation failure", name);
         delete array;
     }
+
+    POS_END_SPAN();
+
     return ret;
 }
 
 int
 ArrayManager::Delete(string name)
 {
+    POS_START_SPAN();
+
     ArrayComponents* array = _FindArray(name);
     if (array == nullptr)
     {
@@ -156,6 +164,8 @@ ArrayManager::Delete(string name)
         arrayList.erase(name);
     }
 
+    POS_END_SPAN();
+
     return ret;
 }
 
@@ -164,6 +174,8 @@ ArrayManager::Mount(string name, bool isWTEnabled)
 {
     return _ExecuteOrHandleErrors([&](ArrayComponents* array)
     {
+        POS_START_SPAN();
+
         telClient->RegisterPublisher(array->GetTelemetryPublisher());
         int ret = array->Mount(isWTEnabled);
         if (ret !=  EID(SUCCESS))
@@ -173,6 +185,9 @@ ArrayManager::Mount(string name, bool isWTEnabled)
                 telClient->DeregisterPublisher(array->GetTelemetryPublisher()->GetName());
             }
         }
+
+        POS_END_SPAN();
+        
         return ret;
     }, name, EID(MOUNT_ARRAY_ARRAY_NAME_DOES_NOT_EXIST));
 }
@@ -182,6 +197,8 @@ ArrayManager::Unmount(string name)
 {
     return _ExecuteOrHandleErrors([&](ArrayComponents* array)
     {
+        POS_START_SPAN();
+
         int ret = array->Unmount();
         if (ret == EID(SUCCESS))
         {
@@ -190,6 +207,9 @@ ArrayManager::Unmount(string name)
                 telClient->DeregisterPublisher(array->GetTelemetryPublisher()->GetName());
             }
         }
+
+        POS_END_SPAN();
+        
         return ret;
     }, name, EID(UNMOUNT_ARRAY_ARRAY_NAME_DOES_NOT_EXIST));
 }
