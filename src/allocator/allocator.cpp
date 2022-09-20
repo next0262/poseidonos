@@ -49,6 +49,7 @@
 #include "src/sys_event/volume_event_publisher.h"
 #include "src/telemetry/telemetry_client/telemetry_publisher.h"
 #include "src/telemetry/telemetry_client/telemetry_client.h"
+#include "src/trace/trace_instrumentation.h"
 
 namespace pos
 {
@@ -82,6 +83,8 @@ Allocator::~Allocator(void)
 int
 Allocator::Init(void)
 {
+    POS_START_SPAN();
+
     if (isInitialized == false)
     {
         if (tp != nullptr)
@@ -96,6 +99,9 @@ Allocator::Init(void)
         _RegisterToAllocatorService();
         isInitialized = true;
     }
+
+    POS_END_SPAN();
+
     return 0;
 }
 
@@ -108,6 +114,8 @@ Allocator::PrepareVersionedSegmentCtx(IVersionedSegmentContext* vscSegCtx)
 void
 Allocator::Dispose(void)
 {
+    POS_START_SPAN();
+
     POS_TRACE_INFO(EID(UNMOUNT_ARRAY_DEBUG_MSG), "[Allocator] Dispose, init:{}", isInitialized);
     if (isInitialized == true)
     {
@@ -127,6 +135,8 @@ Allocator::Dispose(void)
         }
         isInitialized = false;
     }
+
+    POS_END_SPAN();
 }
 
 void

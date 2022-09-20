@@ -5,6 +5,7 @@ import (
 	"cli/cmd/displaymgr"
 	"cli/cmd/globals"
 	"cli/cmd/grpcmgr"
+	"cli/cmd/otelmgr"
 	"fmt"
 	"os"
 
@@ -26,6 +27,14 @@ Example:
           `,
 	RunE: func(cmd *cobra.Command, args []string) error {
 
+		var command = "UNMOUNTARRAY"
+
+		m := otelmgr.GetOtelManagerInstance()
+		defer m.Shutdown()
+		t := otelmgr.NewTracer()
+		t.SetTrace(m.GetRootContext(), globals.SYSTEM_CMD_APP_NAME, command)
+		defer t.Release()
+
 		var warningMsg = "WARNING: After unmounting array" + " " +
 			unmount_array_arrayName + "," + " " +
 			"all the volumes in the array will be unmounted.\n" +
@@ -34,13 +43,16 @@ Example:
 			unmount_array_arrayName + "?"
 
 		if unmount_array_isForced == false {
+			tt := otelmgr.NewTracer();
+			tt.SetTrace(t.GetContext(), globals.SYSTEM_CMD_APP_NAME, "AskConfirmation")
+	
 			conf := displaymgr.AskConfirmation(warningMsg)
 			if conf == false {
 				os.Exit(0)
 			}
-		}
 
-		var command = "UNMOUNTARRAY"
+			tt.Release()
+		}
 
 		req, buildErr := buildUnmountArrayReq(command)
 		if buildErr != nil {
@@ -55,7 +67,7 @@ Example:
 		}
 		displaymgr.PrintRequest(string(reqJson))
 
-		res, gRpcErr := grpcmgr.SendUnmountArray(req)
+		res, gRpcErr := grpcmgr.SendUnmountArray(t.GetContext(), req)
 		if gRpcErr != nil {
 			globals.PrintErrMsg(gRpcErr)
 			return gRpcErr

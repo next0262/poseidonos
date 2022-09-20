@@ -226,15 +226,20 @@ message Status {
 	optional string solution = 5;
 }
 
-
 message PosInfo {
 	string version = 1;
+}
+
+message TraceContext {
+	string traceParent = 1;
+	string traceState = 2;
 }
 
 message SystemInfoRequest {
 	string command = 1;
 	string rid = 2;
 	string requestor = 3;
+	TraceContext context = 4;
 }
 
 message SystemInfoResponse {
@@ -531,6 +536,7 @@ message CreateArrayRequest {
 		string raidtype = 5;
 	}
 	Param param = 4;
+	TraceContext context = 5;
 }
 
 message CreateArrayResponse {
@@ -575,6 +581,7 @@ message DeleteArrayRequest {
 			string name = 1;
 	}
 	Param param = 4;
+	TraceContext context = 5;
 }
 
 message DeleteArrayResponse {
@@ -596,6 +603,7 @@ message MountArrayRequest {
 			optional bool enableWriteThrough = 2;
 	}
 	Param param = 4;
+	TraceContext context = 5;
 }
 
 message MountArrayResponse {
@@ -615,6 +623,7 @@ message UnmountArrayRequest {
 			string name = 1;
 	}
 	Param param = 4;
+	TraceContext context = 5;
 }
 
 message UnmountArrayResponse {

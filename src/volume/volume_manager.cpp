@@ -57,6 +57,7 @@
 #include "src/volume/volume_replicate_property_updater.h"
 #include "src/volume/volume_qos_updater.h"
 #include "src/telemetry/telemetry_client/telemetry_publisher.h"
+#include "src/trace/trace_instrumentation.h"
 
 namespace pos
 {
@@ -624,6 +625,8 @@ VolumeManager::DecreasePendingIOCount(int volId, VolumeIoType volumeIoType, uint
 void
 VolumeManager::DetachVolumes(void)
 {
+    POS_START_SPAN();
+
     while(true)
     {
         if (volumeExceptionLock.try_lock() == true)
@@ -635,6 +638,8 @@ VolumeManager::DetachVolumes(void)
 
     VolumeDetacher volumeDetacher(volumes, arrayInfo->GetName(), arrayInfo->GetIndex());
     volumeDetacher.DoAll();
+
+    POS_END_SPAN();
 }
 
 int

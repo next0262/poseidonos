@@ -6,7 +6,7 @@ var (
 	GrpcPort          string = "50055"
 	OtlpPort          string = "30080" 
 	GrpcServerAddress string = IPv4 + ":" + GrpcPort
-	OtlpServerAddress string = IPv4 + ":" + OtlpPort
+	OtlpServerAddress string = "12.36.192.177" + ":" + "4318"
 	FieldSeparator    string = "|"
 	NodeName          string = ""
 

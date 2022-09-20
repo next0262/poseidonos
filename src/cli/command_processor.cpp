@@ -2,6 +2,7 @@
 #include <vector>
 #include <spdk/nvme_spec.h>
 #include <string>
+#include <iostream>
 
 #include "src/cli/cli_event_code.h"
 #include "src/cli/command_processor.h"
@@ -39,6 +40,11 @@ CommandProcessor::~CommandProcessor(void)
 grpc::Status
 CommandProcessor::ExecuteSystemInfoCommand(const SystemInfoRequest* request, SystemInfoResponse* reply)
 {
+    struct ContextW3C ctx;
+    ctx.traceParent = request->context().traceparent();
+    ctx.traceState = request->context().tracestate();
+    POS_START_SPAN_WITH_PARENT(ctx);
+
     reply->set_command(request->command());
     reply->set_rid(request->rid());
     
@@ -69,7 +75,9 @@ CommandProcessor::ExecuteSystemInfoCommand(const SystemInfoRequest* request, Sys
 
     _SetEventStatus(EID(SUCCESS), reply->mutable_result()->mutable_status());
     _SetPosInfo(reply->mutable_info());
-    
+
+    POS_END_SPAN();
+
     return grpc::Status::OK;
 }
 
@@ -489,7 +497,10 @@ CommandProcessor::ExecuteReplaceArrayDeviceCommand(const ReplaceArrayDeviceReque
 grpc::Status
 CommandProcessor::ExecuteCreateArrayCommand(const CreateArrayRequest* request, CreateArrayResponse* reply)
 {
-    POS_START_SPAN();
+    struct ContextW3C ctx;
+    ctx.traceParent = request->context().traceparent();
+    ctx.traceState = request->context().tracestate();
+    POS_START_SPAN_WITH_PARENT(ctx);
 
     grpc_cli::CreateArrayRequest_Param param = request->param();
     
@@ -621,7 +632,10 @@ CommandProcessor::ExecuteAutocreateArrayCommand(const AutocreateArrayRequest* re
 grpc::Status
 CommandProcessor::ExecuteDeleteArrayCommand(const DeleteArrayRequest* request, DeleteArrayResponse* reply)
 {
-    POS_START_SPAN();
+    struct ContextW3C ctx;
+    ctx.traceParent = request->context().traceparent();
+    ctx.traceState = request->context().tracestate();
+    POS_START_SPAN_WITH_PARENT(ctx);
 
     NvmfTarget* nvmfTarget = NvmfTargetSingleton::Instance();
     string arrayName = (request->param()).name();
@@ -658,7 +672,10 @@ CommandProcessor::ExecuteDeleteArrayCommand(const DeleteArrayRequest* request, D
 grpc::Status
 CommandProcessor::ExecuteMountArrayCommand(const MountArrayRequest* request, MountArrayResponse* reply)
 {
-    POS_START_SPAN();
+    struct ContextW3C ctx;
+    ctx.traceParent = request->context().traceparent();
+    ctx.traceState = request->context().tracestate();
+    POS_START_SPAN_WITH_PARENT(ctx);
 
     string arrayName = (request->param()).name();
     bool isWTenabled = (request->param()).enablewritethrough();
@@ -703,7 +720,10 @@ CommandProcessor::ExecuteMountArrayCommand(const MountArrayRequest* request, Mou
 grpc::Status
 CommandProcessor::ExecuteUnmountArrayCommand(const UnmountArrayRequest* request, UnmountArrayResponse* reply)
 {
-    POS_START_SPAN();
+    struct ContextW3C ctx;
+    ctx.traceParent = request->context().traceparent();
+    ctx.traceState = request->context().tracestate();
+    POS_START_SPAN_WITH_PARENT(ctx);
 
     string arrayName = (request->param()).name();
 

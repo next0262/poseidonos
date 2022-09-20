@@ -34,17 +34,47 @@
 
 #include "src/trace/trace_exporter.h"
 #include "opentelemetry/trace/provider.h"
+#include "opentelemetry/trace/propagation/http_trace_context.h"
 
 using namespace opentelemetry;
 
 namespace pos
 {
 
+template <typename T>
+class HttpTextMapCarrier : public opentelemetry::context::propagation::TextMapCarrier
+{
+public:
+    HttpTextMapCarrier<T>(T &headers) : headers_(headers) {}
+    HttpTextMapCarrier() = default;
+    virtual nostd::string_view Get(nostd::string_view key) const noexcept override
+    { 
+        auto it = headers_.find(key.data());
+        if (it != headers_.end())
+        {
+            return it->second;
+        }
+        return "";
+    }
+    virtual void Set(nostd::string_view key, nostd::string_view value) noexcept override
+    {
+        headers_.insert(std::pair<std::string, std::string>(std::string(key), std::string(value)));
+    }
+
+    T headers_;
+};
+
+struct ContextW3C{
+    std::string traceParent;
+    std::string traceState;
+};
+
 class TraceSpan
 {
 public:
     TraceSpan();
-    void Start(std::string str);
+    void Start(std::string name);
+    void StartWithParent(std::string name, struct ContextW3C ctx);
     void End();
     void AddAttribute(nostd::string_view key, const common::AttributeValue &value);
     nostd::shared_ptr<trace::Span> GetSpan(void);
@@ -70,7 +100,17 @@ private:
     if(TraceExporterSingleton::Instance(nullptr)->IsEnabled())  \
     {   \
         tspan = new TraceSpan;  \
-        tspan->Start(std::string(__func__) + "@" + std::string(__FILE__));  \
+        tspan->Start(std::string(__func__) + "()" + "@" + std::string(__FILE__) + ":" + std::to_string(__LINE__));  \
+        tscope = new TraceScope(tspan->GetTracer(), tspan->GetSpan());  \
+    }
+
+#define POS_START_SPAN_WITH_PARENT(CTX) \
+    TraceSpan *tspan {nullptr};   \
+    TraceScope *tscope {nullptr}; \
+    if(TraceExporterSingleton::Instance(nullptr)->IsEnabled())  \
+    {   \
+        tspan = new TraceSpan;  \
+        tspan->StartWithParent(std::string(__func__) + "()" + "@" + std::string(__FILE__) + ":" + std::to_string(__LINE__), CTX);  \
         tscope = new TraceScope(tspan->GetTracer(), tspan->GetSpan());  \
     }
 

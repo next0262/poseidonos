@@ -40,8 +40,11 @@ func dialToCliServer() (*grpc.ClientConn, error) {
 
 func SendSystemInfo(ctx context.Context, req *pb.SystemInfoRequest) (*pb.SystemInfoResponse, error) {
 	t := otelmgr.NewTracer()
-	t.SetTrace(ctx, globals.GRPC_MGR_APP_NAME, globals.GRPC_SYSTEM_INFO_FUNC_NAME)
+	t.SetTrace(ctx, globals.GRPC_MGR_APP_NAME, "SendSystemInfo")
 	defer t.Release()
+	
+	contextW3C := otelmgr.GetOtelContextInW3C(t.GetContext())
+	req.Context  = &pb.TraceContext{TraceParent: contextW3C["traceparent"], TraceState: contextW3C["tracestate"]}
 
 	conn, err := dialToCliServer()
 	if err != nil {
@@ -357,7 +360,14 @@ func SendReplaceArrayDevice(req *pb.ReplaceArrayDeviceRequest) (*pb.ReplaceArray
 	return res, err
 }
 
-func SendCreateArray(req *pb.CreateArrayRequest) (*pb.CreateArrayResponse, error) {
+func SendCreateArray(ctx context.Context, req *pb.CreateArrayRequest) (*pb.CreateArrayResponse, error) {
+	t := otelmgr.NewTracer()
+	t.SetTrace(ctx, globals.GRPC_MGR_APP_NAME, "SendCreateArray")
+	defer t.Release()
+	
+	contextW3C := otelmgr.GetOtelContextInW3C(t.GetContext())
+	req.Context  = &pb.TraceContext{TraceParent: contextW3C["traceparent"], TraceState: contextW3C["tracestate"]}
+
 	conn, err := dialToCliServer()
 	if err != nil {
 		err := errors.New(fmt.Sprintf("%s (internal error message: %s)",
@@ -401,7 +411,14 @@ func SendAutocreateArray(req *pb.AutocreateArrayRequest) (*pb.AutocreateArrayRes
 	return res, err
 }
 
-func SendDeleteArray(req *pb.DeleteArrayRequest) (*pb.DeleteArrayResponse, error) {
+func SendDeleteArray(ctx context.Context, req *pb.DeleteArrayRequest) (*pb.DeleteArrayResponse, error) {
+	t := otelmgr.NewTracer()
+	t.SetTrace(ctx, globals.GRPC_MGR_APP_NAME, "SendDeleteArray")
+	defer t.Release()
+	
+	contextW3C := otelmgr.GetOtelContextInW3C(t.GetContext())
+	req.Context  = &pb.TraceContext{TraceParent: contextW3C["traceparent"], TraceState: contextW3C["tracestate"]}
+
 	conn, err := dialToCliServer()
 	if err != nil {
 		err := errors.New(fmt.Sprintf("%s (internal error message: %s)",
@@ -423,7 +440,14 @@ func SendDeleteArray(req *pb.DeleteArrayRequest) (*pb.DeleteArrayResponse, error
 	return res, err
 }
 
-func SendMountArray(req *pb.MountArrayRequest) (*pb.MountArrayResponse, error) {
+func SendMountArray(ctx context.Context, req *pb.MountArrayRequest) (*pb.MountArrayResponse, error) {
+	t := otelmgr.NewTracer()
+	t.SetTrace(ctx, globals.GRPC_MGR_APP_NAME, "SendMountArray")
+	defer t.Release()
+	
+	contextW3C := otelmgr.GetOtelContextInW3C(t.GetContext())
+	req.Context  = &pb.TraceContext{TraceParent: contextW3C["traceparent"], TraceState: contextW3C["tracestate"]}
+
 	conn, err := dialToCliServer()
 	if err != nil {
 		err := errors.New(fmt.Sprintf("%s (internal error message: %s)",
@@ -445,7 +469,14 @@ func SendMountArray(req *pb.MountArrayRequest) (*pb.MountArrayResponse, error) {
 	return res, err
 }
 
-func SendUnmountArray(req *pb.UnmountArrayRequest) (*pb.UnmountArrayResponse, error) {
+func SendUnmountArray(ctx context.Context, req *pb.UnmountArrayRequest) (*pb.UnmountArrayResponse, error) {
+	t := otelmgr.NewTracer()
+	t.SetTrace(ctx, globals.GRPC_MGR_APP_NAME, "SendUnmountArray")
+	defer t.Release()
+	
+	contextW3C := otelmgr.GetOtelContextInW3C(t.GetContext())
+	req.Context  = &pb.TraceContext{TraceParent: contextW3C["traceparent"], TraceState: contextW3C["tracestate"]}
+
 	conn, err := dialToCliServer()
 	if err != nil {
 		err := errors.New(fmt.Sprintf("%s (internal error message: %s)",

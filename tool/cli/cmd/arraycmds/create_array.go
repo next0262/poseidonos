@@ -10,6 +10,7 @@ import (
 	"cli/cmd/displaymgr"
 	"cli/cmd/globals"
 	"cli/cmd/grpcmgr"
+	"cli/cmd/otelmgr"
 
 	"github.com/spf13/cobra"
 	"google.golang.org/protobuf/encoding/protojson"
@@ -39,6 +40,12 @@ Eample 2 (creating an array with RAID6):
 
 		var command = "CREATEARRAY"
 
+		m := otelmgr.GetOtelManagerInstance()
+		defer m.Shutdown()
+		t := otelmgr.NewTracer()
+		t.SetTrace(m.GetRootContext(), globals.SYSTEM_CMD_APP_NAME, command)
+		defer t.Release()
+
 		req, buildErr := buildCreateArrayReq(command)
 		if buildErr != nil {
 			fmt.Printf("failed to build request: %v", buildErr)
@@ -52,7 +59,7 @@ Eample 2 (creating an array with RAID6):
 		}
 		displaymgr.PrintRequest(string(reqJson))
 
-		res, gRpcErr := grpcmgr.SendCreateArray(req)
+		res, gRpcErr := grpcmgr.SendCreateArray(t.GetContext(), req)
 		if gRpcErr != nil {
 			globals.PrintErrMsg(gRpcErr)
 			return gRpcErr

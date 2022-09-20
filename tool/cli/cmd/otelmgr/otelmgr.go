@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/propagation"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"
@@ -27,6 +28,21 @@ func GetOtelManagerInstance() *OtelManager {
 		instance = new(OtelManager)
 	}
 	return instance
+}
+
+func GetOtelContextInW3C(ctx context.Context) propagation.MapCarrier {
+
+	if !globals.EnableOtel {
+		return propagation.MapCarrier{}
+
+	}
+
+	carrier := propagation.MapCarrier{}
+	propagator := propagation.NewCompositeTextMapPropagator(propagation.TraceContext{})
+
+	propagator.Inject(ctx, carrier)
+
+	return carrier
 }
 
 func (mgr *OtelManager) InitTracerProvider(ctx context.Context, servName string, version string) error {

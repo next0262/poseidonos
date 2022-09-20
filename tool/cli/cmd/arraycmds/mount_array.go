@@ -5,6 +5,7 @@ import (
 	"cli/cmd/displaymgr"
 	"cli/cmd/globals"
 	"cli/cmd/grpcmgr"
+	"cli/cmd/otelmgr"
 	"fmt"
 
 	"github.com/spf13/cobra"
@@ -29,6 +30,12 @@ Example:
 
 		var command = "MOUNTARRAY"
 
+		m := otelmgr.GetOtelManagerInstance()
+		defer m.Shutdown()
+		t := otelmgr.NewTracer()
+		t.SetTrace(m.GetRootContext(), globals.SYSTEM_CMD_APP_NAME, command)
+		defer t.Release()
+
 		req, buildErr := buildMountArrayReq(command)
 		if buildErr != nil {
 			fmt.Printf("failed to build request: %v", buildErr)
@@ -42,7 +49,7 @@ Example:
 		}
 		displaymgr.PrintRequest(string(reqJson))
 
-		res, gRpcErr := grpcmgr.SendMountArray(req)
+		res, gRpcErr := grpcmgr.SendMountArray(t.GetContext(), req)
 		if gRpcErr != nil {
 			globals.PrintErrMsg(gRpcErr)
 			return gRpcErr

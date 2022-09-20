@@ -43,6 +43,7 @@
 #include "src/sys_event/volume_event.h"
 #include "src/telemetry/telemetry_client/telemetry_publisher.h"
 #include "src/telemetry/telemetry_client/telemetry_client.h"
+#include "src/trace/trace_instrumentation.h"
 
 namespace pos
 {
@@ -138,12 +139,16 @@ Mapper::~Mapper(void)
 void
 Mapper::Dispose(void)
 {
+    POS_START_SPAN();
+
     if (isInitialized == true)
     {
         POS_TRACE_INFO(EID(MAPPER_FAILED), "[Mapper Dispose] MAPPER Disposed, init:{} arrayId:{}", isInitialized, arrayId);
         StoreAll();
         _Dispose();
     }
+
+    POS_END_SPAN();
 }
 
 void
@@ -156,6 +161,8 @@ Mapper::Shutdown(void)
 int
 Mapper::Init(void)
 {
+    POS_START_SPAN();
+
     int ret = 0;
     if (isInitialized == false)
     {
@@ -194,6 +201,9 @@ Mapper::Init(void)
         isInitialized = true;
     }
     assert(ret == 0);
+
+    POS_END_SPAN();
+
     return ret;
 }
 

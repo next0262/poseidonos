@@ -41,6 +41,7 @@
 #include "src/logger/logger.h"
 #include "src/event_scheduler/event.h"
 #include "src/event_scheduler/event_scheduler.h"
+#include "src/trace/trace_instrumentation.h"
 
 namespace pos
 {
@@ -68,19 +69,28 @@ GarbageCollector::GarbageCollector(IArrayInfo* i, IStateControl* s,
 
 int GarbageCollector::Init(void)
 {
+    POS_START_SPAN();
+
     state->Subscribe(this, typeid(*this).name());
     int returnVal = Start();
     if (unlikely(returnVal != EID(SUCCESS)))
     {
         state->Unsubscribe(this);
     }
+
+    POS_END_SPAN();
+
     return returnVal;
 }
 
 void GarbageCollector::Dispose(void)
 {
+    POS_START_SPAN();
+
     End();
     state->Unsubscribe(this);
+
+    POS_END_SPAN();
 }
 
 void GarbageCollector::Shutdown(void)

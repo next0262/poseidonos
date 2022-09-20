@@ -8,6 +8,7 @@ import (
 	"cli/cmd/displaymgr"
 	"cli/cmd/globals"
 	"cli/cmd/grpcmgr"
+	"cli/cmd/otelmgr"
 
 	"github.com/spf13/cobra"
 	"google.golang.org/protobuf/encoding/protojson"
@@ -28,6 +29,14 @@ Example:
           `,
 	RunE: func(cmd *cobra.Command, args []string) error {
 
+		var command = "DELETEARRAY"
+		
+		m := otelmgr.GetOtelManagerInstance()
+		defer m.Shutdown()
+		t := otelmgr.NewTracer()
+		t.SetTrace(m.GetRootContext(), globals.SYSTEM_CMD_APP_NAME, command)
+		defer t.Release()
+
 		var warningMsg = "WARNING: You are deleting array" + " " +
 			delete_array_arrayName + "," + " " +
 			"you will not be able to recover the data and the volumes in the array.\n" +
@@ -40,8 +49,6 @@ Example:
 				os.Exit(0)
 			}
 		}
-
-		var command = "DELETEARRAY"
 
 		req, buildErr := buildDeleteArrayReq(command)
 		if buildErr != nil {
@@ -56,7 +63,7 @@ Example:
 		}
 		displaymgr.PrintRequest(string(reqJson))
 
-		res, gRpcErr := grpcmgr.SendDeleteArray(req)
+		res, gRpcErr := grpcmgr.SendDeleteArray(t.GetContext(), req)
 		if gRpcErr != nil {
 			globals.PrintErrMsg(gRpcErr)
 			return gRpcErr

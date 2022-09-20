@@ -45,9 +45,28 @@ TraceSpan::TraceSpan()
 }
 
 void
-TraceSpan::Start(std::string str)
+TraceSpan::Start(std::string name)
 {
-    span = tracer->StartSpan(str);
+    span = tracer->StartSpan(name);
+}
+
+void
+TraceSpan::StartWithParent(std::string name, struct ContextW3C ctx)
+{
+    HttpTextMapCarrier<std::map<std::string, std::string>> carrier;
+
+    carrier.Set(trace::propagation::kTraceParent, ctx.traceParent);
+    carrier.Set(trace::propagation::kTraceState, ctx.traceState);
+
+    trace::propagation::HttpTraceContext httpTraceContext;
+
+    auto currentContext = context::RuntimeContext::GetCurrent();
+    auto newContext = httpTraceContext.Extract(carrier, currentContext);
+
+    trace::StartSpanOptions opts;    
+    opts.parent = trace::GetSpan(newContext)->GetContext();
+
+    span = tracer->StartSpan(name, opts);
 }
 
 void

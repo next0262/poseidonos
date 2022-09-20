@@ -59,6 +59,7 @@
 #include "src/telemetry/telemetry_client/telemetry_client.h"
 #include "src/telemetry/telemetry_client/telemetry_publisher.h"
 #include "src/rocksdb_log_buffer/rocksdb_log_buffer.h"
+#include "src/trace/trace_instrumentation.h"
 
 namespace pos
 {
@@ -237,6 +238,8 @@ JournalManager::Init(IVSAMap* vsaMap, IStripeMap* stripeMap,
     IVolumeInfoManager* volumeManager, MetaFsFileControlApi* metaFsCtrl,
     EventScheduler* eventScheduler, TelemetryClient* tc)
 {
+    POS_START_SPAN();
+
     int result = 0;
 
     if (config->IsEnabled() == true)
@@ -260,6 +263,8 @@ JournalManager::Init(IVSAMap* vsaMap, IStripeMap* stripeMap,
             result = _Reset();
         }
     }
+
+    POS_END_SPAN();
 
     return result;
 }
@@ -337,6 +342,8 @@ JournalManager::_DoRecovery(void)
 void
 JournalManager::Dispose(void)
 {
+    POS_START_SPAN();
+
     if (config->IsEnabled() == true)
     {
         _Reset();
@@ -346,6 +353,8 @@ JournalManager::Dispose(void)
         }
         _DisposeModules();
     }
+
+    POS_END_SPAN();
 }
 
 void

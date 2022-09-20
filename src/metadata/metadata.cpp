@@ -46,6 +46,7 @@
 #include "src/metadata/segment_context_updater.h"
 #include "src/telemetry/telemetry_client/telemetry_client.h"
 #include "src/volume/volume_service.h"
+#include "src/trace/trace_instrumentation.h"
 
 namespace pos
 {
@@ -145,6 +146,7 @@ Metadata::~Metadata(void)
 int
 Metadata::Init(void)
 {
+    POS_START_SPAN();
     int eventId = static_cast<int>(EID(MOUNT_ARRAY_DEBUG_MSG));
     int result = 0;
 
@@ -204,12 +206,16 @@ Metadata::Init(void)
         return result;
     }
 
+    POS_END_SPAN();
+
     return result;
 }
 
 void
 Metadata::Dispose(void)
 {
+    POS_START_SPAN();
+
     int eventId = static_cast<int>(EID(UNMOUNT_ARRAY_DEBUG_MSG));
     std::string arrayName = arrayInfo->GetName();
 
@@ -223,6 +229,8 @@ Metadata::Dispose(void)
     journal->Dispose();
 
     metaService->Unregister(arrayInfo->GetName());
+
+    POS_END_SPAN();
 }
 
 void

@@ -6,6 +6,7 @@ import (
 	"cli/cmd/grpcmgr"
 	"cli/cmd/otelmgr"
 	"fmt"
+	"context"
 
 	pb "cli/api"
 
@@ -23,15 +24,16 @@ Syntax:
 	poseidonos-cli system info
           `,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		m := otelmgr.GetOtelManagerInstance()
-		defer m.Shutdown()
-		t := otelmgr.NewTracer()
-		t.SetTrace(m.GetRootContext(), globals.SYSTEM_CMD_APP_NAME, globals.SYSTEM_INFO_FUNC_NAME)
-		defer t.Release()
 
 		var command = "SYSTEMINFO"
 
-		req, buildErr := buildSystemInfoReq(command)
+		m := otelmgr.GetOtelManagerInstance()
+		defer m.Shutdown()
+		t := otelmgr.NewTracer()
+		t.SetTrace(m.GetRootContext(), globals.SYSTEM_CMD_APP_NAME, command)
+		defer t.Release()
+
+		req, buildErr := buildSystemInfoReq(t.GetContext(), command)
 		if buildErr != nil {
 			fmt.Printf("failed to build request: %v", buildErr)
 			t.RecordError(buildErr)
@@ -64,9 +66,10 @@ Syntax:
 	},
 }
 
-func buildSystemInfoReq(command string) (*pb.SystemInfoRequest, error) {
+func buildSystemInfoReq(ctx context.Context, command string) (*pb.SystemInfoRequest, error) {
+
 	uuid := globals.GenerateUUID()
-	req := &pb.SystemInfoRequest{Command: command, Rid: uuid, Requestor: "cli"}
+	req := &pb.SystemInfoRequest{Command: command, Rid: uuid, Requestor: "cli" }
 
 	return req, nil
 }
