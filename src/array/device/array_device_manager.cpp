@@ -223,6 +223,8 @@ ArrayDeviceManager::Clear(void)
 DeviceSet<DeviceMeta>
 ArrayDeviceManager::ExportToMeta(void)
 {
+    POS_START_SPAN();
+
     DeviceSet<ArrayDevice*> _d = devs_->GetDevs();
     DeviceSet<DeviceMeta> metaSet;
     if (_d.nvm.size() > 0)
@@ -262,6 +264,8 @@ ArrayDeviceManager::ExportToMeta(void)
         DeviceMeta deviceMeta(dev->GetUblock()->GetSN(), dev->GetState());
         metaSet.spares.push_back(deviceMeta);
     }
+
+    POS_END_SPAN();
 
     return metaSet;
 }

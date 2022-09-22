@@ -223,6 +223,8 @@ MbrManager::_AllocMem(void)
 int
 MbrManager::_WriteToDevices(void)
 {
+    POS_START_SPAN();
+
     version++;
     systeminfo.mbrVersion = version;
     _AllocMem();
@@ -241,6 +243,8 @@ MbrManager::_WriteToDevices(void)
     }
     POS_TRACE_DEBUG(EID(MBR_WRITE_DONE),
         "write mbr data");
+
+    POS_END_SPAN();
 
     return result;
 }
@@ -338,6 +342,8 @@ MbrManager::_ReadFromDevices(void)
 void
 MbrManager::_DiskIo(UblockSharedPtr dev, void* ctx)
 {
+    POS_START_SPAN();
+
     struct DiskIoContext* ctxt = static_cast<struct DiskIoContext*>(ctx);
     UbioSmartPtr bio(new Ubio(ctxt->mem, MBR_BLOCKS * Ubio::UNITS_PER_BLOCK, 0));
 
@@ -347,6 +353,8 @@ MbrManager::_DiskIo(UblockSharedPtr dev, void* ctx)
 
     IODispatcher& ioDispatcher = *IODispatcherSingleton::Instance();
     ioDispatcher.Submit(bio, true);
+
+    POS_END_SPAN();
 }
 
 void
@@ -477,6 +485,8 @@ MbrManager::_GetSystemUuid(void)
 int
 MbrManager::CreateAbr(ArrayMeta& meta)
 {
+    POS_START_SPAN();
+
     int ret = 0;
     ArrayNamePolicy arrayNamePolicy;
     ret = arrayNamePolicy.CheckArrayName(meta.arrayName);
@@ -538,12 +548,16 @@ MbrManager::CreateAbr(ArrayMeta& meta)
     }
 
     pthread_rwlock_unlock(&mbrLock);
+    POS_END_SPAN();
+
     return EID(MBR_WRONG_ARRAY_VALID_FLAG);
 }
 
 int
 MbrManager::DeleteAbr(string arrayName)
 {
+    POS_START_SPAN();
+
     pthread_rwlock_wrlock(&mbrLock);
     int result = EID(MBR_ABR_NOT_FOUND);
     unsigned int arrayIndex;
@@ -590,6 +604,9 @@ MbrManager::DeleteAbr(string arrayName)
     mapMgr->DeleteDevices(arrayIndex);
 
     pthread_rwlock_unlock(&mbrLock);
+    
+    POS_END_SPAN();
+
     return result;
 }
 

@@ -87,6 +87,8 @@ int
 PartitionManager::CreatePartitions(ArrayDevice* nvm, vector<ArrayDevice*> data,
     RaidTypeEnum metaRaid, RaidTypeEnum dataRaid, IPartitionServices* svc)
 {
+    POS_START_SPAN();
+
     POS_TRACE_INFO(EID(CREATE_ARRAY_DEBUG_MSG), "PartitionManager::CreatePartition, MetaRaid:{}, DataRaid:{}",
         RaidType(metaRaid).ToString(), RaidType(dataRaid).ToString());
     Partitions out;
@@ -109,12 +111,16 @@ PartitionManager::CreatePartitions(ArrayDevice* nvm, vector<ArrayDevice*> data,
         POS_TRACE_WARN(ret, "Error occured during the creating partitions");
     }
 
+    POS_END_SPAN();
+
     return ret;
 }
 
 void
 PartitionManager::DeletePartitions()
 {
+    POS_START_SPAN();
+
     for (size_t i = 0; i < partitions.size(); i++)
     {
         if (nullptr != partitions[i])
@@ -123,11 +129,16 @@ PartitionManager::DeletePartitions()
             partitions[i] = nullptr;
         }
     }
+
+    POS_END_SPAN();
+    
 }
 
 void
 PartitionManager::FormatPartition(PartitionType type, uint32_t arrayId, IODispatcher* io)
 {
+    POS_START_SPAN();
+
     Partition* partition = partitions[type];
     if (partition != nullptr)
     {
@@ -138,6 +149,8 @@ PartitionManager::FormatPartition(PartitionType type, uint32_t arrayId, IODispat
     {
         POS_TRACE_ERROR(EID(CREATE_ARRAY_DEBUG_MSG), "Failed to format {} partition", PARTITION_TYPE_STR[type]);
     }
+
+    POS_END_SPAN();
 }
 
 RaidState

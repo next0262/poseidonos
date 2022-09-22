@@ -50,6 +50,8 @@ MbrMapManager::~MbrMapManager(void)
 int
 MbrMapManager::InsertDevices(ArrayMeta& meta, unsigned int arrayIndex)
 {
+    POS_START_SPAN();
+
     auto insertNum = 0;
     for (auto dev : meta.devs.nvm)
     {
@@ -78,6 +80,8 @@ MbrMapManager::InsertDevices(ArrayMeta& meta, unsigned int arrayIndex)
     POS_TRACE_DEBUG(EID(MBR_DEBUG_MSG),
         "Inserted {} devices to arrayDeviceMap", insertNum);
 
+    POS_END_SPAN();
+    
     return 0;
 }
 
@@ -91,6 +95,8 @@ MbrMapManager::InsertDevice(string deviceUid, unsigned int arrayIndex)
 int
 MbrMapManager::DeleteDevices(unsigned int arrayIndex)
 {
+    POS_START_SPAN();
+
     arrayDeviceIndexMapIter devIter;
     auto deleteNum = 0;
     for (devIter = arrayDeviceIndexMap.begin(); devIter !=
@@ -112,6 +118,8 @@ MbrMapManager::DeleteDevices(unsigned int arrayIndex)
     POS_TRACE_DEBUG(EID(MBR_DEBUG_MSG),
         "Deleted {} devices from arrayDeviceMap", deleteNum);
 
+    POS_END_SPAN();
+    
     return 0;
 }
 
