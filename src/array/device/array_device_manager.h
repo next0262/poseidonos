@@ -63,14 +63,16 @@ public:
     virtual void Clear(void);
     virtual int AddSpare(string devName);
     virtual int RemoveSpare(string devName);
-    virtual int RemoveSpare(ArrayDevice* dev);
-    virtual int ReplaceWithSpare(ArrayDevice* target);
+    virtual int ReplaceWithSpare(ArrayDevice* target, ArrayDevice*& swapOut);
 
     virtual tuple<ArrayDevice*, ArrayDeviceType> GetDev(UblockSharedPtr uBlock);
-    virtual tuple<ArrayDevice*, ArrayDeviceType> GetDev(string devSn);
-    virtual ArrayDevice* GetFaulty(void);
-    virtual ArrayDevice* GetRebuilding(void);
+    virtual tuple<ArrayDevice*, ArrayDeviceType> GetDevBySn(string devSn);
+    virtual tuple<ArrayDevice*, ArrayDeviceType> GetDevByName(string devName);
+    virtual vector<IArrayDevice*> GetFaulty(void);
+    virtual vector<IArrayDevice*> GetRebuilding(void);
     virtual vector<ArrayDevice*> GetDataDevices(void);
+    virtual vector<ArrayDevice*> GetSpareDevices(void);
+    virtual vector<ArrayDevice*> GetAvailableSpareDevices(void);
 
     // This is UT helper method and doesn't need to be inherited. This isn't for production use.
     void SetArrayDeviceList(ArrayDeviceList* arrayDeviceList);

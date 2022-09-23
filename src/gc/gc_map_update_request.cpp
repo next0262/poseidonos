@@ -36,7 +36,6 @@
 #include <memory>
 #include <string>
 
-#include "Air.h"
 #include "src/allocator/allocator.h"
 #include "src/allocator_service/allocator_service.h"
 #include "src/array_mgmt/array_manager.h"
@@ -44,8 +43,8 @@
 #include "src/gc/copier_meta.h"
 #include "src/gc/gc_map_update_completion.h"
 #include "src/gc/gc_stripe_manager.h"
-#include "src/include/branch_prediction.h"
 #include "src/include/backend_event.h"
+#include "src/include/branch_prediction.h"
 #include "src/include/pos_event_id.hpp"
 #include "src/io/backend_io/flush_completion.h"
 #include "src/io/backend_io/stripe_map_update_request.h"
@@ -58,7 +57,7 @@
 
 namespace pos
 {
-GcMapUpdateRequest::GcMapUpdateRequest(Stripe* stripe, std::string arrayName, GcStripeManager* gcStripeManager)
+GcMapUpdateRequest::GcMapUpdateRequest(StripeSmartPtr stripe, std::string arrayName, GcStripeManager* gcStripeManager)
 : GcMapUpdateRequest(stripe,
       std::make_shared<GcMapUpdateCompletion>(stripe, arrayName, MapperServiceSingleton::Instance()->GetIStripeMap(arrayName), EventSchedulerSingleton::Instance(), gcStripeManager),
       MapperServiceSingleton::Instance()->GetIVSAMap(arrayName),
@@ -67,7 +66,7 @@ GcMapUpdateRequest::GcMapUpdateRequest(Stripe* stripe, std::string arrayName, Gc
 {
 }
 
-GcMapUpdateRequest::GcMapUpdateRequest(Stripe* stripe,
+GcMapUpdateRequest::GcMapUpdateRequest(StripeSmartPtr stripe,
     CallbackSmartPtr completionEvent,
     IVSAMap* inputIVSAMap,
     IArrayInfo* inputIArrayInfo,
@@ -151,14 +150,14 @@ GcMapUpdateRequest::_UpdateMeta(void)
     int result = metaUpdater->UpdateGcMap(stripe, mapUpdates, invalidSegCnt, completionEvent);
     if (unlikely(0 != result))
     {
-        POS_EVENT_ID eventId = POS_EVENT_ID::GC_MAP_UPDATE_FAILED;
+        POS_EVENT_ID eventId = EID(GC_MAP_UPDATE_FAILED);
         POS_TRACE_ERROR(static_cast<int>(eventId),
             "gc map update failed, arrayName:{}, stripeUserLsid:{}",
             iArrayInfo->GetName(), mapUpdates.userLsid);
         return false;
     }
 
-    POS_TRACE_DEBUG((int)POS_EVENT_ID::GC_MAP_UPDATE_REQUEST,
+    POS_TRACE_DEBUG(EID(GC_MAP_UPDATE_REQUEST),
         "gc map update request, arrayName:{}, stripeUserLsid:{}",
         iArrayInfo->GetName(), mapUpdates.userLsid);
     return true;

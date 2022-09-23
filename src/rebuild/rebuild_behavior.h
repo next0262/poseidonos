@@ -36,34 +36,21 @@
 
 #include "src/array/rebuild/rebuild_context.h"
 #include "src/logger/logger.h"
-#include "src/resource_manager/memory_manager.h"
 
 namespace pos
 {
-class BufferPool;
 class RebuildBehavior
 {
 public:
-    RebuildBehavior(unique_ptr<RebuildContext> ctx,
-        MemoryManager* mm = MemoryManagerSingleton::Instance());
+    explicit RebuildBehavior(unique_ptr<RebuildContext> c);
     virtual ~RebuildBehavior(void);
+    virtual bool Rebuild(void) = 0;
+    virtual void UpdateProgress(uint32_t val) = 0;
     virtual void StopRebuilding(void);
     virtual RebuildContext* GetContext(void);
-    virtual bool Read(void) = 0;
-    virtual bool Write(uint32_t targetId, UbioSmartPtr ubio) = 0;
-    virtual bool Complete(uint32_t targetId, UbioSmartPtr ubio) = 0;
-    virtual void UpdateProgress(uint32_t val) = 0;
 
 protected:
-    bool _InitBuffers(void);
-    bool _InitRecoverBuffers(string owner);
-    bool _InitRebuildReadBuffers(string owner, int totalChunksToRead);
-    int _GetTotalReadChunksForRecovery(void);
-    virtual string _GetClassName(void) = 0;
-
+    bool isInitialized = false;
     unique_ptr<RebuildContext> ctx = nullptr;
-    MemoryManager* mm = nullptr;
-    BufferPool* recoverBuffers = nullptr;
-    BufferPool* rebuildReadBuffers = nullptr;
 };
 } // namespace pos

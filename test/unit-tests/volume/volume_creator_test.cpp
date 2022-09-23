@@ -27,6 +27,7 @@ TEST(VolumeCreator, Do_wrongName)
 {
     // Given
     std::string arrayName = "";
+    std::string uuid = "";
     int arrayID = 0;
     std::string name = "volumetest";
     std::string newName = "";
@@ -44,7 +45,7 @@ TEST(VolumeCreator, Do_wrongName)
 
     VolumeCreator volumeCreator(volumes, arrayName, arrayID);
 
-    actual = volumeCreator.Do(newName, size, maxIops, maxBw, minIops, minBw);
+    actual = volumeCreator.Do(newName, size, maxIops, maxBw, minIops, minBw, uuid, false);
 
     // Then
     ASSERT_NE(actual, expected);
@@ -62,9 +63,10 @@ TEST(VolumeCreator, Do_SameName)
     uint64_t maxBw = 100;
     uint64_t minIops = 0;
     uint64_t minBw = 0;
+    std::string uuid = "";
 
     int actual;
-    int expected = (int)POS_EVENT_ID::CREATE_VOL_SAME_VOL_NAME_EXISTS;
+    int expected = EID(CREATE_VOL_SAME_VOL_NAME_EXISTS);
 
     // When
     VolumeList volumes;
@@ -75,7 +77,7 @@ TEST(VolumeCreator, Do_SameName)
 
     VolumeCreator volumeCreator(volumes, arrayName, arrayID);
 
-    actual = volumeCreator.Do(name, size, maxIops, maxBw, minIops, minBw);
+    actual = volumeCreator.Do(name, size, maxIops, maxBw, minIops, minBw, uuid, false);
 
     // Then
     ASSERT_EQ(actual, expected);
@@ -93,16 +95,17 @@ TEST(VolumeCreator, Do_SetSizeFail)
     uint64_t maxBw = 1;
     uint64_t minIops = 0;
     uint64_t minBw = 0;
+    std::string uuid = "";
 
     int actual;
-    int expected = (int)POS_EVENT_ID::CREATE_VOL_SIZE_NOT_ALIGNED;
+    int expected = EID(CREATE_VOL_SIZE_NOT_ALIGNED);
 
     // When
     VolumeList volumes;
 
     VolumeCreator volumeCreator(volumes, arrayName, arrayID);
 
-    actual = volumeCreator.Do(name, size, maxIops, maxBw, minIops, minBw);
+    actual = volumeCreator.Do(name, size, maxIops, maxBw, minIops, minBw, uuid, false);
 
     // Then
     ASSERT_EQ(actual, expected);
@@ -120,16 +123,17 @@ TEST(VolumeCreator, Do_NotEnoughArraySize)
     uint64_t maxBw = 1;
     uint64_t minIops = 0;
     uint64_t minBw = 0;
+    std::string uuid = "";
 
     int actual;
-    int expected = (int)POS_EVENT_ID::CREATE_VOL_SIZE_EXCEEDED;
+    int expected = EID(CREATE_VOL_SIZE_EXCEEDED);
 
     // When
     VolumeList volumes;
 
     VolumeCreator volumeCreator(volumes, arrayName, arrayID);
 
-    actual = volumeCreator.Do(name, size, maxIops, maxBw, minIops, minBw);
+    actual = volumeCreator.Do(name, size, maxIops, maxBw, minIops, minBw, uuid, false);
 
     // Then
     ASSERT_EQ(actual, expected);

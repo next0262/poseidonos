@@ -39,7 +39,7 @@
 namespace pos
 {
 StripeMapContent::StripeMapContent(Map* m, int mapId, MapperAddressInfo* addrInfo)
-: MapContent(mapId, addrInfo)
+: MapContent(mapId, addrInfo, MetaFileType::SpecialPurposeMap)
 {
     // only for UT
     fileName = "StripeMap.bin";
@@ -47,7 +47,7 @@ StripeMapContent::StripeMapContent(Map* m, int mapId, MapperAddressInfo* addrInf
 }
 
 StripeMapContent::StripeMapContent(int mapId, MapperAddressInfo* addrInfo)
-: MapContent(mapId, addrInfo)
+: MapContent(mapId, addrInfo, MetaFileType::SpecialPurposeMap)
 {
     fileName = "StripeMap.bin";
 }
@@ -91,7 +91,7 @@ StripeMapContent::SetEntry(StripeId vsid, StripeAddr entry)
         if (unlikely(mpage == nullptr))
         {
             map->ReleaseMpageLock(pageNr);
-            return -EID(STRIPEMAP_SET_FAILURE);
+            return ERRID(STRIPEMAP_SET_FAILURE);
         }
         mapHeader->SetMapAllocated(pageNr);
     }

@@ -41,6 +41,7 @@
 #include "src/include/branch_prediction.h"
 #include "src/include/pos_event_id.hpp"
 #include "src/io/frontend_io/aio.h"
+#include "src/io_scheduler/io_dispatcher_submission.h"
 #include "src/io_scheduler/io_worker.h"
 #include "src/logger/logger.h"
 #include "src/master_context/config_manager.h"
@@ -56,6 +57,7 @@
 
 namespace pos
 {
+bool QosManager::needThrottling;
 /* --------------------------------------------------------------------------*/
 /**
  * @Synopsis
@@ -107,7 +109,6 @@ QosManager::QosManager(SpdkEnvCaller* spdkEnvCaller,
 
     monitoringManager = InternalManagerFactory::CreateInternalManager(QosInternalManager_Monitor, qosContext, this);
     policyManager = InternalManagerFactory::CreateInternalManager(QosInternalManager_Policy, qosContext, this);
-    processingManager = InternalManagerFactory::CreateInternalManager(QosInternalManager_Processing, qosContext, this);
     correctionManager = InternalManagerFactory::CreateInternalManager(QosInternalManager_Correction, qosContext, this);
 
     for (uint32_t reactor = 0; reactor < M_MAX_REACTORS; reactor++)
@@ -140,7 +141,6 @@ QosManager::~QosManager(void)
     delete qosEventManager;
     delete monitoringManager;
     delete policyManager;
-    delete processingManager;
     delete correctionManager;
     delete qosContext;
     if (spdkEnvCaller != nullptr)
@@ -213,7 +213,7 @@ QosManager::FinalizeSpdkManager(void)
     {
         spdkManager->Finalize();
     }
-    POS_TRACE_INFO(POS_EVENT_ID::QOS_FINALIZATION, "QosSpdkManager Finalization complete");
+    POS_TRACE_INFO(EID(QOS_FINALIZATION), "QosSpdkManager Finalization complete");
     delete spdkManager;
 }
 /* --------------------------------------------------------------------------*/
@@ -234,13 +234,12 @@ QosManager::_Finalize(void)
     qosEventManager->SetExitQos();
     monitoringManager->SetExitQos();
     policyManager->SetExitQos();
-    processingManager->SetExitQos();
     correctionManager->SetExitQos();
     if (nullptr != qosThread)
     {
         qosThread->join();
     }
-    POS_TRACE_INFO(POS_EVENT_ID::QOS_FINALIZATION, "QosManager Finalization complete");
+    POS_TRACE_INFO(EID(QOS_FINALIZATION), "QosManager Finalization complete");
 }
 
 /* --------------------------------------------------------------------------*/
@@ -298,6 +297,9 @@ QosManager::PeriodicalJob(uint64_t* nextTick)
             *nextTick = now;
         }
         *nextTick = *nextTick + IBOF_QOS_TIMESLICE_IN_USEC * spdkEnvCaller->SpdkGetTicksHz() / SPDK_SEC_TO_USEC;
+        IODispatcherSubmissionSingleton::Instance()->CheckAndSetBusyMode();
+        IODispatcherSubmissionSingleton::Instance()->RefillRemaining(SPDK_SEC_TO_USEC
+            / IBOF_QOS_TIMESLICE_IN_USEC);
         _ControlThrottling();
     }
 }
@@ -311,6 +313,14 @@ QosManager::_ControlThrottling(void)
     QosUserPolicy& qosUserPolicy = qosContext->GetQosUserPolicy();
     AllVolumeUserPolicy& allVolUserPolicy = qosUserPolicy.GetAllVolumeUserPolicy();
     std::vector<std::pair<uint32_t, uint32_t>> minVols = allVolUserPolicy.GetMinimumGuaranteeVolume();
+    if (minVols.empty())
+    {
+        needThrottling = false;
+    }
+    else
+    {
+        needThrottling = true;
+    }
     for (auto iter : minVols)
     {
         uint32_t arrayId = iter.first;
@@ -353,7 +363,7 @@ QosManager::_QosWorker(void)
     {
         if (true == IsExitQosSet())
         {
-            POS_TRACE_INFO(POS_EVENT_ID::QOS_FINALIZATION, "QosManager Finalization Triggered, QosWorker thread exit");
+            POS_TRACE_INFO(EID(QOS_FINALIZATION), "QosManager Finalization Triggered, QosWorker thread exit");
             break;
         }
         currentManager->Execute();
@@ -384,10 +394,6 @@ QosManager::_GetNextInternalManager(QosInternalManagerType internalManagerType)
 
         case QosInternalManager_Policy:
             internalManager = policyManager;
-            break;
-
-        case QosInternalManager_Processing:
-            internalManager = processingManager;
             break;
 
         case QosInternalManager_Correction:
@@ -784,16 +790,16 @@ QosManager::UpdateBackendPolicy(BackendEvent eventType, qos_backend_policy backe
 {
     std::unique_lock<std::mutex> uniqueLock(policyUpdateLock);
     backendPolicyCli[eventType] = backendPolicy;
-    if (eventType == BackendEvent_UserdataRebuild && backendPolicyCli[BackendEvent_UserdataRebuild].priorityImpact == PRIORITY_LOWEST)
+    if (eventType == BackendEvent_UserdataRebuild && backendPolicyCli[BackendEvent_UserdataRebuild].priorityImpact == PRIORITY_LOW)
     {
         qos_backend_policy policy;
-        policy.priorityImpact = PRIORITY_HIGHEST;
+        policy.priorityImpact = PRIORITY_HIGH;
         backendPolicyCli[BackendEvent_FrontendIO] = policy;
     }
-    else if (eventType == BackendEvent_UserdataRebuild && backendPolicyCli[BackendEvent_UserdataRebuild].priorityImpact == PRIORITY_HIGHEST)
+    else if (eventType == BackendEvent_UserdataRebuild && backendPolicyCli[BackendEvent_UserdataRebuild].priorityImpact == PRIORITY_HIGH)
     {
         qos_backend_policy policy;
-        policy.priorityImpact = PRIORITY_LOWEST;
+        policy.priorityImpact = PRIORITY_LOW;
         backendPolicyCli[BackendEvent_FrontendIO] = policy;
     }
     return QosReturnCode::SUCCESS;
@@ -968,7 +974,7 @@ QosManager::UpdateArrayMap(std::string arrayName)
     }
     if (currentNumberOfArrays >= MAX_ARRAY_COUNT)
     {
-        POS_TRACE_WARN(static_cast<int>(POS_EVENT_ID::QOS_MAX_ARRAYS_EXCEEDED), "Trying to create more arrays than maximum possible arrays");
+        POS_TRACE_WARN(static_cast<int>(EID(QOS_MAX_ARRAYS_EXCEEDED)), "Trying to create more arrays than maximum possible arrays");
         return;
     }
     else
@@ -1004,7 +1010,7 @@ QosManager::DeleteEntryArrayMap(std::string arrayName)
     std::lock_guard<std::mutex> lock(mapUpdateLock);
     if (arrayNameMap.find(arrayName) == arrayNameMap.end())
     {
-        POS_TRACE_ERROR(static_cast<int>(POS_EVENT_ID::QOS_ARRAY_DOES_NOT_EXIST), "Deleting array which does not exist");
+        POS_TRACE_ERROR(static_cast<int>(EID(QOS_ARRAY_DOES_NOT_EXIST)), "Deleting array which does not exist");
         return;
     }
     else

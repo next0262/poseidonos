@@ -41,7 +41,10 @@
 #include "src/journal_manager/log_buffer/log_write_context_factory.h"
 #include "src/logger/logger.h"
 #include "src/metafs/metafs_file_intf.h"
-
+#include "src/telemetry/telemetry_client/telemetry_publisher.h"
+#include "src/metafs/config/metafs_config_manager.h"
+#include "src/metafs/include/metafs_service.h"
+#include "src/meta_file_intf/rocksdb_metafs_intf.h"
 namespace pos
 {
 JournalLogBuffer::JournalLogBuffer(void)
@@ -50,7 +53,9 @@ JournalLogBuffer::JournalLogBuffer(void)
   numInitializedLogGroup(0),
   logBufferReadDone(0),
   logFile(nullptr),
-  initializedDataBuffer(nullptr)
+  initializedDataBuffer(nullptr),
+  telemetryPublisher(nullptr),
+  rocksDbEnabled(MetaFsServiceSingleton::Instance()->GetConfigManager()->IsRocksdbEnabled())
 {
 }
 
@@ -76,15 +81,27 @@ JournalLogBuffer::~JournalLogBuffer(void)
 }
 
 int
-JournalLogBuffer::Init(JournalConfiguration* journalConfiguration, LogWriteContextFactory* logWriteContextFactory, int arrayId)
+JournalLogBuffer::Init(JournalConfiguration* journalConfiguration, LogWriteContextFactory* logWriteContextFactory,
+    int arrayId, TelemetryPublisher* tp)
 {
     config = journalConfiguration;
     logFactory = logWriteContextFactory;
+    telemetryPublisher = tp;
 
     if (logFile == nullptr)
     {
-        logFile = new MetaFsFileIntf("JournalLogBuffer", arrayId, config->GetMetaVolumeToUse());
-        POS_TRACE_INFO(EID(JOURNAL_LOG_BUFFER_INITIATED), "MetaFsFileIntf for JournalLogBuffer has been instantiated with MetaVolumeType {}", config->GetMetaVolumeToUse());
+        // rocksDbEnabled case works when journal configuration "use_rocksdb" is false and metafs configuration "use_rocksdb" is true. 
+        // TODO(sang7.park) : but the performance of POS is too low with this case, so have to figure out it.
+        if (rocksDbEnabled)
+        {
+            logFile = new RocksDBMetaFsIntf("JournalLogBuffer", arrayId, MetaFileType::Journal, config->GetMetaVolumeToUse());
+            POS_TRACE_INFO(EID(JOURNAL_LOG_BUFFER_INITIATED), "RocksDBMetaFsIntf for JournalLogBuffer has been instantiated with MetaVolumeType {}, this option is not recommended because of low performance. ", config->GetMetaVolumeToUse());
+        }
+        else
+        {
+            logFile = new MetaFsFileIntf("JournalLogBuffer", arrayId, MetaFileType::Journal, config->GetMetaVolumeToUse());
+            POS_TRACE_INFO(EID(JOURNAL_LOG_BUFFER_INITIATED), "MetaFsFileIntf for JournalLogBuffer has been instantiated with MetaVolumeType {}", config->GetMetaVolumeToUse());
+        }
     }
     return 0;
 }
@@ -108,7 +125,7 @@ JournalLogBuffer::Dispose(void)
         int ret = logFile->Close();
         if (ret != 0)
         {
-            POS_TRACE_ERROR((int)POS_EVENT_ID::JOURNAL_LOG_BUFFER_CLOSE_FAILED,
+            POS_TRACE_ERROR(EID(JOURNAL_LOG_BUFFER_CLOSE_FAILED),
                 "Failed to close journal log buffer");
         }
     }
@@ -131,15 +148,15 @@ JournalLogBuffer::Create(uint64_t logBufferSize)
 {
     if (logFile->DoesFileExist() == true)
     {
-        POS_TRACE_ERROR(POS_EVENT_ID::JOURNAL_LOG_BUFFER_CREATE_FAILED,
+        POS_TRACE_ERROR(EID(JOURNAL_LOG_BUFFER_CREATE_FAILED),
             "Log buffer already exists");
-        return -1 * (int)POS_EVENT_ID::JOURNAL_LOG_BUFFER_CREATE_FAILED;
+        return -1 * EID(JOURNAL_LOG_BUFFER_CREATE_FAILED);
     }
 
     int ret = logFile->Create(logBufferSize);
     if (ret != 0)
     {
-        POS_TRACE_ERROR((int)POS_EVENT_ID::JOURNAL_LOG_BUFFER_CREATE_FAILED,
+        POS_TRACE_ERROR(EID(JOURNAL_LOG_BUFFER_CREATE_FAILED),
             "Failed to create log buffer");
         return ret;
     }
@@ -147,7 +164,7 @@ JournalLogBuffer::Create(uint64_t logBufferSize)
     ret = logFile->Open();
     if (ret != 0)
     {
-        POS_TRACE_ERROR((int)POS_EVENT_ID::JOURNAL_LOG_BUFFER_OPEN_FAILED,
+        POS_TRACE_ERROR(EID(JOURNAL_LOG_BUFFER_OPEN_FAILED),
             "Failed to open log buffer");
         return ret;
     }
@@ -161,22 +178,22 @@ JournalLogBuffer::Open(uint64_t& logBufferSize)
 {
     if (logFile->DoesFileExist() == false)
     {
-        POS_TRACE_ERROR(POS_EVENT_ID::JOURNAL_LOG_BUFFER_OPEN_FAILED,
+        POS_TRACE_ERROR(EID(JOURNAL_LOG_BUFFER_OPEN_FAILED),
             "Log buffer does not exist");
-        return (-1 * (int)POS_EVENT_ID::JOURNAL_LOG_BUFFER_OPEN_FAILED);
+        return (-1 * EID(JOURNAL_LOG_BUFFER_OPEN_FAILED));
     }
 
     int ret = logFile->Open();
     if (ret != 0)
     {
-        POS_TRACE_ERROR(POS_EVENT_ID::JOURNAL_LOG_BUFFER_OPEN_FAILED,
+        POS_TRACE_ERROR(EID(JOURNAL_LOG_BUFFER_OPEN_FAILED),
             "Failed to open log buffer");
         return ret;
     }
 
     logBufferSize = logFile->GetFileSize();
 
-    POS_TRACE_INFO(POS_EVENT_ID::JOURNAL_LOG_BUFFER_LOADED,
+    POS_TRACE_INFO(EID(JOURNAL_LOG_BUFFER_LOADED),
         "Journal log buffer is loaded");
     return ret;
 }
@@ -185,6 +202,14 @@ int
 JournalLogBuffer::ReadLogBuffer(int groupId, void* buffer)
 {
     uint64_t groupSize = config->GetLogGroupSize();
+
+    if (telemetryPublisher)
+    {
+        POSMetric metric(TEL36004_JRN_LOAD_LOG_GROUP, POSMetricTypes::MT_GAUGE);
+        metric.AddLabel("group_id", std::to_string(groupId));
+        metric.SetGaugeValue(1);
+        telemetryPublisher->PublishMetric(metric);
+    }
 
     AsyncMetaFileIoCtx* logBufferReadReq = new AsyncMetaFileIoCtx();
     logBufferReadReq->opcode = MetaFsIoOpcode::Read;
@@ -199,15 +224,23 @@ JournalLogBuffer::ReadLogBuffer(int groupId, void* buffer)
     int ret = logFile->AsyncIO(logBufferReadReq);
     if (ret != 0)
     {
-        POS_TRACE_ERROR((int)POS_EVENT_ID::JOURNAL_LOG_BUFFER_READ_FAILED,
+        POS_TRACE_ERROR(EID(JOURNAL_LOG_BUFFER_READ_FAILED),
             "Failed to read log buffer");
         delete logBufferReadReq;
-        return -1 * ((int)POS_EVENT_ID::JOURNAL_LOG_BUFFER_READ_FAILED);
+        return -1 * (EID(JOURNAL_LOG_BUFFER_READ_FAILED));
     }
 
     while (logBufferReadDone == false)
     {
         usleep(1);
+    }
+
+    if (telemetryPublisher)
+    {
+        POSMetric metric(TEL36004_JRN_LOAD_LOG_GROUP, POSMetricTypes::MT_GAUGE);
+        metric.AddLabel("group_id", std::to_string(groupId));
+        metric.SetGaugeValue(0);
+        telemetryPublisher->PublishMetric(metric);
     }
 
     return ret;
@@ -221,9 +254,9 @@ JournalLogBuffer::WriteLog(LogWriteContext* context)
 
     if (ret != 0)
     {
-        POS_TRACE_ERROR((int)POS_EVENT_ID::JOURNAL_LOG_WRITE_FAILED,
+        POS_TRACE_ERROR(EID(JOURNAL_LOG_WRITE_FAILED),
             "Failed to write journal log");
-        ret = -1 * (int)POS_EVENT_ID::JOURNAL_LOG_WRITE_FAILED;
+        ret = -1 * EID(JOURNAL_LOG_WRITE_FAILED);
     }
 
     return ret;
@@ -242,7 +275,7 @@ JournalLogBuffer::SyncResetAll(void)
         ret = AsyncReset(groupId, callbackEvent);
         if (ret != 0)
         {
-            POS_TRACE_ERROR((int)POS_EVENT_ID::JOURNAL_LOG_BUFFER_RESET_FAILED,
+            POS_TRACE_ERROR(EID(JOURNAL_LOG_BUFFER_RESET_FAILED),
                 "Failed to reset journal log buffer");
             return ret;
         }
@@ -252,7 +285,7 @@ JournalLogBuffer::SyncResetAll(void)
     {
     }
 
-    POS_TRACE_INFO((int)POS_EVENT_ID::JOURNAL_LOG_BUFFER_RESET,
+    POS_TRACE_INFO(EID(JOURNAL_LOG_BUFFER_RESET),
         "Journal log buffer is reset");
 
     return ret;
@@ -261,6 +294,14 @@ JournalLogBuffer::SyncResetAll(void)
 int
 JournalLogBuffer::AsyncReset(int id, EventSmartPtr callbackEvent)
 {
+    if (telemetryPublisher)
+    {
+        POSMetric metric(TEL36002_JRN_LOG_GROUP_RESET_CNT, POSMetricTypes::MT_COUNT);
+        metric.AddLabel("group_id", std::to_string(id));
+        metric.SetCountValue(1);
+        telemetryPublisher->PublishMetric(metric);
+    }
+
     uint64_t offset = _GetFileOffset(id, 0);
     uint64_t groupSize = config->GetLogGroupSize();
     LogGroupResetContext* resetRequest = logFactory->CreateLogGroupResetContext(offset, id, groupSize, callbackEvent, initializedDataBuffer);
@@ -278,7 +319,7 @@ JournalLogBuffer::InternalIo(LogBufferIoContext* context)
     int ret = logFile->AsyncIO(context);
     if (ret != 0)
     {
-        POS_TRACE_ERROR((int)POS_EVENT_ID::JOURNAL_LOG_BUFFER_RESET_FAILED,
+        POS_TRACE_ERROR(EID(JOURNAL_LOG_BUFFER_RESET_FAILED),
             "Failed to reset log buffer");
     }
     return ret;
@@ -303,7 +344,7 @@ JournalLogBuffer::Delete(void)
     {
         ret = logFile->Delete();
 
-        POS_TRACE_DEBUG((int)POS_EVENT_ID::JOURNAL_DEBUG,
+        POS_TRACE_DEBUG(EID(JOURNAL_DEBUG),
             "Journal log buffer is deleted");
     }
     return ret;
@@ -313,6 +354,13 @@ void
 JournalLogBuffer::LogGroupResetCompleted(int logGroupId)
 {
     numInitializedLogGroup++;
+    if (telemetryPublisher)
+    {
+        POSMetric metric(TEL36003_JRN_LOG_GROUP_RESET_DONE_CNT, POSMetricTypes::MT_COUNT);
+        metric.AddLabel("group_id", std::to_string(logGroupId));
+        metric.SetCountValue(1);
+        telemetryPublisher->PublishMetric(metric);
+    }
 }
 
 bool

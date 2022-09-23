@@ -39,6 +39,7 @@
 #include "src/journal_manager/config/journal_configuration.h"
 #include "src/journal_manager/log_buffer/i_log_group_reset_completed.h"
 #include "src/meta_file_intf/meta_file_intf.h"
+#include "i_journal_log_buffer.h"
 
 namespace pos
 {
@@ -46,35 +47,37 @@ class LogWriteContext;
 class LogBufferIoContext;
 class LogGroupResetContext;
 class LogWriteContextFactory;
+class TelemetryPublisher;
 
-class JournalLogBuffer : public ILogGroupResetCompleted
+class JournalLogBuffer : public IJournalLogBuffer
 {
 public:
     JournalLogBuffer(void);
     explicit JournalLogBuffer(MetaFileIntf* metaFile);
     virtual ~JournalLogBuffer(void);
 
-    virtual int Init(JournalConfiguration* journalConfiguration, LogWriteContextFactory* logWriteContextFactory, int arrayId);
-    virtual void InitDataBuffer(void);
-    virtual void Dispose(void);
+    virtual int Init(JournalConfiguration* journalConfiguration, LogWriteContextFactory* logWriteContextFactory,
+        int arrayId, TelemetryPublisher* tp) override;
+    virtual void InitDataBuffer(void) override;
+    virtual void Dispose(void) override;
 
-    virtual int Create(uint64_t logBufferSize);
-    virtual int Open(uint64_t& logBufferSize);
+    virtual int Create(uint64_t logBufferSize) override;
+    virtual int Open(uint64_t& logBufferSize) override;
 
-    virtual int ReadLogBuffer(int groupId, void* buffer);
-    virtual int WriteLog(LogWriteContext* context);
+    virtual int ReadLogBuffer(int groupId, void* buffer) override;
+    virtual int WriteLog(LogWriteContext* context) override;
 
-    virtual int SyncResetAll(void);
-    virtual int AsyncReset(int id, EventSmartPtr callbackEvent);
+    virtual int SyncResetAll(void) override;
+    virtual int AsyncReset(int id, EventSmartPtr callbackEvent) override;
 
-    virtual int InternalIo(LogBufferIoContext* context);
-    virtual void InternalIoDone(AsyncMetaFileIoCtx* ctx);
+    virtual int InternalIo(LogBufferIoContext* context) override;
+    virtual void InternalIoDone(AsyncMetaFileIoCtx* ctx) override;
 
-    int Delete(void); // TODO(huijeong.kim): move to tester code
+    int Delete(void) override; // TODO(huijeong.kim): move to tester code
 
     virtual void LogGroupResetCompleted(int logGroupId) override;
 
-    virtual bool DoesLogFileExist(void);
+    virtual bool DoesLogFileExist(void) override;
     inline bool
     IsInitialized(void)
     {
@@ -109,5 +112,8 @@ private:
     MetaFileIntf* logFile;
 
     char* initializedDataBuffer;
+
+    TelemetryPublisher* telemetryPublisher;
+    bool rocksDbEnabled;
 };
 } // namespace pos

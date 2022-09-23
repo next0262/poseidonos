@@ -1,16 +1,16 @@
 package arraycmds
 
 import (
-	"encoding/json"
+	"fmt"
 	"os"
 
+	pb "cli/api"
 	"cli/cmd/displaymgr"
 	"cli/cmd/globals"
-	"cli/cmd/messages"
-	"cli/cmd/socketmgr"
+	"cli/cmd/grpcmgr"
 
-	"github.com/labstack/gommon/log"
 	"github.com/spf13/cobra"
+	"google.golang.org/protobuf/encoding/protojson"
 )
 
 var DeleteArrayCmd = &cobra.Command{
@@ -26,11 +26,11 @@ Syntax:
 Example: 
 	poseidonos-cli array delete --array-name Array0	
           `,
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 
-		var warningMsg = "WARNING: After deleting array" + " " +
+		var warningMsg = "WARNING: You are deleting array" + " " +
 			delete_array_arrayName + "," + " " +
-			"you cannot recover the data of the volumes in the array.\n\n" +
+			"you will not be able to recover the data and the volumes in the array.\n" +
 			"Are you sure you want to delete array" + " " +
 			delete_array_arrayName + "?"
 
@@ -43,27 +43,42 @@ Example:
 
 		var command = "DELETEARRAY"
 
-		param := messages.DeleteArrayParam{
-			ARRAYNAME: delete_array_arrayName,
+		req, buildErr := buildDeleteArrayReq(command)
+		if buildErr != nil {
+			fmt.Printf("failed to build request: %v", buildErr)
+			return buildErr
 		}
 
-		uuid := globals.GenerateUUID()
-
-		req := messages.BuildReqWithParam(command, uuid, param)
-
-		reqJSON, err := json.Marshal(req)
+		reqJson, err := protojson.Marshal(req)
 		if err != nil {
-			log.Error("error:", err)
+			fmt.Printf("failed to marshal the protobuf request: %v", err)
+			return err
+		}
+		displaymgr.PrintRequest(string(reqJson))
+
+		res, gRpcErr := grpcmgr.SendDeleteArray(req)
+		if gRpcErr != nil {
+			globals.PrintErrMsg(gRpcErr)
+			return gRpcErr
 		}
 
-		displaymgr.PrintRequest(string(reqJSON))
-
-		// Do not send request to server and print response when testing request build.
-		if !(globals.IsTestingReqBld) {
-			resJSON := socketmgr.SendReqAndReceiveRes(string(reqJSON))
-			displaymgr.PrintResponse(command, resJSON, globals.IsDebug, globals.IsJSONRes, globals.DisplayUnit)
+		printErr := displaymgr.PrintProtoResponse(command, res)
+		if printErr != nil {
+			fmt.Printf("failed to print the response: %v", printErr)
+			return printErr
 		}
+
+		return nil
 	},
+}
+
+func buildDeleteArrayReq(command string) (*pb.DeleteArrayRequest, error) {
+	uuid := globals.GenerateUUID()
+
+	param := &pb.DeleteArrayRequest_Param{Name: delete_array_arrayName}
+	req := &pb.DeleteArrayRequest{Command: command, Rid: uuid, Requestor: "cli", Param: param}
+
+	return req, nil
 }
 
 // Note (mj): In Go-lang, variables are shared among files in a package.

@@ -53,7 +53,7 @@ void
 VolumeEventPublisher::RegisterSubscriber(VolumeEvent* subscriber, std::string arrayName, int arrayId)
 {
     subscribers.push_back(std::pair<int, VolumeEvent*>(arrayId, subscriber));
-    POS_TRACE_DEBUG((int)POS_EVENT_ID::VOLUME_EVENT,
+    POS_TRACE_DEBUG(EID(VOLUME_EVENT),
         "VolumeEvent subscriber {} is registered", subscriber->Tag());
 }
 
@@ -66,7 +66,7 @@ VolumeEventPublisher::RemoveSubscriber(VolumeEvent* subscriber, std::string arra
         {
             if (it->second == subscriber)
             {
-                POS_TRACE_DEBUG((int)POS_EVENT_ID::VOLUME_EVENT,
+                POS_TRACE_DEBUG(EID(VOLUME_EVENT),
                     "VolumeEvent subscriber {} is removed", it->second->Tag());
                 subscribers.erase(it);
                 break;
@@ -78,7 +78,7 @@ VolumeEventPublisher::RemoveSubscriber(VolumeEvent* subscriber, std::string arra
 bool
 VolumeEventPublisher::NotifyVolumeCreated(VolumeEventBase* volEventBase, VolumeEventPerf* volEventPerf, VolumeArrayInfo* volArrayInfo)
 {
-    POS_TRACE_DEBUG((int)POS_EVENT_ID::VOLUME_EVENT,
+    POS_TRACE_DEBUG(EID(VOLUME_EVENT),
         "NotifyVolumeCreated, # of subscribers: {}", subscribers.size());
 
     bool ret = true;
@@ -87,17 +87,20 @@ VolumeEventPublisher::NotifyVolumeCreated(VolumeEventBase* volEventBase, VolumeE
     {
         if (it->first == volArrayInfo->arrayId)
         {
-            POS_TRACE_DEBUG((int)POS_EVENT_ID::VOLUME_EVENT,
+            POS_TRACE_DEBUG(EID(VOLUME_EVENT),
                 "NotifyVolumeCreated to {} : {} {} {} {} {}",
                 it->second->Tag(), volEventBase->volName, volEventBase->volId, volEventBase->volSizeByte,
                 volEventPerf->maxiops, volEventPerf->maxbw);
             int res = it->second->VolumeCreated(volEventBase, volEventPerf, volArrayInfo);
-            if (res != (int)POS_EVENT_ID::VOL_EVENT_OK)
+            if (res != EID(VOL_EVENT_OK))
             {
+                POS_TRACE_WARN(EID(VOLUME_EVENT),
+                    "Failure returned during volume event(CREATE) notification to {}, res:{}",
+                    it->second->Tag(), res);
                 ret = false;
             }
 
-            POS_TRACE_DEBUG((int)POS_EVENT_ID::VOLUME_EVENT,
+            POS_TRACE_DEBUG(EID(VOLUME_EVENT),
                 "NotifyVolumeCreated to {} done, res: {}",
                 it->second->Tag(), res);
         }
@@ -109,7 +112,7 @@ VolumeEventPublisher::NotifyVolumeCreated(VolumeEventBase* volEventBase, VolumeE
 bool
 VolumeEventPublisher::NotifyVolumeUpdated(VolumeEventBase* volEventBase, VolumeEventPerf* volEventPerf, VolumeArrayInfo* volArrayInfo)
 {
-    POS_TRACE_DEBUG((int)POS_EVENT_ID::VOLUME_EVENT,
+    POS_TRACE_DEBUG(EID(VOLUME_EVENT),
         "NotifyVolumeUpdated, # of subscribers: {}", subscribers.size());
 
     bool ret = true;
@@ -118,17 +121,20 @@ VolumeEventPublisher::NotifyVolumeUpdated(VolumeEventBase* volEventBase, VolumeE
     {
         if (it->first == volArrayInfo->arrayId)
         {
-            POS_TRACE_DEBUG((int)POS_EVENT_ID::VOLUME_EVENT,
+            POS_TRACE_DEBUG(EID(VOLUME_EVENT),
                 "NotifyVolumeUpdated to {} : {} {} {} {}",
                 it->second->Tag(), volEventBase->volName, volEventBase->volId,
                 volEventPerf->maxiops, volEventPerf->maxbw);
             int res = it->second->VolumeUpdated(volEventBase, volEventPerf, volArrayInfo);
-            if (res != (int)POS_EVENT_ID::VOL_EVENT_OK)
+            if (res != EID(VOL_EVENT_OK))
             {
+                POS_TRACE_WARN(EID(VOLUME_EVENT),
+                    "Failure returned during volume event(UPDATE) notification to {}, res:{}",
+                    it->second->Tag(), res);
                 ret = false;
             }
 
-            POS_TRACE_DEBUG((int)POS_EVENT_ID::VOLUME_EVENT,
+            POS_TRACE_DEBUG(EID(VOLUME_EVENT),
                 "NotifyVolumeUpdated to {} done, res: {}",
                 it->second->Tag(), res);
         }
@@ -140,7 +146,7 @@ VolumeEventPublisher::NotifyVolumeUpdated(VolumeEventBase* volEventBase, VolumeE
 bool
 VolumeEventPublisher::NotifyVolumeDeleted(VolumeEventBase* volEventBase, VolumeArrayInfo* volArrayInfo)
 {
-    POS_TRACE_DEBUG((int)POS_EVENT_ID::VOLUME_EVENT,
+    POS_TRACE_DEBUG(EID(VOLUME_EVENT),
         "NotifyVolumeDeleted, # of subscribers: {}", subscribers.size());
 
     bool ret = true;
@@ -149,16 +155,19 @@ VolumeEventPublisher::NotifyVolumeDeleted(VolumeEventBase* volEventBase, VolumeA
     {
         if (it->first == volArrayInfo->arrayId)
         {
-            POS_TRACE_DEBUG((int)POS_EVENT_ID::VOLUME_EVENT,
+            POS_TRACE_DEBUG(EID(VOLUME_EVENT),
                 "NotifyVolumeDeleted to {} : {} {} {}",
                 it->second->Tag(), volEventBase->volName, volEventBase->volId, volEventBase->volSizeByte);
             int res = it->second->VolumeDeleted(volEventBase, volArrayInfo);
-            if (res != (int)POS_EVENT_ID::VOL_EVENT_OK)
+            if (res != EID(VOL_EVENT_OK))
             {
+                POS_TRACE_WARN(EID(VOLUME_EVENT),
+                    "Failure returned during volume event(DELETE) notification to {}, res:{}",
+                    it->second->Tag(), res);
                 ret = false;
             }
 
-            POS_TRACE_DEBUG((int)POS_EVENT_ID::VOLUME_EVENT,
+            POS_TRACE_DEBUG(EID(VOLUME_EVENT),
                 "NotifyVolumeDeleted to {} done, res: {}",
                 it->second->Tag(), res);
         }
@@ -170,7 +179,7 @@ VolumeEventPublisher::NotifyVolumeDeleted(VolumeEventBase* volEventBase, VolumeA
 bool
 VolumeEventPublisher::NotifyVolumeMounted(VolumeEventBase* volEventBase, VolumeEventPerf* volEventPerf, VolumeArrayInfo* volArrayInfo)
 {
-    POS_TRACE_DEBUG((int)POS_EVENT_ID::VOLUME_EVENT,
+    POS_TRACE_DEBUG(EID(VOLUME_EVENT),
         "NotifyVolumeMounted, # of subscribers: {}", subscribers.size());
 
     bool ret = true;
@@ -179,18 +188,24 @@ VolumeEventPublisher::NotifyVolumeMounted(VolumeEventBase* volEventBase, VolumeE
     {
         if (it->first == volArrayInfo->arrayId)
         {
-            POS_TRACE_DEBUG((int)POS_EVENT_ID::VOLUME_EVENT,
+            POS_TRACE_DEBUG(EID(VOLUME_EVENT),
                 "NotifyVolumeMounted to {} : {} {} {} {} {} {}",
                 it->second->Tag(), volEventBase->volName, volEventBase->subnqn, volEventBase->volId, volEventBase->volSizeByte,
                 volEventPerf->maxiops, volEventPerf->maxbw);
             int res = it->second->VolumeMounted(volEventBase, volEventPerf, volArrayInfo);
-            if (res != (int)POS_EVENT_ID::VOL_EVENT_OK)
+            if (res != EID(VOL_EVENT_OK))
             {
+                POS_TRACE_WARN(EID(VOLUME_EVENT),
+                    "Failure returned during volume event(MOUNT) notification to {}, res:{}",
+                    it->second->Tag(), res);
                 ret = false;
             }
-            POS_TRACE_DEBUG((int)POS_EVENT_ID::VOLUME_EVENT,
-                "NotifyVolumeMounted to {} done, res: {}",
-                it->second->Tag(), res);
+            else
+            {
+                POS_TRACE_INFO(EID(VOLUME_EVENT),
+                    "NotifyVolumeMounted to {} done, res: {}",
+                    it->second->Tag(), res);
+            }
         }
     }
 
@@ -200,7 +215,7 @@ VolumeEventPublisher::NotifyVolumeMounted(VolumeEventBase* volEventBase, VolumeE
 bool
 VolumeEventPublisher::NotifyVolumeUnmounted(VolumeEventBase* volEventBase, VolumeArrayInfo* volArrayInfo)
 {
-    POS_TRACE_DEBUG((int)POS_EVENT_ID::VOLUME_EVENT,
+    POS_TRACE_DEBUG(EID(VOLUME_EVENT),
         "NotifyVolumeUnmounted, # of subscribers: {}", subscribers.size());
 
     bool ret = true;
@@ -209,16 +224,19 @@ VolumeEventPublisher::NotifyVolumeUnmounted(VolumeEventBase* volEventBase, Volum
     {
         if (it->first == volArrayInfo->arrayId)
         {
-            POS_TRACE_DEBUG((int)POS_EVENT_ID::VOLUME_EVENT,
+            POS_TRACE_DEBUG(EID(VOLUME_EVENT),
                 "NotifyVolumeUnmounted to {} : {} {}",
                 it->second->Tag(), volEventBase->volName, volEventBase->volId);
             int res = it->second->VolumeUnmounted(volEventBase, volArrayInfo);
-            if (res != (int)POS_EVENT_ID::VOL_EVENT_OK)
+            if (res != EID(VOL_EVENT_OK))
             {
+                POS_TRACE_WARN(EID(VOLUME_EVENT),
+                    "Failure returned during volume event(UNMOUNT) notification to {}, res:{}",
+                    it->second->Tag(), res);
                 ret = false;
             }
 
-            POS_TRACE_DEBUG((int)POS_EVENT_ID::VOLUME_EVENT,
+            POS_TRACE_DEBUG(EID(VOLUME_EVENT),
                 "NotifyVolumeUnmounted to {} done, res: {}",
                 it->second->Tag(), res);
         }
@@ -230,7 +248,7 @@ VolumeEventPublisher::NotifyVolumeUnmounted(VolumeEventBase* volEventBase, Volum
 bool
 VolumeEventPublisher::NotifyVolumeLoaded(VolumeEventBase* volEventBase, VolumeEventPerf* volEventPerf, VolumeArrayInfo* volArrayInfo)
 {
-    POS_TRACE_DEBUG((int)POS_EVENT_ID::VOLUME_EVENT,
+    POS_TRACE_DEBUG(EID(VOLUME_EVENT),
         "NotifyVolumeLoaded, # of subscribers: {}", subscribers.size());
 
     bool ret = true;
@@ -239,17 +257,20 @@ VolumeEventPublisher::NotifyVolumeLoaded(VolumeEventBase* volEventBase, VolumeEv
     {
         if (it->first == volArrayInfo->arrayId)
         {
-            POS_TRACE_DEBUG((int)POS_EVENT_ID::VOLUME_EVENT,
+            POS_TRACE_DEBUG(EID(VOLUME_EVENT),
                 "NotifyVolumeLoaded to {} : {} {} {} {} {}",
                 it->second->Tag(), volEventBase->volName, volEventBase->volId, volEventBase->volSizeByte,
                 volEventPerf->maxiops, volEventPerf->maxbw);
             int res = it->second->VolumeLoaded(volEventBase, volEventPerf, volArrayInfo);
-            if (res != (int)POS_EVENT_ID::VOL_EVENT_OK)
+            if (res != EID(VOL_EVENT_OK))
             {
+                POS_TRACE_WARN(EID(VOLUME_EVENT),
+                    "Failure returned during volume event(LOAD) notification to {}, res:{}",
+                    it->second->Tag(), res);
                 ret = false;
             }
 
-            POS_TRACE_DEBUG((int)POS_EVENT_ID::VOLUME_EVENT,
+            POS_TRACE_DEBUG(EID(VOLUME_EVENT),
                 "NotifyVolumeLoaded to {} done, res: {}",
                 it->second->Tag(), res);
         }
@@ -261,7 +282,7 @@ VolumeEventPublisher::NotifyVolumeLoaded(VolumeEventBase* volEventBase, VolumeEv
 void
 VolumeEventPublisher::NotifyVolumeDetached(vector<int> volList, VolumeArrayInfo* volArrayInfo)
 {
-    POS_TRACE_DEBUG((int)POS_EVENT_ID::VOLUME_EVENT,
+    POS_TRACE_DEBUG(EID(VOLUME_EVENT),
         "NotifyVolumeDetached, # of subscribers: {}", subscribers.size());
 
 
@@ -269,12 +290,12 @@ VolumeEventPublisher::NotifyVolumeDetached(vector<int> volList, VolumeArrayInfo*
     {
         if (it->first == volArrayInfo->arrayId)
         {
-            POS_TRACE_DEBUG((int)POS_EVENT_ID::VOLUME_EVENT,
+            POS_TRACE_DEBUG(EID(VOLUME_EVENT),
                 "NotifyVolumeDetached to {}",
                 it->second->Tag());
             it->second->VolumeDetached(volList, volArrayInfo);
 
-            POS_TRACE_DEBUG((int)POS_EVENT_ID::VOLUME_EVENT,
+            POS_TRACE_DEBUG(EID(VOLUME_EVENT),
                 "NotifyVolumeDetached to {} done",
                 it->second->Tag());
         }

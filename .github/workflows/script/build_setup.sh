@@ -36,8 +36,6 @@ printVariable()
     echo "PoseidonOS Root : $pos_working_dir"
     echo "Target Type : $target_type"
     echo "Config Option : $config_option"
-    echo "Test Revision : $test_rev"
-    echo "Master Bin Path: ${master_bin_path}"  
     echo "*****************************************************************"
     echo "*****************************************************************"
 }
@@ -48,16 +46,6 @@ processKill()
     texecc $pos_working_dir/test/script/kill_poseidonos.sh
 }
 
-repositorySetup()
-{
-    echo "Setting git repository..."
-    texecc git fetch -p
-    texecc git clean -dff
-    texecc rm -rf *
-    texecc git reset --hard $test_rev
-    echo "Setting git repository done"
-}
-
 setJobNumber()
 {
     if [ $target_type == "PM" ] || [ $target_type == "PSD" ]
@@ -66,8 +54,12 @@ setJobNumber()
     elif [ $target_type == "VM" ]
     then
         job_number=12
+    elif [ $target_type == "GITHUB" ]
+    then
+        job_number=2
+	target_type="VM"
     else
-        echo "## ERROR: incorrect target type(VM/PM/PSD)"
+        echo "## ERROR: incorrect target type(VM/PM/PSD/GITHUB)"
         exit 1
     fi
 }
@@ -126,7 +118,7 @@ buildTest()
 
     texecc ./configure $config_option
     cwd=""
-    cd ${pos_working_dir}/lib; sudo cmake . -DSPDK_DEBUG_ENABLE=n -DUSE_LOCAL_REPO=n
+    cd ${pos_working_dir}/lib; sudo cmake . -DSPDK_DEBUG_ENABLE=n -DUSE_LOCAL_REPO=n -DASAN_ENABLE=n
     texecc make -j ${job_number} clean
 
     if [ $target_type == "VM" ]
@@ -239,7 +231,6 @@ done
 
 printVariable
 processKill
-#repositorySetup
 setJobNumber
 buildTest
 setupTest

@@ -77,27 +77,21 @@ SegmentInfo::IncreaseValidBlockCount(uint32_t inc)
 }
 
 std::pair<bool, SegmentState>
-SegmentInfo::DecreaseValidBlockCount(uint32_t dec, bool isForced)
+SegmentInfo::DecreaseValidBlockCount(uint32_t dec, bool allowVictimSegRelease)
 {
     std::lock_guard<std::mutex> lock(seglock);
     int32_t decreased = validBlockCount.fetch_sub(dec) - dec;
 
     if (decreased == 0)
     {
-        if (true == isForced)
+        if (true == allowVictimSegRelease)
         {
-            if (state == SegmentState::VICTIM)
+            if (state == SegmentState::VICTIM || state == SegmentState::SSD)
             {
                 std::pair<bool, SegmentState> result = {true, state};
                 _MoveToFreeState();
 
                 return result;
-            }
-            else
-            {
-                POS_TRACE_ERROR(EID(SEGMENT_WAS_NOT_VICTIM),
-                "Segment was not victim state:{}", state);
-                assert(false);
             }
         }
         else
@@ -115,7 +109,7 @@ SegmentInfo::DecreaseValidBlockCount(uint32_t dec, bool isForced)
     {
         POS_TRACE_ERROR(EID(VALID_COUNT_UNDERFLOWED),
             "Valid block count decreasedCount:{} total validCount:{} : UNDERFLOWED", dec, decreased);
-        assert(false);
+        return {false, SegmentState::ERROR};
     }
 
     return {false, state};
@@ -140,6 +134,13 @@ SegmentInfo::IncreaseOccupiedStripeCount(void)
     return ++occupiedStripeCount;
 }
 
+void
+SegmentInfo::SetState(SegmentState newState)
+{
+    std::lock_guard<std::mutex> lock(seglock);
+    state = newState;
+}
+
 SegmentState
 SegmentInfo::GetState(void)
 {
@@ -162,7 +163,7 @@ SegmentInfo::MoveToNvramState(void)
     std::lock_guard<std::mutex> lock(seglock);
     if (state != SegmentState::FREE)
     {
-        POS_TRACE_ERROR(POS_EVENT_ID::UNKNOWN_ALLOCATOR_ERROR,
+        POS_TRACE_ERROR(EID(UNKNOWN_ALLOCATOR_ERROR),
             "Failed to move to NVRAM state. Segment state {} valid count {} occupied stripe count {}",
             state, validBlockCount, occupiedStripeCount);
         assert(false);
@@ -195,7 +196,7 @@ SegmentInfo::MoveToVictimState(void)
     std::lock_guard<std::mutex> lock(seglock);
     if (state != SegmentState::SSD)
     {
-        POS_TRACE_ERROR(POS_EVENT_ID::UNKNOWN_ALLOCATOR_ERROR,
+        POS_TRACE_ERROR(EID(UNKNOWN_ALLOCATOR_ERROR),
             "Cannot move to victim state as it's not SSD state, state: {}", state);
         return false;
     }

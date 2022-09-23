@@ -236,7 +236,7 @@ TEST_F(MetaVolumeContainerTexture, FileCreation)
     MetaFsFileControlRequest reqMsg;
 
     EXPECT_CALL(*ssdVolume, CreateFile)
-        .WillOnce(Return(std::make_pair(0, POS_EVENT_ID::SUCCESS)));
+        .WillOnce(Return(std::make_pair(0, EID(SUCCESS))));
 
     EXPECT_EQ(container->CreateFile(MetaVolumeType::SsdVolume, reqMsg), true);
 }
@@ -246,7 +246,7 @@ TEST_F(MetaVolumeContainerTexture, FileDeletion)
     MetaFsFileControlRequest reqMsg;
 
     EXPECT_CALL(*ssdVolume, DeleteFile)
-        .WillOnce(Return(std::make_pair(0, POS_EVENT_ID::SUCCESS)));
+        .WillOnce(Return(std::make_pair(0, EID(SUCCESS))));
 
     EXPECT_EQ(container->DeleteFile(MetaVolumeType::SsdVolume, reqMsg), true);
 }
@@ -267,9 +267,9 @@ TEST_F(MetaVolumeContainerTexture, CheckActiveFile)
 
 TEST_F(MetaVolumeContainerTexture, AddActiveFile)
 {
-    EXPECT_CALL(*ssdVolume, AddFileInActiveList).WillOnce(Return(POS_EVENT_ID::SUCCESS));
+    EXPECT_CALL(*ssdVolume, AddFileInActiveList).WillOnce(Return(EID(SUCCESS)));
 
-    EXPECT_EQ(container->AddFileInActiveList(MetaVolumeType::SsdVolume, 10), POS_EVENT_ID::SUCCESS);
+    EXPECT_EQ(container->AddFileInActiveList(MetaVolumeType::SsdVolume, 10), EID(SUCCESS));
 }
 
 TEST_F(MetaVolumeContainerTexture, RemoveFileFromActiveList)
@@ -279,21 +279,14 @@ TEST_F(MetaVolumeContainerTexture, RemoveFileFromActiveList)
     container->RemoveFileFromActiveList(MetaVolumeType::SsdVolume, 10);
 }
 
-TEST_F(MetaVolumeContainerTexture, CheckFileCreated0)
-{
-    EXPECT_CALL(*ssdVolume, IsGivenFileCreated).WillOnce(Return(true));
-
-    std::string fileName = "TESTFILE";
-    EXPECT_EQ(container->IsGivenFileCreated(fileName), true);
-}
-
-TEST_F(MetaVolumeContainerTexture, CheckFileCreated1)
+TEST_F(MetaVolumeContainerTexture, IsGivenFileCreated_testIfAFileWhichHasTheSameNameExistsForEachMetaVolume)
 {
     EXPECT_CALL(*ssdVolume, IsGivenFileCreated).WillOnce(Return(false));
     EXPECT_CALL(*nvramVolume, IsGivenFileCreated).WillOnce(Return(true));
 
     std::string fileName = "TESTFILE";
-    EXPECT_EQ(container->IsGivenFileCreated(fileName), true);
+    EXPECT_EQ(container->IsGivenFileCreated(MetaVolumeType::SsdVolume, fileName), false);
+    EXPECT_EQ(container->IsGivenFileCreated(MetaVolumeType::NvRamVolume, fileName), true);
 }
 
 TEST_F(MetaVolumeContainerTexture, CheckFileSize)
@@ -442,7 +435,7 @@ TEST_F(MetaVolumeContainerTexture, CheckLookupFile0_Positive)
     EXPECT_CALL(*ssdVolume, LookupNameByDescriptor).WillOnce(Return("1"));
 
     POS_EVENT_ID rc = container->LookupMetaVolumeType(0, MetaVolumeType::SsdVolume);
-    EXPECT_EQ(rc, POS_EVENT_ID::SUCCESS);
+    EXPECT_EQ(rc, EID(SUCCESS));
 }
 
 TEST_F(MetaVolumeContainerTexture, CheckLookupFile0_Negative)
@@ -450,7 +443,7 @@ TEST_F(MetaVolumeContainerTexture, CheckLookupFile0_Negative)
     EXPECT_CALL(*ssdVolume, LookupNameByDescriptor).WillOnce(Return(""));
 
     POS_EVENT_ID rc = container->LookupMetaVolumeType(0, MetaVolumeType::SsdVolume);
-    EXPECT_EQ(rc, POS_EVENT_ID::MFS_INVALID_PARAMETER);
+    EXPECT_EQ(rc, EID(MFS_INVALID_PARAMETER));
 }
 
 TEST_F(MetaVolumeContainerTexture, CheckLookupFile1_Positive)
@@ -460,7 +453,7 @@ TEST_F(MetaVolumeContainerTexture, CheckLookupFile1_Positive)
     EXPECT_CALL(*ssdVolume, LookupDescriptorByName).WillOnce(Return(1));
 
     POS_EVENT_ID rc = container->LookupMetaVolumeType(fileName, MetaVolumeType::SsdVolume);
-    EXPECT_EQ(rc, POS_EVENT_ID::SUCCESS);
+    EXPECT_EQ(rc, EID(SUCCESS));
 }
 
 TEST_F(MetaVolumeContainerTexture, CheckLookupFile2_Negative)
@@ -471,7 +464,7 @@ TEST_F(MetaVolumeContainerTexture, CheckLookupFile2_Negative)
     EXPECT_CALL(*ssdVolume, LookupDescriptorByName).WillOnce(Return(invalid));
 
     POS_EVENT_ID rc = container->LookupMetaVolumeType(fileName, MetaVolumeType::SsdVolume);
-    EXPECT_EQ(rc, POS_EVENT_ID::MFS_INVALID_PARAMETER);
+    EXPECT_EQ(rc, EID(MFS_INVALID_PARAMETER));
 }
 
 TEST_F(MetaVolumeContainerTexture, DetermineVolume_Positive0)
@@ -484,7 +477,7 @@ TEST_F(MetaVolumeContainerTexture, DetermineVolume_Positive0)
 
     POS_EVENT_ID result = container->DetermineVolumeToCreateFile(size, prop, type);
 
-    EXPECT_EQ(result, POS_EVENT_ID::SUCCESS);
+    EXPECT_EQ(result, EID(SUCCESS));
 }
 
 TEST_F(MetaVolumeContainerTexture, DetermineVolume_Positive1)
@@ -497,7 +490,7 @@ TEST_F(MetaVolumeContainerTexture, DetermineVolume_Positive1)
 
     POS_EVENT_ID result = container->DetermineVolumeToCreateFile(size, prop, type);
 
-    EXPECT_EQ(result, POS_EVENT_ID::SUCCESS);
+    EXPECT_EQ(result, EID(SUCCESS));
 }
 
 TEST_F(MetaVolumeContainerTexture, DetermineVolume_Negative)
@@ -510,7 +503,7 @@ TEST_F(MetaVolumeContainerTexture, DetermineVolume_Negative)
 
     POS_EVENT_ID result = container->DetermineVolumeToCreateFile(size, prop, type);
 
-    EXPECT_EQ(result, POS_EVENT_ID::MFS_META_VOLUME_NOT_ENOUGH_SPACE);
+    EXPECT_EQ(result, EID(MFS_META_VOLUME_NOT_ENOUGH_SPACE));
 }
 
 TEST_F(MetaVolumeContainerTexture, CheckTheLastLpn)

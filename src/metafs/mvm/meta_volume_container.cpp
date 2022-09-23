@@ -81,7 +81,7 @@ MetaVolumeContainer::_CreateVolume(const MetaVolumeType volumeType, const int ar
         volume = std::make_shared<SsdMetaVolume>(arrayId, volumeType, maxLpnNum);
     }
 
-    MFS_TRACE_INFO((int)POS_EVENT_ID::MFS_INFO_MESSAGE,
+    MFS_TRACE_INFO(EID(MFS_INFO_MESSAGE),
         "MetaVolume has been instantiated, arrayId: {}, volumeType: {}, maxLpnNum: {}",
         arrayId, (int)volumeType, maxLpnNum);
 
@@ -99,7 +99,7 @@ MetaVolumeContainer::OpenAllVolumes(bool isNPOR)
 {
     MetaLpnType* Info = new MetaLpnType[(int)BackupInfo::Max]();
 
-    POS_TRACE_DEBUG((int)POS_EVENT_ID::MFS_DEBUG_MESSAGE,
+    POS_TRACE_DEBUG(EID(MFS_DEBUG_MESSAGE),
         "Try to open {} meta volume(s)", volumeContainer.size());
 
     for (auto& item : volumeContainer)
@@ -118,27 +118,27 @@ MetaVolumeContainer::OpenAllVolumes(bool isNPOR)
             {
                 if (false == volume->CreateVolume())
                 {
-                    MFS_TRACE_ERROR((int)POS_EVENT_ID::MFS_META_VOLUME_OPEN_FAILED,
+                    MFS_TRACE_ERROR(EID(MFS_META_VOLUME_OPEN_FAILED),
                         "Failed to re-create meta volume(type: {})", (int)volumeType);
                     delete[] Info;
                     return false;
                 }
                 else
                 {
-                    POS_TRACE_INFO((int)POS_EVENT_ID::MFS_INFO_MESSAGE,
+                    POS_TRACE_INFO(EID(MFS_INFO_MESSAGE),
                         "Successfully re-created meta volume(type: {})", (int)volumeType);
                 }
             }
             else
             {
-                MFS_TRACE_ERROR((int)POS_EVENT_ID::MFS_META_VOLUME_OPEN_FAILED,
+                MFS_TRACE_ERROR(EID(MFS_META_VOLUME_OPEN_FAILED),
                     "Failed to open meta volume(type: {})", (int)volumeType);
                 delete[] Info;
                 return false;
             }
         }
 
-        POS_TRACE_DEBUG((int)POS_EVENT_ID::MFS_DEBUG_MESSAGE,
+        POS_TRACE_DEBUG(EID(MFS_DEBUG_MESSAGE),
             "Opened meta volume(type: {})", (int)volumeType);
     }
 
@@ -152,7 +152,7 @@ MetaVolumeContainer::CloseAllVolumes(bool& resetContext)
 {
     if (!allVolumesOpened)
     {
-        MFS_TRACE_WARN((int)POS_EVENT_ID::MFS_META_VOLUME_ALREADY_CLOSED,
+        MFS_TRACE_WARN(EID(MFS_META_VOLUME_ALREADY_CLOSED),
             "All volume already closed. Ignore duplicate volume close");
         return true;
     }
@@ -171,7 +171,7 @@ MetaVolumeContainer::CloseAllVolumes(bool& resetContext)
         if (!volume->CloseVolume(Info, resetContext /* output */))
         {
             // due to both array stop state and active files.
-            MFS_TRACE_ERROR((int)POS_EVENT_ID::MFS_META_VOLUME_CLOSE_FAILED,
+            MFS_TRACE_ERROR(EID(MFS_META_VOLUME_CLOSE_FAILED),
                 "Meta volume close is failed, cxt={}", resetContext);
 
             if (true == resetContext)
@@ -183,7 +183,7 @@ MetaVolumeContainer::CloseAllVolumes(bool& resetContext)
             return false;
         }
 
-        MFS_TRACE_INFO((int)POS_EVENT_ID::MFS_INFO_MESSAGE,
+        MFS_TRACE_INFO(EID(MFS_INFO_MESSAGE),
             "MetaVolume has been successfully closed, arrayId: {}, volumeType: {}",
             arrayId, (int)volumeType);
     }
@@ -228,15 +228,15 @@ MetaVolumeContainer::DetermineVolumeToCreateFile(FileSizeType fileByteSize,
 
     if (search == volumeContainer.end())
     {
-        return POS_EVENT_ID::MFS_INVALID_PARAMETER;
+        return EID(MFS_INVALID_PARAMETER);
     }
 
     if (!search->second->IsOkayToStore(fileByteSize, prop))
     {
-        return POS_EVENT_ID::MFS_META_VOLUME_NOT_ENOUGH_SPACE;
+        return EID(MFS_META_VOLUME_NOT_ENOUGH_SPACE);
     }
 
-    return POS_EVENT_ID::SUCCESS;
+    return EID(SUCCESS);
 }
 
 bool
@@ -261,7 +261,7 @@ MetaVolumeContainer::CreateFile(const MetaVolumeType volumeType, MetaFsFileContr
 {
     auto result = volumeContainer[volumeType]->CreateFile(reqMsg);
 
-    return (result.second == POS_EVENT_ID::SUCCESS);
+    return (result.second == EID(SUCCESS));
 }
 
 bool
@@ -269,7 +269,7 @@ MetaVolumeContainer::DeleteFile(const MetaVolumeType volumeType, MetaFsFileContr
 {
     auto result = volumeContainer[volumeType]->DeleteFile(reqMsg);
 
-    return (result.second == POS_EVENT_ID::SUCCESS);
+    return (result.second == EID(SUCCESS));
 }
 
 MetaLpnType
@@ -309,9 +309,9 @@ MetaVolumeContainer::LookupMetaVolumeType(FileDescriptorType fd, const MetaVolum
 {
     auto name = volumeContainer[volumeType]->LookupNameByDescriptor(fd);
     if (name != "")
-        return POS_EVENT_ID::SUCCESS;
+        return EID(SUCCESS);
 
-    return POS_EVENT_ID::MFS_INVALID_PARAMETER;
+    return EID(MFS_INVALID_PARAMETER);
 }
 
 POS_EVENT_ID
@@ -319,9 +319,9 @@ MetaVolumeContainer::LookupMetaVolumeType(std::string& fileName, const MetaVolum
 {
     auto fd = volumeContainer[volumeType]->LookupDescriptorByName(fileName);
     if (fd != MetaFsCommonConst::INVALID_FD)
-        return POS_EVENT_ID::SUCCESS;
+        return EID(SUCCESS);
 
-    return POS_EVENT_ID::MFS_INVALID_PARAMETER;
+    return EID(MFS_INVALID_PARAMETER);
 }
 
 bool
@@ -337,19 +337,9 @@ MetaVolumeContainer::AddFileInActiveList(const MetaVolumeType volumeType, const 
 }
 
 bool
-MetaVolumeContainer::IsGivenFileCreated(std::string& fileName)
+MetaVolumeContainer::IsGivenFileCreated(const MetaVolumeType volumeType, const std::string& fileName)
 {
-    StringHashType fileKey = MetaFileUtil::GetHashKeyFromFileName(fileName);
-    bool isCreated = false;
-
-    for (auto& vol : volumeContainer)
-    {
-        isCreated = vol.second->IsGivenFileCreated(fileKey);
-        if (isCreated)
-            break;
-    }
-
-    return isCreated;
+    return volumeContainer[volumeType]->IsGivenFileCreated(MetaFileUtil::GetHashKeyFromFileName(fileName));
 }
 
 void

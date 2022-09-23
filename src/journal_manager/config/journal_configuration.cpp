@@ -1,6 +1,6 @@
 /*
  *   BSD LICENSE
- *   Copyright (c) 2021 Samsung Electronics Corporation
+ *   Copyright (c) 2022 Samsung Electronics Corporation
  *   All rights reserved.
  *
  *   Redistribution and use in source and binary forms, with or without
@@ -57,10 +57,15 @@ JournalConfiguration::JournalConfiguration(ConfigManager* configManager)
   logBufferSizeInConfig(UINT64_MAX),
   metaPageSize(UINT64_MAX),
   maxPartitionSize(UINT64_MAX),
+  rocksdbEnabled(false),
+  metaVolumeToUse(),
+  rocksdbPath(""),
+  vscEnabled(false),
   areReplayWbStripesInUserArea(false),
   debugEnabled(false),
+  intervalForMetric(0),
   configManager(configManager),
-  numLogGroups(2),
+  numLogGroups(DEFAULT_NUMBER_OF_LOG_GROUPS),
   logBufferSize(UINT64_MAX)
 {
     _ReadConfiguration();
@@ -76,7 +81,7 @@ JournalConfiguration::Init(bool isWriteThroughEnabled)
     // TODO (meta): writeThroughEnabled should be of previous power cycle
     areReplayWbStripesInUserArea = isWriteThroughEnabled;
     metaVolumeToUse = (isWriteThroughEnabled == true) ? (MetaVolumeType::JournalVolume) : (MetaVolumeType::NvRamVolume);
-    POS_TRACE_INFO(static_cast<int>(POS_EVENT_ID::JOURNAL_CONFIGURATION), "Journal will be stored on {}", metaVolumeToUse);
+    POS_TRACE_INFO(static_cast<int>(EID(JOURNAL_CONFIGURATION)), "Journal will be stored on {}", metaVolumeToUse);
 }
 
 int
@@ -108,9 +113,21 @@ JournalConfiguration::IsEnabled(void)
 }
 
 bool
+JournalConfiguration::IsVscEnabled(void)
+{
+    return vscEnabled;
+}
+
+bool
 JournalConfiguration::IsDebugEnabled(void)
 {
     return debugEnabled;
+}
+
+uint64_t
+JournalConfiguration::GetIntervalForMetric(void)
+{
+    return intervalForMetric;
 }
 
 bool
@@ -119,6 +136,17 @@ JournalConfiguration::AreReplayWbStripesInUserArea(void)
     return areReplayWbStripesInUserArea;
 }
 
+bool
+JournalConfiguration::IsRocksdbEnabled(void)
+{
+    return rocksdbEnabled;
+}
+
+std::string
+JournalConfiguration::GetRocksdbPath(void)
+{
+    return rocksdbPath;
+}
 int
 JournalConfiguration::GetNumLogGroups(void)
 {
@@ -158,7 +186,7 @@ JournalConfiguration::GetMetaVolumeToUse(void)
 void
 JournalConfiguration::_ReadConfiguration(void)
 {
-    int eventId = static_cast<int>(POS_EVENT_ID::JOURNAL_CONFIGURATION);
+    int eventId = static_cast<int>(EID(JOURNAL_CONFIGURATION));
 
     journalEnabled = _IsJournalEnabled();
     if (journalEnabled == true)
@@ -171,6 +199,14 @@ JournalConfiguration::_ReadConfiguration(void)
 
         debugEnabled = _IsDebugEnabled();
         logBufferSizeInConfig = _ReadLogBufferSize();
+        rocksdbEnabled = _IsRocksdbEnabled();
+        intervalForMetric = _GetIntervalForMetric();
+        numLogGroups = _ReadNumLogGroup();
+        vscEnabled = _IsVscEnabled();
+        if (rocksdbEnabled)
+        {
+            rocksdbPath = _GetRocksdbPath();
+        }
     }
     else
     {
@@ -190,8 +226,23 @@ JournalConfiguration::_IsJournalEnabled(void)
     if (ret != 0)
     {
         enabled = false;
-        POS_TRACE_INFO(static_cast<int>(POS_EVENT_ID::JOURNAL_CONFIGURATION),
+        POS_TRACE_INFO(static_cast<int>(EID(JOURNAL_CONFIGURATION)),
             "Failed to read journal enablement from config file");
+    }
+    return enabled;
+}
+
+bool
+JournalConfiguration::_IsVscEnabled(void)
+{
+    bool enabled = false;
+    int ret = configManager->GetValue("journal", "enable_vsc",
+        static_cast<void*>(&enabled), CONFIG_TYPE_BOOL);
+    if (ret != 0)
+    {
+        enabled = false;
+        POS_TRACE_INFO(static_cast<int>(EID(JOURNAL_CONFIGURATION)),
+            "Failed to read versioned segment context enablement from config file");
     }
     return enabled;
 }
@@ -207,13 +258,30 @@ JournalConfiguration::_IsDebugEnabled(void)
     {
         if (enabled == true)
         {
-            POS_TRACE_INFO(static_cast<int>(POS_EVENT_ID::JOURNAL_CONFIGURATION),
+            POS_TRACE_INFO(static_cast<int>(EID(JOURNAL_CONFIGURATION)),
                 "Journal debug mode enabled");
             return true;
         }
     }
 
     return false;
+}
+
+uint64_t
+JournalConfiguration::_GetIntervalForMetric(void)
+{
+    uint64_t interval = 0;
+    int ret = configManager->GetValue("journal", "interval_in_msec_for_metric",
+        static_cast<void*>(&interval), ConfigType::CONFIG_TYPE_UINT64);
+
+    if (ret == 0)
+    {
+        POS_TRACE_INFO(static_cast<int>(EID(JOURNAL_CONFIGURATION)),
+            "Interval is {}", interval);
+        return interval;
+    }
+
+    return 0;
 }
 
 uint64_t
@@ -233,13 +301,77 @@ JournalConfiguration::_ReadLogBufferSize(void)
     return size;
 }
 
+uint64_t
+JournalConfiguration::_ReadNumLogGroup(void)
+{
+    uint64_t count = 0;
+    int ret = configManager->GetValue("journal", "number_of_log_groups",
+        static_cast<void*>(&count), ConfigType::CONFIG_TYPE_UINT64);
+
+    if (ret == 0)
+    {
+        POS_TRACE_INFO(static_cast<int>(EID(JOURNAL_CONFIGURATION)),
+            "The number of log groups is {}", count);
+    }
+    else
+    {
+        count = DEFAULT_NUMBER_OF_LOG_GROUPS;
+    }
+
+    return count;
+}
+
+bool
+JournalConfiguration::_IsRocksdbEnabled(void)
+{
+    bool enabled = false;
+    int ret = configManager->GetValue("meta_rocksdb", "journal_use_rocksdb",
+        static_cast<void*>(&enabled), ConfigType::CONFIG_TYPE_BOOL);
+    if (ret == 0)
+    {
+        if (enabled == true)
+        {
+            POS_TRACE_INFO(static_cast<int>(EID(JOURNAL_CONFIGURATION)),
+                "RocksDB Log Buffer is enabled");
+            return true;
+        }
+        POS_TRACE_INFO(static_cast<int>(EID(JOURNAL_CONFIGURATION)),
+            "RocksDB Log Buffer is disabled {}", enabled);
+        return false;
+    }
+    else
+    {
+        POS_TRACE_INFO(static_cast<int>(EID(JOURNAL_CONFIGURATION)),
+            "RocksDB Log Buffer is disabled");
+        return false;
+    }
+}
+
+std::string
+JournalConfiguration::_GetRocksdbPath(void)
+{
+    std::string path = "";
+    int ret = configManager->GetValue("meta_rocksdb", "rocksdb_path",
+        static_cast<void*>(&path), ConfigType::CONFIG_TYPE_STRING);
+
+    if (ret == 0)
+    {
+        POS_TRACE_INFO(static_cast<int>(EID(JOURNAL_CONFIGURATION)),
+            "RocksDB Log will be saved in {}", path);
+    }
+    else
+    {
+        path = "/etc/pos/POSRaid";
+        POS_TRACE_INFO(static_cast<int>(EID(JOURNAL_CONFIGURATION)),
+            "RocksDB Log will be saved in default path {}", path);
+    }
+    return path;
+}
+
 void
 JournalConfiguration::_ReadMetaFsConfiguration(MetaFsFileControlApi* metaFsCtrl)
 {
-    MetaFilePropertySet prop;
-    prop.ioAccPattern = MetaFileAccessPattern::ByteIntensive;
-    prop.ioOpType = MetaFileDominant::WriteDominant;
-    prop.integrity = MetaFileIntegrityType::Lvl0_Disable;
+    MetaFilePropertySet prop(MetaFileType::Journal);
 
     metaPageSize = metaFsCtrl->EstimateAlignedFileIOSize(prop, metaVolumeToUse);
     maxPartitionSize = metaFsCtrl->GetAvailableSpace(prop, metaVolumeToUse);
@@ -248,11 +380,11 @@ JournalConfiguration::_ReadMetaFsConfiguration(MetaFsFileControlApi* metaFsCtrl)
 int
 JournalConfiguration::_ConfigureLogBufferSize(uint64_t& size)
 {
-    int eventId = static_cast<int>(POS_EVENT_ID::JOURNAL_CONFIGURATION);
+    int eventId = static_cast<int>(EID(JOURNAL_CONFIGURATION));
 
     if (maxPartitionSize <= metaPageSize)
     {
-        POS_TRACE_DEBUG(eventId, "No enugh space to create new log buffer");
+        POS_TRACE_DEBUG(eventId, "No enough space to create new log buffer");
         return -1 * eventId;
     }
 
@@ -281,7 +413,7 @@ JournalConfiguration::_SetLogBufferSize(uint64_t size)
     logBufferSize = size;
 
     bufferLayout.Init(logBufferSize, numLogGroups);
-    POS_TRACE_INFO(POS_EVENT_ID::JOURNAL_CONFIGURATION,
+    POS_TRACE_INFO(EID(JOURNAL_CONFIGURATION),
         "Log buffer size is configured to {}", logBufferSize);
 }
 } // namespace pos

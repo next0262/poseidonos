@@ -47,20 +47,19 @@ class EventScheduler;
 class CheckpointHandler
 {
 public:
-    CheckpointHandler(void);
-    CheckpointHandler(int numMapsToFlush, int numMapsFlushed, EventSmartPtr callback);
+    CheckpointHandler(const int arrayId);
+    CheckpointHandler(int numMapsToFlush, int numMapsFlushed, EventSmartPtr callback, const int arrayId);
     virtual ~CheckpointHandler(void) = default;
 
     virtual void Init(IMapFlush* mapFlushToUse, IContextManager* contextManagerToUse, EventScheduler* eventScheduler);
 
     virtual int Start(MapList pendingDirtyMaps, EventSmartPtr callback);
-    virtual int FlushCompleted(int metaId);
+    virtual int FlushCompleted(int metaId, int logGroupId);
 
     virtual CheckpointStatus GetStatus(void);
+    virtual void UpdateLogGroupInProgress(int logGroupId);
 
 private:
-    void _InitializeExternalModuleReferences(void);
-
     void _CheckMapFlushCompleted(void);
     void _TryToComplete(void);
     void _Reset(void);
@@ -82,6 +81,8 @@ private:
 
     std::mutex completionLock;
     EventSmartPtr checkpointCompletionCallback;
+    int arrayId;
+    int logGroupIdInProgress;
 };
 
 } // namespace pos

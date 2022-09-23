@@ -40,6 +40,7 @@
 #include "src/allocator/context_manager/block_allocation_status.h"
 #include "src/allocator/context_manager/gc_ctx/gc_ctx.h"
 #include "src/allocator/context_manager/rebuild_ctx/rebuild_ctx.h"
+#include "src/journal_manager/log_buffer/versioned_segment_ctx.h"
 #include "src/allocator/i_context_manager.h"
 #include "src/allocator/i_context_replayer.h"
 #include "src/allocator/i_segment_ctx.h"
@@ -49,9 +50,9 @@
 namespace pos
 {
 class IAllocatorFileIoClient;
-class AllocatorFileIoManager;
 class AllocatorCtx;
 class SegmentCtx;
+class VersionedSegmentCtx;
 class ContextReplayer;
 class TelemetryPublisher;
 class EventScheduler;
@@ -66,15 +67,14 @@ public:
     ContextManager(void) = default;
     ContextManager(TelemetryPublisher* tp,
         AllocatorCtx* allocCtx_, SegmentCtx* segCtx_, RebuildCtx* rebuildCtx_,
-        GcCtx* gcCtx_, BlockAllocationStatus* blockAllocStatus_,
-        ContextIoManager* ioManager,
-        ContextReplayer* ctxReplayer_, AllocatorAddressInfo* info_, uint32_t arrayId_);
+        IVersionedSegmentContext* versionedSegCtx_, GcCtx* gcCtx_, BlockAllocationStatus* blockAllocStatus_,
+        ContextIoManager* ioManager, ContextReplayer* ctxReplayer_, AllocatorAddressInfo* info_, uint32_t arrayId_);
     ContextManager(TelemetryPublisher* tp, AllocatorAddressInfo* info, uint32_t arrayId_);
     virtual ~ContextManager(void);
     virtual void Init(void);
     virtual void Dispose(void);
 
-    virtual int FlushContexts(EventSmartPtr callback, bool sync);
+    virtual int FlushContexts(EventSmartPtr callback, bool sync, int logGroupId = ALL_LOG_GROUP);
     virtual SegmentId AllocateFreeSegment(void);
     virtual SegmentId AllocateGCVictimSegment(void);
     virtual SegmentId AllocateRebuildTargetSegment(void);
@@ -100,19 +100,18 @@ public:
     virtual ContextReplayer* GetContextReplayer(void) { return contextReplayer; }
     virtual GcCtx* GetGcCtx(void) { return gcCtx; }
     virtual std::mutex& GetCtxLock(void) { return ctxLock; }
-
     virtual BlockAllocationStatus* GetAllocationStatus(void) { return blockAllocStatus; }
+    virtual void PrepareVersionedSegmentCtx(IVersionedSegmentContext* versionedSegCtx_);
+    virtual void ResetFlushedInfo(int logGroupId);
+    virtual void SetAllocateDuplicatedFlush(bool flag);
 
 private:
-    void _ResetSegmentStates(void);
-
     ContextIoManager* ioManager;
-
     AllocatorAddressInfo* addrInfo;
     AllocatorCtx* allocatorCtx;
     SegmentCtx* segmentCtx;
     RebuildCtx* rebuildCtx;
-
+    IVersionedSegmentContext* versionedSegCtx;
     ContextReplayer* contextReplayer;
     GcCtx* gcCtx;
     BlockAllocationStatus* blockAllocStatus;
@@ -121,6 +120,11 @@ private:
     std::mutex ctxLock;
 
     TelemetryPublisher* telPublisher;
+
+    int logGroupIdInProgress;
+    bool allowDuplicatedFlush;
+    const int INVALID_LOG_GROUP_ID = 0xFFFF;
+    static const int ALL_LOG_GROUP = -1;
 };
 
 } // namespace pos

@@ -8,7 +8,10 @@ JournalConfigurationBuilder::JournalConfigurationBuilder(TestInfo* testInfo)
 : isJournalEnabled(true),
   logBufferSize(16 * 1024 * 1024),
   metaPageSize(testInfo->metaPageSize),
-  partitionSize(testInfo->metaPartitionSize)
+  partitionSize(testInfo->metaPartitionSize),
+  isRocksDBEnabled(false),
+  rocksDBBasePath(""),
+  isVscEnabled(false)
 {
 }
 
@@ -44,10 +47,25 @@ JournalConfigurationBuilder::SetMaxPartitionSize(uint64_t partitionSize)
     return this;
 }
 
+JournalConfigurationBuilder*
+JournalConfigurationBuilder::SetRocksDBEnable(uint64_t isRocksDBEnabled)
+{
+    this->isRocksDBEnabled = isRocksDBEnabled;
+    return this;
+}
+
+JournalConfigurationBuilder*
+JournalConfigurationBuilder::SetRocksDBBasePath(std::string rocksDBBasePath)
+{
+    this->rocksDBBasePath = rocksDBBasePath;
+    return this;
+}
+
 JournalConfigurationSpy*
 JournalConfigurationBuilder::Build(void)
 {
-    JournalConfigurationSpy* config = new JournalConfigurationSpy(isJournalEnabled, logBufferSize, metaPageSize, partitionSize);
+    JournalConfigurationSpy* config = new JournalConfigurationSpy(isJournalEnabled, logBufferSize, metaPageSize,
+        partitionSize, isRocksDBEnabled, rocksDBBasePath, isVscEnabled);
     return config;
 }
 

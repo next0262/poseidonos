@@ -67,7 +67,9 @@ TEST(UnvmeDrv,
     mockDevCtx.ioCompletionCount = 0;
     EXPECT_CALL(mockDevCtx, GetPendingError).WillOnce(Return(&mockIoCtx));
 
-    EXPECT_CALL(mockIoCtx, GetDeviceContext).WillOnce(Return(&mockDevCtx));
+    EXPECT_CALL(mockIoCtx, GetDeviceContext)
+        .Times(3)
+        .WillRepeatedly(Return(&mockDevCtx));
 
     UnvmeDrv unvmeDrv(mockUnvmeCmd, mockSpdkNvmeCaller);
 
@@ -96,7 +98,7 @@ TEST(UnvmeDrv, CompleteErrors_testIfIoCtxIsnull)
 TEST(UnvmeDrv, DeviceAttached_testIfAttachEventIsNull)
 {
     // Given
-    int expectedEventId = (int)POS_EVENT_ID::UNVME_SSD_ATTACH_NOTIFICATION_FAILED;
+    int expectedEventId = EID(UNVME_SSD_ATTACH_NOTIFICATION_FAILED);
     UnvmeDrv unvmeDrv;
 
     // When
@@ -109,7 +111,7 @@ TEST(UnvmeDrv, DeviceAttached_testIfAttachEventIsNull)
 TEST(UnvmeDrv, DeviceDetached_testIfDetachEventIsNull)
 {
     // Given
-    int expectedEventId = (int)POS_EVENT_ID::UNVME_SSD_DETACH_NOTIFICATION_FAILED;
+    int expectedEventId = EID(UNVME_SSD_DETACH_NOTIFICATION_FAILED);
     UnvmeDrv unvmeDrv;
 
     // When

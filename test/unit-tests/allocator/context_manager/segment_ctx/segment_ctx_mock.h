@@ -3,6 +3,12 @@
 #include <list>
 #include <vector>
 #include "src/allocator/context_manager/segment_ctx/segment_ctx.h"
+#include "test/unit-tests/allocator/address/allocator_address_info_mock.h"
+#include "test/unit-tests/allocator/context_manager/gc_ctx/gc_ctx_mock.h"
+#include "test/unit-tests/allocator/context_manager/rebuild_ctx/rebuild_ctx_mock.h"
+#include "test/unit-tests/telemetry/telemetry_client/telemetry_publisher_mock.h"
+
+using testing::NiceMock;
 
 namespace pos
 {
@@ -38,6 +44,7 @@ public:
     MOCK_METHOD(int, SetRebuildCompleted, (SegmentId segId), (override));
     MOCK_METHOD(int, MakeRebuildTarget, (), (override));
     MOCK_METHOD(std::set<SegmentId>, GetNvramSegmentList, (), (override));
+    MOCK_METHOD(std::set<SegmentId>, GetVictimSegmentList, (), (override));
     MOCK_METHOD(int, StopRebuilding, (), (override));
     MOCK_METHOD(uint32_t, GetRebuildTargetSegmentCount, (), (override));
     MOCK_METHOD(std::set<SegmentId>, GetRebuildSegmentList, (), (override));
@@ -45,8 +52,10 @@ public:
     MOCK_METHOD(void, CopySegmentInfoToBufferforWBT, (WBTAllocatorMetaType type, char* dstBuf), (override));
     MOCK_METHOD(void, CopySegmentInfoFromBufferforWBT, (WBTAllocatorMetaType type, char* dstBuf), (override));
     MOCK_METHOD(void, ValidateBlks, (VirtualBlks blks), (override));
-    MOCK_METHOD(bool, InvalidateBlks, (VirtualBlks blks, bool isForced), (override));
+    MOCK_METHOD(bool, InvalidateBlks, (VirtualBlks blks, bool allowVictimSegRelease), (override));
     MOCK_METHOD(bool, UpdateOccupiedStripeCount, (StripeId lsid), (override));
+    MOCK_METHOD(void, ValidateBlocksWithGroupId, (VirtualBlks blks, int logGroupId), (override));
+    MOCK_METHOD(bool, InvalidateBlocksWithGroupId, (VirtualBlks blks, bool isForced, int logGroupId), (override));
+    MOCK_METHOD(bool, UpdateStripeCount, (StripeId lsid, int logGroupId), (override));
 };
-
 } // namespace pos

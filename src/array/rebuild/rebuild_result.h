@@ -35,6 +35,7 @@
 #include "src/include/rebuild_state.h"
 
 #include <string>
+#include <vector>
 
 using namespace std;
 
@@ -46,7 +47,6 @@ struct RebuildResult
 {
 public:
     string array = "";
-    ArrayDevice* target = nullptr;
     RebuildState result = RebuildState::READY;
 };
 } // namespace pos

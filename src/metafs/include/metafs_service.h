@@ -39,6 +39,8 @@
 // A Meta Filesystem Layer instance accessible by upper modules
 #pragma once
 
+#include <numa.h>
+
 #include <array>
 #include <memory>
 #include <string>
@@ -47,19 +49,21 @@
 #include "mk/ibof_config.h"
 #include "src/lib/singleton.h"
 #include "src/metafs/metafs.h"
-#include "src/telemetry/telemetry_client/telemetry_publisher.h"
 
 namespace pos
 {
-class ScalableMetaIoWorker;
 class MetaFsIoScheduler;
 class MetaFsConfigManager;
+class TelemetryPublisher;
+class MetaFsIoSchedulerFactory;
+
+using SchedulerMap = std::unordered_map<uint32_t, MetaFsIoScheduler*>;
 
 class MetaFsService
 {
 public:
     MetaFsService(void);
-    MetaFsService(MetaFsIoScheduler* ioScheduler, MetaFsConfigManager* configManager);
+    MetaFsService(MetaFsConfigManager* configManager, MetaFsIoSchedulerFactory* factory, const int numaCount = numa_num_configured_nodes());
     virtual ~MetaFsService(void);
     virtual void Initialize(const uint32_t totalCoreCount, const cpu_set_t schedSet,
         const cpu_set_t workSet, TelemetryPublisher* tp = nullptr);
@@ -67,7 +71,7 @@ public:
     virtual void Deregister(const std::string& arrayName);
     virtual MetaFs* GetMetaFs(const std::string& arrayName) const;
     virtual MetaFs* GetMetaFs(int arrayId) const;
-    virtual MetaFsIoScheduler* GetScheduler(void) const
+    virtual SchedulerMap GetScheduler(void) const
     {
         return ioScheduler_;
     }
@@ -78,13 +82,22 @@ public:
 
 private:
     void _CreateScheduler(const uint32_t totalCount, const cpu_set_t schedSet,
-        const cpu_set_t workSet, TelemetryPublisher* tp);
+        const cpu_set_t workSet);
+    uint32_t _GetNumaIdConsideringNumaDedicatedScheduling(const uint32_t numaId) const;
+    bool _CheckIfPossibleToCreateScheduler(const int numOfSchedulersCreated);
+    bool _CheckSchedulerSettingFromConfig(const int countOfScheduler) const;
+    virtual uint32_t _GetNumaId(const uint32_t coreId)
+    {
+        return numa_node_of_cpu(coreId);
+    }
 
+    const int MAX_SCHEDULER_COUNT;
     std::unordered_map<std::string, int> arrayNameToId_;
     std::array<MetaFs*, MetaFsConfig::MAX_ARRAY_CNT> fileSystems_;
-    MetaFsIoScheduler* ioScheduler_;
+    SchedulerMap ioScheduler_;
     MetaFsConfigManager* configManager_;
-    bool needToRemoveConfig_;
+    TelemetryPublisher* tp_;
+    MetaFsIoSchedulerFactory* factory_;
 };
 
 using MetaFsServiceSingleton = Singleton<MetaFsService>;

@@ -18,7 +18,6 @@ TEST(RebuildBehaviorFactory, testIfRebuildBehaviorForJournalPartitionIsCreatedIn
         .stripesPerSegment = 20,
         .totalSegments = 100};
 
-    ctx->isWT = true;
     ctx->part = PartitionType::JOURNAL_SSD;
     ctx->size = &physicalSize;
 
@@ -28,20 +27,5 @@ TEST(RebuildBehaviorFactory, testIfRebuildBehaviorForJournalPartitionIsCreatedIn
 
     // Then
     ASSERT_NE(rbd, nullptr);
-}
-
-TEST(RebuildBehaviorFactory, testIfRebuildBehaviorForJournalPartitionIsNullWhenWTisOff)
-{
-    // Given
-    RebuildBehaviorFactory factory(nullptr);
-    unique_ptr<RebuildContext> ctx = make_unique<RebuildContext>();
-    ctx->isWT = false;
-    ctx->part = PartitionType::JOURNAL_SSD;
-
-    // When
-    RebuildBehavior* bhvr = factory.CreateRebuildBehavior(move(ctx));
-
-    // Then
-    ASSERT_EQ(bhvr, nullptr);
 }
 }  // namespace pos

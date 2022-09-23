@@ -81,7 +81,7 @@ protected:
 TEST_F(CheckpointHandlerTestFixture, Start_testIfCheckpointStartSuccessfullywithSingleDirtMapList)
 {
     // Given
-    checkpointHandler = new CheckpointHandler();
+    checkpointHandler = new CheckpointHandler(0);
     checkpointHandler->Init(mapFlush, contextManager, nullptr);
 
     // When : Succeed flushing dirty map and allocator meta pages
@@ -97,7 +97,7 @@ TEST_F(CheckpointHandlerTestFixture, Start_testIfCheckpointStartSuccessfullywith
 TEST_F(CheckpointHandlerTestFixture, Start_testIfCheckpointStartSuccessfullywithSeveralDirtMapList)
 {
     // Given
-    checkpointHandler = new CheckpointHandler();
+    checkpointHandler = new CheckpointHandler(0);
     checkpointHandler->Init(mapFlush, contextManager, nullptr);
 
     // When : Succeed flushing dirty map and allocator meta pages
@@ -118,7 +118,7 @@ TEST_F(CheckpointHandlerTestFixture, Start_testIfFlushCompletedImmediatelyDuring
 TEST_F(CheckpointHandlerTestFixture, Start_testIfCheckpointFailedWhenFlushDirtyMpagesFailed)
 {
     // Given
-    checkpointHandler = new CheckpointHandler();
+    checkpointHandler = new CheckpointHandler(0);
     checkpointHandler->Init(mapFlush, contextManager, nullptr);
 
     // When : Failed to flushing dirty map pages
@@ -133,7 +133,7 @@ TEST_F(CheckpointHandlerTestFixture, Start_testIfCheckpointFailedWhenFlushDirtyM
 TEST_F(CheckpointHandlerTestFixture, Start_testIfCheckpointFailedWhencontextManagersFlushFailed)
 {
     // Given
-    checkpointHandler = new CheckpointHandler();
+    checkpointHandler = new CheckpointHandler(0);
     checkpointHandler->Init(mapFlush, contextManager, nullptr);
 
     // When : Succeed to flushing dirty map pages and failed flushing allocator meta pages
@@ -159,15 +159,15 @@ TEST_F(CheckpointHandlerTestFixture, FlushCompleted_testIfCheckpointCompleted)
     });
 
     EventSmartPtr checkpointCompletion(new MockEvent());
-    checkpointHandler = new CheckpointHandler(numMapsToFlush, numMapsFlushed, checkpointCompletion);
-    checkpointHandler->Init(nullptr, nullptr, &eventScheduler);
+    checkpointHandler = new CheckpointHandler(numMapsToFlush, numMapsFlushed, checkpointCompletion, 0);
+    checkpointHandler->Init(nullptr, contextManager, &eventScheduler);
 
     // Then: Callback event should be executed
     EXPECT_CALL(*(MockEvent*)(checkpointCompletion.get()), Execute);
 
     // When: All dirty maps and allocator meta are flushed
-    EXPECT_TRUE(checkpointHandler->FlushCompleted(0) == 0);
-    EXPECT_TRUE(checkpointHandler->FlushCompleted(ALLOCATOR_META_ID) == 0);
+    EXPECT_TRUE(checkpointHandler->FlushCompleted(0, 0) == 0);
+    EXPECT_TRUE(checkpointHandler->FlushCompleted(ALLOCATOR_META_ID, 0) == 0);
 
     // Then: Checkpoint status should be changed to COMPLETED
     EXPECT_TRUE(checkpointHandler->GetStatus() == COMPLETED);
@@ -178,13 +178,21 @@ TEST_F(CheckpointHandlerTestFixture, FlushCompleted_testIfCheckpointFailedWhenMa
     // Given: Map is not flushed yet
     int numMapsToFlush = 2;
     int numMapsFlushed = 0;
-    checkpointHandler = new CheckpointHandler(numMapsToFlush, numMapsFlushed, nullptr);
+
+    MockEventScheduler eventScheduler;
+    ON_CALL(eventScheduler, EnqueueEvent).WillByDefault([&](EventSmartPtr event)
+    {
+        event->Execute();
+    });
+
+    checkpointHandler = new CheckpointHandler(numMapsToFlush, numMapsFlushed, nullptr, 0);
+    checkpointHandler->Init(nullptr, contextManager, &eventScheduler);
 
     // Then: Checkpoint status should not be COMPLETED
     EXPECT_TRUE(checkpointHandler->GetStatus() != COMPLETED);
 
     // When: Allocatator meta flush is completed
-    EXPECT_TRUE(checkpointHandler->FlushCompleted(ALLOCATOR_META_ID) == 0);
+    EXPECT_TRUE(checkpointHandler->FlushCompleted(ALLOCATOR_META_ID, 0) == 0);
 
     // Then: Checkpoint status should not be changed to COMPLETED
     EXPECT_TRUE(checkpointHandler->GetStatus() != COMPLETED);

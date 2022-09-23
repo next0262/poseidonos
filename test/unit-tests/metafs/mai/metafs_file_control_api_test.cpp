@@ -55,12 +55,12 @@ TEST(MetaFsFileControlApi, WBT_testIfMetaFileInfoListCanBeReturned)
     NiceMock<MockMetaFsManagementApi>* mgmt = new NiceMock<MockMetaFsManagementApi>(arrayId, storage);
     NiceMock<MockMetaVolumeManager>* volMgr = new NiceMock<MockMetaVolumeManager>(arrayId, storage);
 
-    MetaFsFileControlApi api(arrayId, storage, mgmt, volMgr);
+    MetaFsFileControlApi api(arrayId, storage, mgmt, nullptr, volMgr);
 
     std::vector<MetaFileInfoDumpCxt> result;
 
-    EXPECT_CALL(*volMgr, CheckReqSanity).WillOnce(Return(POS_EVENT_ID::SUCCESS));
-    EXPECT_CALL(*volMgr, ProcessNewReq).WillOnce(Return(POS_EVENT_ID::SUCCESS));
+    EXPECT_CALL(*volMgr, CheckReqSanity).WillOnce(Return(EID(SUCCESS)));
+    EXPECT_CALL(*volMgr, ProcessNewReq).WillOnce(Return(EID(SUCCESS)));
 
     result = api.Wbt_GetMetaFileList(type);
 }
@@ -74,12 +74,12 @@ TEST(MetaFsFileControlApi, WBT_testIfMetaFileInodeCanBeReturned)
     NiceMock<MockMetaFsManagementApi>* mgmt = new NiceMock<MockMetaFsManagementApi>(arrayId, storage);
     NiceMock<MockMetaVolumeManager>* volMgr = new NiceMock<MockMetaVolumeManager>(arrayId, storage);
 
-    MetaFsFileControlApi api(arrayId, storage, mgmt, volMgr);
+    MetaFsFileControlApi api(arrayId, storage, mgmt, nullptr, volMgr);
 
     MetaFileInodeInfo* result = nullptr;
 
-    EXPECT_CALL(*volMgr, CheckReqSanity).WillOnce(Return(POS_EVENT_ID::SUCCESS));
-    EXPECT_CALL(*volMgr, ProcessNewReq).WillOnce(Return(POS_EVENT_ID::SUCCESS));
+    EXPECT_CALL(*volMgr, CheckReqSanity).WillOnce(Return(EID(SUCCESS)));
+    EXPECT_CALL(*volMgr, ProcessNewReq).WillOnce(Return(EID(SUCCESS)));
 
     result = api.Wbt_GetMetaFileInode(fileName, type);
 }
@@ -93,11 +93,11 @@ TEST(MetaFsFileControlApi, Get_testIfFileIoSizeCanBeRetrieved)
     NiceMock<MockMetaFsManagementApi>* mgmt = new NiceMock<MockMetaFsManagementApi>(arrayId, storage);
     NiceMock<MockMetaVolumeManager>* volMgr = new NiceMock<MockMetaVolumeManager>(arrayId, storage);
 
-    MetaFsFileControlApi api(arrayId, storage, mgmt, volMgr);
+    MetaFsFileControlApi api(arrayId, storage, mgmt, nullptr, volMgr);
     api.SetStatus(true);
 
-    EXPECT_CALL(*volMgr, CheckReqSanity).WillOnce(Return(POS_EVENT_ID::SUCCESS));
-    EXPECT_CALL(*volMgr, ProcessNewReq).WillOnce(Return(POS_EVENT_ID::SUCCESS));
+    EXPECT_CALL(*volMgr, CheckReqSanity).WillOnce(Return(EID(SUCCESS)));
+    EXPECT_CALL(*volMgr, ProcessNewReq).WillOnce(Return(EID(SUCCESS)));
 
     size_t size = api.GetAlignedFileIOSize(fd, type);
 
@@ -113,7 +113,7 @@ TEST(MetaFsFileControlApi, Get_TheLastValidLpn)
     NiceMock<MockMetaFsManagementApi>* mgmt = new NiceMock<MockMetaFsManagementApi>(arrayId, storage);
     NiceMock<MockMetaVolumeManager>* volMgr = new NiceMock<MockMetaVolumeManager>(arrayId, storage);
 
-    MetaFsFileControlApi api(arrayId, storage, mgmt, volMgr);
+    MetaFsFileControlApi api(arrayId, storage, mgmt, nullptr, volMgr);
 
     EXPECT_CALL(*volMgr, GetTheLastValidLpn).WillOnce(Return(0));
 

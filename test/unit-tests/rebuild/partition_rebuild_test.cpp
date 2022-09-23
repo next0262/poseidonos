@@ -37,7 +37,9 @@ TEST(PartitionRebuild, StartRebuild_testIfRebuildStateIsRebuilding)
     ctx->logger = new RebuildLogger(arrayName);
     ctx->prog = new RebuildProgress(arrayName);
     ctx->stripeCnt = 1024;
-    MockRebuildBehavior* bhvr = new MockRebuildBehavior(move(ctx), nullptr);
+    PartitionPhysicalSize size;
+    ctx->size = &size;
+    MockRebuildBehavior* bhvr = new MockRebuildBehavior(move(ctx));
     PartitionRebuild* partRebuild = new PartitionRebuild(bhvr, &mockEventScheduler);
 
     // When
@@ -54,10 +56,12 @@ TEST(PartitionRebuild, StopRebuild_testIfRebuildStateIsCancelled)
     unique_ptr<RebuildContext> ctx = make_unique<RebuildContext>();
     ctx->logger = new RebuildLogger(arrayName);
     ctx->prog = new RebuildProgress(arrayName);
+    PartitionPhysicalSize size;
+    ctx->size = &size;
     ctx->SetResult(RebuildState::REBUILDING);
     NiceMock<MockEventScheduler> mockEventScheduler;
     ON_CALL(mockEventScheduler, EnqueueEvent(_)).WillByDefault(Return());
-    MockRebuildBehavior* bhvr = new MockRebuildBehavior(move(ctx), nullptr);
+    MockRebuildBehavior* bhvr = new MockRebuildBehavior(move(ctx));
     PartitionRebuild* partRebuild = new PartitionRebuild(bhvr, &mockEventScheduler);
 
     // When
@@ -74,8 +78,10 @@ TEST(PartitionRebuild, TotalStripeCnt_testIfTotalStripeCountIsCorrect)
     unique_ptr<RebuildContext> ctx = make_unique<RebuildContext>();
     ctx->logger = new RebuildLogger(arrayName);
     ctx->prog = new RebuildProgress(arrayName);
+    PartitionPhysicalSize size;
+    ctx->size = &size;
     ctx->stripeCnt = 1024;
-    MockRebuildBehavior* bhvr = new MockRebuildBehavior(move(ctx), nullptr);
+    MockRebuildBehavior* bhvr = new MockRebuildBehavior(move(ctx));
     NiceMock<MockEventScheduler> mockEventScheduler;
     ON_CALL(mockEventScheduler, EnqueueEvent(_)).WillByDefault(Return());
     PartitionRebuild* partRebuild = new PartitionRebuild(bhvr, &mockEventScheduler);

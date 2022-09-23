@@ -46,13 +46,13 @@
 namespace pos
 {
 ReadLogBuffer::ReadLogBuffer(JournalConfiguration* journalConfig,
-    JournalLogBuffer* logBuffer, ReplayLogList& logList, ReplayProgressReporter* reporter)
+    IJournalLogBuffer* logBuffer, ReplayLogList& logList, ReplayProgressReporter* reporter)
 : ReadLogBuffer(journalConfig, logBuffer, logList, reporter, new LogBufferParser())
 {
 }
 
 ReadLogBuffer::ReadLogBuffer(JournalConfiguration* journalConfig,
-    JournalLogBuffer* logBuffer, ReplayLogList& logList,
+    IJournalLogBuffer* logBuffer, ReplayLogList& logList,
     ReplayProgressReporter* reporter, LogBufferParser* logBufferParser)
 : ReplayTask(reporter),
   config(journalConfig),
@@ -84,16 +84,16 @@ ReadLogBuffer::GetNumSubTasks(void)
 int
 ReadLogBuffer::Start(void)
 {
-    int eventId = static_cast<int>(POS_EVENT_ID::JOURNAL_REPLAY_STATUS);
+    int eventId = static_cast<int>(EID(JOURNAL_REPLAY_STATUS));
     POS_TRACE_DEBUG(eventId, "[ReplayTask] Read log buffer started");
 
     int result = 0;
     int numLogGroups = config->GetNumLogGroups();
-    uint64_t groupSize = config->GetLogGroupSize();
+    uint64_t groupSize = config->GetLogGroupSize() * 2;
 
     for (int groupId = 0; groupId < numLogGroups; groupId++)
     {
-        void* logGroupBuffer = malloc(groupSize);
+        void* logGroupBuffer = calloc(groupSize, sizeof(char));
         readLogBuffer.push_back(logGroupBuffer);
 
         result = logBuffer->ReadLogBuffer(groupId, logGroupBuffer);
@@ -114,11 +114,11 @@ ReadLogBuffer::Start(void)
     {
         if (logList.IsEmpty() == true)
         {
-            int eventId = static_cast<int>(POS_EVENT_ID::JOURNAL_REPLAY_STOPPED);
+            int eventId = static_cast<int>(EID(JOURNAL_REPLAY_STOPPED));
             std::ostringstream os;
             os << "No logs to replay. Stop replaying";
 
-            POS_TRACE_DEBUG(eventId, os.str());
+            POS_TRACE_INFO(eventId, os.str());
             POS_TRACE_DEBUG_IN_MEMORY(ModuleInDebugLogDump::JOURNAL, eventId, os.str());
             result = eventId;
         }

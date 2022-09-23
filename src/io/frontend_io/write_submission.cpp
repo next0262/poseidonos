@@ -32,9 +32,10 @@
 
 #include "src/io/frontend_io/write_submission.h"
 
+#include <air/Air.h>
+
 #include <mutex>
 
-#include "Air.h"
 #include "src/admin/smart_log_mgr.h"
 #include "src/allocator/i_block_allocator.h"
 #include "src/allocator/i_wbstripe_allocator.h"
@@ -48,6 +49,7 @@
 #include "src/gc/flow_control/flow_control.h"
 #include "src/gc/flow_control/flow_control_service.h"
 #include "src/include/address_type.h"
+#include "src/include/array_config.h"
 #include "src/include/branch_prediction.h"
 #include "src/include/meta_const.h"
 #include "src/io/frontend_io/aio.h"
@@ -90,6 +92,7 @@ WriteSubmission::WriteSubmission(VolumeIoSmartPtr volumeIo, RBAStateManager* inp
   flowControl(inputFlowControl),
   arrayInfo(inputArrayInfo)
 {
+    airlog("RequestedUserWrite", "user", GetEventType(), 1);
     if (nullptr == flowControl)
     {
         flowControl = FlowControlServiceSingleton::Instance()->GetFlowControl(arrayInfo->GetName());
@@ -123,7 +126,6 @@ WriteSubmission::Execute(void)
             return false;
         }
         bool done = _ProcessOwnedWrite();
-
         if (unlikely(!done))
         {
             rbaStateManager->BulkReleaseOwnership(volumeId, startRba,
@@ -223,10 +225,10 @@ WriteSubmission::_SendVolumeIo(VolumeIoSmartPtr volumeIo)
         if (false == isRead)
         {
             WriteForParity writeForParity(volumeIo);
-            bool ret  = writeForParity.Execute();
+            bool ret = writeForParity.Execute();
             if (ret == false)
             {
-                POS_EVENT_ID eventId = POS_EVENT_ID::WRITE_FOR_PARITY_FAILED;
+                POS_EVENT_ID eventId = EID(WRITE_FOR_PARITY_FAILED);
                 POS_TRACE_ERROR(static_cast<int>(eventId),
                     "Failed to copy user data to dram for parity");
             }
@@ -385,8 +387,6 @@ WriteSubmission::_AllocateFreeWriteBuffer(void)
 
     if (!iBlockAllocator->TryRdLock(volumeId))
     {
-        POS_EVENT_ID eventId = POS_EVENT_ID::WRHDLR_FAIL_TO_LOCK;
-        POS_TRACE_DEBUG(eventId, "volumeId:{}", volumeId);
         return;
     }
 
@@ -395,14 +395,14 @@ WriteSubmission::_AllocateFreeWriteBuffer(void)
         VirtualBlks targetVsaRange;
 
         uint64_t key = reinterpret_cast<uint64_t>(this) + allocatedBlockCount;
-        airlog("LAT_WrSb_AllocWriteBuf", "AIR_BEGIN", 0, key);
+        airlog("LAT_WrSb_AllocWriteBuf", "begin", 0, key);
         auto result = iBlockAllocator->AllocateWriteBufferBlks(volumeId, remainBlockCount);
         targetVsaRange = result.first;
-        airlog("LAT_WrSb_AllocWriteBuf", "AIR_END", 0, key);
+        airlog("LAT_WrSb_AllocWriteBuf", "end", 0, key);
 
         if (IsUnMapVsa(targetVsaRange.startVsa))
         {
-            POS_EVENT_ID eventId = POS_EVENT_ID::WRHDLR_NO_FREE_SPACE;
+            POS_EVENT_ID eventId = EID(WRHDLR_NO_FREE_SPACE);
             POS_TRACE_DEBUG(eventId, "No free space in write buffer");
 
             IStateControl* stateControl =
@@ -410,8 +410,13 @@ WriteSubmission::_AllocateFreeWriteBuffer(void)
             if (unlikely(stateControl->GetState()->ToStateType() == StateEnum::STOP))
             {
                 POS_EVENT_ID eventId =
-                    POS_EVENT_ID::WRHDLR_FAIL_BY_SYSTEM_STOP;
+                    EID(WRHDLR_FAIL_BY_SYSTEM_STOP);
                 POS_TRACE_ERROR(eventId, "System Stop incurs write fail");
+                if (!iBlockAllocator->Unlock(volumeId))
+                {
+                    POS_EVENT_ID eventId = EID(WRHDLR_FAIL_TO_UNLOCK);
+                    POS_TRACE_DEBUG(eventId, "volumeId:{}", volumeId);
+                }
                 throw eventId;
             }
             break;
@@ -419,16 +424,24 @@ WriteSubmission::_AllocateFreeWriteBuffer(void)
         if (true == isWTEnabled)
         {
             VirtualBlkAddr startVsa = targetVsaRange.startVsa;
-            for (uint32_t index = 0 ; index < targetVsaRange.numBlks; index++)
+            uint32_t remainingBlks = targetVsaRange.numBlks;
+            while (remainingBlks > 0)
             {
                 VirtualBlksInfo info;
                 VirtualBlks vsaInfo;
+                uint32_t numBlks = ArrayConfig::BLOCKS_PER_CHUNK -
+                    (startVsa.offset % ArrayConfig::BLOCKS_PER_CHUNK);
+                if (numBlks > remainingBlks)
+                {
+                    numBlks = remainingBlks;
+                }
                 vsaInfo.startVsa = startVsa;
-                vsaInfo.numBlks = 1;
+                vsaInfo.numBlks = numBlks;
                 info.first = vsaInfo;
                 info.second = result.second;
                 _AddVirtualBlks(info);
-                startVsa.offset += 1;
+                startVsa.offset += numBlks;
+                remainingBlks -= numBlks;
             }
         }
         else
@@ -440,7 +453,7 @@ WriteSubmission::_AllocateFreeWriteBuffer(void)
 
     if (!iBlockAllocator->Unlock(volumeId))
     {
-        POS_EVENT_ID eventId = POS_EVENT_ID::WRHDLR_FAIL_TO_UNLOCK;
+        POS_EVENT_ID eventId = EID(WRHDLR_FAIL_TO_UNLOCK);
         POS_TRACE_DEBUG(eventId, "volumeId:{}", volumeId);
     }
 }

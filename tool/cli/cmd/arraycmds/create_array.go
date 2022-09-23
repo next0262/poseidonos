@@ -1,19 +1,18 @@
 package arraycmds
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"strconv"
 	"strings"
 
+	pb "cli/api"
 	"cli/cmd/displaymgr"
 	"cli/cmd/globals"
-	"cli/cmd/messages"
-	"cli/cmd/socketmgr"
+	"cli/cmd/grpcmgr"
 
-	"github.com/labstack/gommon/log"
 	"github.com/spf13/cobra"
+	"google.golang.org/protobuf/encoding/protojson"
 )
 
 var CreateArrayCmd = &cobra.Command{
@@ -24,75 +23,94 @@ Create an array for PoseidonOS.
 
 Syntax: 
 	poseidonos-cli array create (--array-name | -a) ArrayName (--buffer | -b) DeviceName 
-	(--data-devs | -d) DeviceNameList (--spare | -s) DeviceName [--raid RAID0 | RAID5 | RAID10] 
+	(--data-devs | -d) DeviceNameList (--spare | -s) DeviceName [--raid RAID0 | RAID5 | RAID10 | RAID6] 
 	[--no-raid]
 
-Example: 
+Example 1 (creating an array with RAID5):  
 	poseidonos-cli array create --array-name Array0 --buffer device0 
 	--data-devs nvme-device0,nvme-device1,nvme-device2,nvme-device3 --spare nvme-device4 --raid RAID5
-          `,
+	
+Eample 2 (creating an array with RAID6): 	
+	poseidonos-cli array create --array-name Array0 --buffer device0 
+	--data-devs nvme-device0,nvme-device1,nvme-device2,nvme-device3 --spare nvme-device4 --raid RAID6
+`,
 
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 
 		var command = "CREATEARRAY"
 
-		req, err := buildCreateArrayReq(command)
+		req, buildErr := buildCreateArrayReq(command)
+		if buildErr != nil {
+			fmt.Printf("failed to build request: %v", buildErr)
+			return buildErr
+		}
+
+		reqJson, err := protojson.Marshal(req)
 		if err != nil {
-			fmt.Println("error: " + err.Error())
-			return
+			fmt.Printf("failed to marshal the protobuf request: %v", err)
+			return err
+		}
+		displaymgr.PrintRequest(string(reqJson))
+
+		res, gRpcErr := grpcmgr.SendCreateArray(req)
+		if gRpcErr != nil {
+			globals.PrintErrMsg(gRpcErr)
+			return gRpcErr
 		}
 
-		reqJSON, err := json.Marshal(req)
-		if err != nil {
-			log.Error(err)
-			return
+		printErr := displaymgr.PrintProtoResponse(command, res)
+		if printErr != nil {
+			fmt.Printf("failed to print the response: %v", printErr)
+			return printErr
 		}
 
-		displaymgr.PrintRequest(string(reqJSON))
-
-		if !(globals.IsTestingReqBld) {
-			resJSON := socketmgr.SendReqAndReceiveRes(string(reqJSON))
-			displaymgr.PrintResponse(command, resJSON, globals.IsDebug, globals.IsJSONRes, globals.DisplayUnit)
-		}
+		return nil
 	},
 }
 
 // Build a CreateArrayReq using flag values from commandline and return it
-func buildCreateArrayReq(command string) (messages.Request, error) {
+func buildCreateArrayReq(command string) (*pb.CreateArrayRequest, error) {
 
-	req := messages.Request{}
-
-	// Split a string (comma separate) that contains comma-separated device names into strings
-	// and add them to a string array.
-	dataDevs := parseDevList(create_array_dataDevsList)
-	spareDevs := parseDevList(create_array_spareDevsList)
-	bufferDevs := parseDevList(create_array_bufferList)
+	dataDevs := strings.Split(create_array_dataDevsList, ",")
+	spareDevs := strings.Split(create_array_spareDevsList, ",")
+	bufferDevs := strings.Split(create_array_bufferList, ",")
 
 	if create_array_isNoRaid == true {
 		if len(dataDevs) > maxNumDataDevsNoRaid {
 			err := errors.New(`array with no RAID can have maximum ` +
 				strconv.Itoa(maxNumDataDevsNoRaid) + ` data device(s).`)
-			return req, err
+			return nil, err
 		}
 		create_array_raid = "NONE"
 	}
 
 	if isRAIDConstMet(len(dataDevs), create_array_raid) == false {
 		err := errors.New(`RAID10 only supports even number of data devices.`)
-		return req, err
+		return nil, err
 	}
 
-	param := messages.CreateArrayParam{
-		ARRAYNAME: create_array_arrayName,
-		RAID:      strings.ToUpper(create_array_raid),
-		BUFFER:    bufferDevs,
-		DATA:      dataDevs,
-		SPARE:     spareDevs,
+	param := &pb.CreateArrayRequest_Param{Name: create_array_arrayName, Raidtype: create_array_raid}
+
+	if create_array_dataDevsList != "" {
+		for _, dataDev := range dataDevs {
+			param.Data = append(param.Data, &pb.DeviceNameList{DeviceName: dataDev})
+		}
+	}
+
+	if create_array_spareDevsList != "" {
+		for _, spare := range spareDevs {
+			param.Spare = append(param.Spare, &pb.DeviceNameList{DeviceName: spare})
+		}
+	}
+
+	if create_array_bufferList != "" {
+		for _, buffer := range bufferDevs {
+			param.Buffer = append(param.Buffer, &pb.DeviceNameList{DeviceName: buffer})
+		}
 	}
 
 	uuid := globals.GenerateUUID()
-
-	req = messages.BuildReqWithParam(command, uuid, param)
+	req := &pb.CreateArrayRequest{Command: command, Rid: uuid, Requestor: "cli", Param: param}
 
 	return req, nil
 }

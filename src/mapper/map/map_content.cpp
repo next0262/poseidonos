@@ -35,15 +35,17 @@
 #include "src/mapper/map/map_content.h"
 #include "src/mapper/map/map_io_handler.h"
 #include "src/meta_file_intf/mock_file_intf.h"
+#include "src/event_scheduler/event_scheduler.h"
 
 #include <string>
 
 namespace pos
 {
-MapContent::MapContent(int mapId_, MapperAddressInfo* addrInfo_)
+MapContent::MapContent(int mapId_, MapperAddressInfo* addrInfo_, MetaFileType type)
 : mapHeader(nullptr),
   map(nullptr),
   mapIoHandler(nullptr),
+  fileType(type),
   mapId(mapId_),
   entriesPerMpage(0),
   addrInfo(addrInfo_),
@@ -75,7 +77,7 @@ MapContent::Init(uint64_t numEntries, uint64_t entrySize, uint64_t mpageSize)
         mapHeader->Init(numMpages, mpageSize);
         if (mapIoHandler == nullptr)
         {
-            mapIoHandler = new MapIoHandler(map, mapHeader, mapId, addrInfo);
+            mapIoHandler = new MapIoHandler(map, mapHeader, mapId, addrInfo, EventSchedulerSingleton::Instance());
         }
     }
     return 0;
@@ -87,7 +89,7 @@ MapContent::OpenMapFile(void)
     uint64_t fileSize = mapHeader->GetSize() + map->GetSize() * map->GetNumMpages();
     POS_TRACE_INFO(EID(MAPPER_SUCCESS), "[Mapper] Open MapFile fileName:{}, size:{}, arrayId:{}", fileName, fileSize, addrInfo->GetArrayId());
     assert(fileSize > 0);
-    int ret = mapIoHandler->OpenFile(fileName, fileSize);
+    int ret = mapIoHandler->OpenFile(fileName, fileSize, fileType);
     if (ret == EID(NEED_TO_INITIAL_STORE))
     {
         POS_TRACE_INFO(EID(MAPPER_SUCCESS), "[Mapper] Need to Initial Store fileName:{}, arrayId:{}", fileName, addrInfo->GetArrayId());
@@ -163,7 +165,7 @@ MapContent::DoesFileExist(void)
 int
 MapContent::Dump(std::string fname)
 {
-    MetaFileIntf* linuxFileToStore = new MockFileIntf(fname, addrInfo->GetArrayId());
+    MetaFileIntf* linuxFileToStore = new MockFileIntf(fname, addrInfo->GetArrayId(), MetaFileType::Map);
     int ret = linuxFileToStore->Create(0);
     linuxFileToStore->Open();
 
@@ -180,7 +182,7 @@ MapContent::Dump(std::string fname)
 int
 MapContent::DumpLoad(std::string fname)
 {
-    MetaFileIntf* linuxFileFromLoad = new MockFileIntf(fname, addrInfo->GetArrayId());
+    MetaFileIntf* linuxFileFromLoad = new MockFileIntf(fname, addrInfo->GetArrayId(), MetaFileType::Map);
     int ret = linuxFileFromLoad->Open();
 
     if (ret == 0)

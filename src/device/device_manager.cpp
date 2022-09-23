@@ -67,7 +67,7 @@ DeviceAttachEventHandler(UblockSharedPtr dev)
         return;
     }
 
-    POS_TRACE_INFO(POS_EVENT_ID::DEVICEMGR_ATTACH,
+    POS_TRACE_INFO(EID(DEVICEMGR_ATTACH),
         "DeviceAttachEventHandler: {}", dev->GetName());
     DeviceManagerSingleton::Instance()->AttachDevice(dev);
 }
@@ -130,7 +130,7 @@ DeviceManager::IterateDevicesAndDoFunc(DeviceIterFunc func, void* ctx)
         std::lock_guard<std::recursive_mutex> guard(deviceManagerMutex);
         if (devices.size() == 0)
         {
-            int result = (int)POS_EVENT_ID::DEVICEMGR_DEVICE_NOT_FOUND;
+            int result = EID(DEVICEMGR_DEVICE_NOT_FOUND);
             POS_TRACE_ERROR(result, "There is no device");
             return result;
         }
@@ -164,8 +164,9 @@ DeviceManager::_ClearDevices()
     {
         ioDispatcher->RemoveDeviceForReactor(dev);
         ioDispatcher->RemoveDeviceForIOWorker(dev);
+        dev.reset();
     }
-    POS_TRACE_INFO(POS_EVENT_ID::DEVICEMGR_CLEAR_DEVICE, "devices has been cleared sucessfully");
+    POS_TRACE_INFO(EID(DEVICEMGR_CLEAR_DEVICE), "devices has been cleared sucessfully");
     devices.clear();
 }
 
@@ -185,7 +186,7 @@ DeviceManager::_ClearMonitors()
 void
 DeviceManager::_StartMonitoring()
 {
-    POS_TRACE_INFO(POS_EVENT_ID::DEVICEMGR_START_MONITOR,
+    POS_TRACE_INFO(EID(DEVICEMGR_START_MONITOR),
         "Start Monitoring");
 
     bool tryStart = false;
@@ -201,7 +202,7 @@ DeviceManager::_StartMonitoring()
 
     if (tryStart == false)
     {
-        POS_TRACE_ERROR(POS_EVENT_ID::DEVICEMGR_START_MONITOR,
+        POS_TRACE_ERROR(EID(DEVICEMGR_START_MONITOR),
             "unable to start monitoring");
     }
 }
@@ -217,7 +218,7 @@ DeviceManager::_CheckDuplication(UblockSharedPtr dev)
         return true;
     }
 
-    POS_TRACE_WARN(POS_EVENT_ID::DEVICEMGR_CHK_DUPLICATE,
+    POS_TRACE_WARN(EID(DEVICEMGR_CHK_DUPLICATE),
         "DEVICE DUPLICATED Name:{}, SN: {}",
         name.val, sn.val);
 
@@ -244,10 +245,10 @@ DeviceManager::ScanDevs(void)
 void
 DeviceManager::_InitScan()
 {
-    POS_TRACE_INFO(POS_EVENT_ID::DEVICEMGR_INIT_SCAN, "InitScan begin");
+    POS_TRACE_INFO(EID(DEVICEMGR_INIT_SCAN), "InitScan begin");
     for (size_t i = 0; i < drivers.size(); i++)
     {
-        POS_TRACE_INFO(POS_EVENT_ID::DEVICEMGR_INIT_SCAN,
+        POS_TRACE_INFO(EID(DEVICEMGR_INIT_SCAN),
             "scanning {}, {}", i, drivers[i]->GetName());
         vector<UblockSharedPtr> _devs;
         drivers[i]->ScanDevs(&_devs);
@@ -260,7 +261,7 @@ DeviceManager::_InitScan()
             }
         }
     }
-    POS_TRACE_INFO(POS_EVENT_ID::DEVICEMGR_INIT_SCAN,
+    POS_TRACE_INFO(EID(DEVICEMGR_INIT_SCAN),
         "InitScan done, dev cnt: {}", devices.size());
 }
 
@@ -271,30 +272,30 @@ DeviceManager::RemoveDevice(UblockSharedPtr dev)
     auto iter = find(devices.begin(), devices.end(), dev);
     if (iter == devices.end())
     {
-        POS_TRACE_ERROR(POS_EVENT_ID::DEVICEMGR_REMOVE_DEV,
+        POS_TRACE_ERROR(EID(DEVICEMGR_REMOVE_DEV),
             "device not found");
-        return static_cast<int>(POS_EVENT_ID::DEVICEMGR_REMOVE_DEV);
+        return static_cast<int>(EID(DEVICEMGR_REMOVE_DEV));
     }
 
-    UnvmeSsdSharedPtr ssd = nullptr;
-
     DeviceType type = (*iter)->GetType();
+    ioDispatcher->RemoveDeviceForReactor(dev);
+    ioDispatcher->RemoveDeviceForIOWorker(dev);
+    devices.erase(iter);
+
+    UnvmeSsdSharedPtr ssd = nullptr;
     if (type == DeviceType::SSD)
     {
         ssd = dynamic_pointer_cast<UnvmeSsd>(dev);
     }
-
-    ioDispatcher->RemoveDeviceForReactor(dev);
-    ioDispatcher->RemoveDeviceForIOWorker(dev);
-
-    devices.erase(iter);
     if (type == DeviceType::SSD && ssd != nullptr)
     {
+        POS_TRACE_WARN(EID(DEVICEMGR_REMOVE_DEV), "SSD {}({}) is hot-removed", dev->GetName(), dev->GetSN());
+        ssd->SetHotDetached();
         UnvmeDrvSingleton::Instance()->GetDaemon()->Resume();
     }
 
-    POS_TRACE_WARN(POS_EVENT_ID::DEVICEMGR_REMOVE_DEV,
-        "device removed successfully {}", dev->GetName());
+    POS_TRACE_WARN(EID(DEVICEMGR_REMOVE_DEV),
+        "device removed successfully name:{}, type:{}", dev->GetName(), type);
     dev = nullptr;
 
     return 0;
@@ -304,7 +305,7 @@ void
 DeviceManager::_Rescan()
 {
     // URAM RESCAN
-    POS_TRACE_INFO(POS_EVENT_ID::DEVICEMGR_RESCAN, "ReScan begin");
+    POS_TRACE_INFO(EID(DEVICEMGR_RESCAN), "ReScan begin");
     size_t i;
     for (i = 0; i < drivers.size(); i++)
     {
@@ -317,12 +318,12 @@ DeviceManager::_Rescan()
     if (i >= drivers.size())
     {
         // NO URAM_DRV
-        POS_TRACE_INFO(POS_EVENT_ID::DEVICEMGR_RESCAN,
+        POS_TRACE_INFO(EID(DEVICEMGR_RESCAN),
             "ReScan done, dev cnt: {}", devices.size());
         return;
     }
 
-    POS_TRACE_DEBUG(POS_EVENT_ID::DEVICEMGR_RESCAN,
+    POS_TRACE_DEBUG(EID(DEVICEMGR_RESCAN),
         "scanning {}, {}", i, drivers[i]->GetName());
     vector<UblockSharedPtr> _devs;
     drivers[i]->ScanDevs(&_devs);
@@ -363,7 +364,7 @@ DeviceManager::_Rescan()
         }
     }
 
-    POS_TRACE_INFO(POS_EVENT_ID::DEVICEMGR_RESCAN,
+    POS_TRACE_INFO(EID(DEVICEMGR_RESCAN),
         "ReScan done, dev cnt: {}", devices.size());
 }
 
@@ -373,12 +374,12 @@ DeviceManager::GetDev(DeviceIdentifier& devID)
     auto it = find_if(devices.begin(), devices.end(), devID.GetPredicate());
     if (it != devices.end())
     {
-        POS_TRACE_DEBUG(POS_EVENT_ID::DEVICEMGR_GETDEV,
+        POS_TRACE_DEBUG(EID(DEVICEMGR_GETDEV),
             "Device Found: {}", devID.val);
         return (*it);
     }
 
-    POS_TRACE_INFO(POS_EVENT_ID::DEVICEMGR_GETDEV,
+    POS_TRACE_INFO(EID(DEVICEMGR_GETDEV),
         "Device Not Found: {}", devID.val);
     return nullptr;
 }
@@ -399,8 +400,6 @@ DeviceManager::ListDevs()
         devs.push_back(devices[i]->GetProperty());
     }
 
-    POS_TRACE_INFO(POS_EVENT_ID::DEVICEMGR_LISTDEV,
-        "ListDevs, count: {}", devs.size());
     return devs;
 }
 
@@ -425,15 +424,22 @@ DeviceManager::GetNvmeCtrlr(std::string& deviceName)
 void
 DeviceManager::AttachDevice(UblockSharedPtr dev)
 {
-    std::lock_guard<std::recursive_mutex> guard(deviceManagerMutex);
-    if (_CheckDuplication(dev) == true)
+    bool isNew = false;
     {
-        _PrepareDevice(dev);
+        std::lock_guard<std::recursive_mutex> guard(deviceManagerMutex);
+        if (_CheckDuplication(dev) == true)
+        {
+            _PrepareDevice(dev);
+            devices.push_back(dev);
+            isNew = true;
+        }
+    }
+    if (isNew == true)
+    {
         deviceEvent->DeviceAttached(dev);
-        devices.push_back(dev);
-        POS_TRACE_INFO(POS_EVENT_ID::DEVICEMGR_ATTACH,
-            "AttachDevice - add a new device to the system: {}",
-            dev->GetName());
+        POS_TRACE_TRACE(EID(POS_TRACE_DEVICE_ATTACHED),
+            "device_name:{}, device_mn:{}, device_sn:{}",
+            dev->GetName(), dev->GetMN(), dev->GetSN());
     }
 }
 
@@ -453,9 +459,9 @@ DeviceManager::DetachDevice(DevUid uid)
                 // Device Manager can call DetachDevice for already removed Ublock Device.
                 // So, just resume the Daemon.
                 UnvmeDrvSingleton::Instance()->GetDaemon()->Resume();
-                POS_TRACE_WARN(POS_EVENT_ID::DEVICEMGR_DETACH,
+                POS_TRACE_WARN(EID(DEVICEMGR_DETACH),
                     "DetachDevice - unknown device or already detached: {}", uid.val);
-                return static_cast<int>(POS_EVENT_ID::DEVICEMGR_DETACH);
+                return static_cast<int>(EID(DEVICEMGR_DETACH));
             }
             ret = _DetachDeviceImpl(dev);
         }
@@ -472,15 +478,15 @@ DeviceManager::DetachDevice(DevUid uid)
 int
 DeviceManager::_DetachDeviceImpl(UblockSharedPtr dev)
 {
-    POS_TRACE_INFO(POS_EVENT_ID::DEVICEMGR_DETACH,
-        "DetachDevice: {}", dev->GetName());
+    POS_TRACE_TRACE(EID(POS_TRACE_DEVICE_DETACHED),
+        "device_name:{}, device_mn:{}, device_sn:{}", dev->GetName(), dev->GetMN(), dev->GetSN());
     if (dev->GetClass() == DeviceClass::ARRAY)
     {
         if (deviceEvent != nullptr)
         {
             if (deviceEvent->DeviceDetached(dev) < 0)
             {
-                POS_TRACE_DEBUG(POS_EVENT_ID::DEVICEMGR_DETACH,
+                POS_TRACE_DEBUG(EID(DEVICEMGR_DETACH),
                 "Failed to acquire lock for device detach");
                 return LOCK_ACQUIRE_FAILED;
             }
@@ -522,15 +528,7 @@ DeviceManager::_PrepareDevice(UblockSharedPtr dev)
     ioDispatcher->AddDeviceForReactor(dev);
     cpu_set_t ioWorkerCpuSet = affinityManager->GetCpuSet(CoreType::UDD_IO_WORKER);
     ioDispatcher->AddDeviceForIOWorker(dev, ioWorkerCpuSet);
-}
-
-void
-DeviceManager::HandleCompletedCommand(void)
-{
-    if (unlikely(ioDispatcher != nullptr))
-    {
-        ioDispatcher->CompleteForThreadLocalDeviceList();
-    }
+    dev->WrapupOpenDeviceSpecific();
 }
 
 } // namespace pos

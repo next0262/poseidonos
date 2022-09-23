@@ -32,6 +32,7 @@
 
 #include "src/io/frontend_io/aio.h"
 
+#include <air/Air.h>
 #include <string.h>
 #include <unistd.h>
 
@@ -39,7 +40,6 @@
 #include <string>
 #include <vector>
 
-#include "Air.h"
 #include "spdk/pos.h"
 #include "src/admin/admin_command_handler.h"
 #include "src/array_mgmt/array_manager.h"
@@ -58,6 +58,7 @@
 #include "src/io/frontend_io/write_submission.h"
 #include "src/io_scheduler/io_dispatcher.h"
 #include "src/logger/logger.h"
+#include "src/pos_replicator/posreplicator_manager.h"
 #include "src/spdk_wrapper/event_framework_api.h"
 #include "src/spdk_wrapper/spdk.h"
 #include "src/volume/volume_manager.h"
@@ -168,7 +169,7 @@ AioCompletion::_SendUserCompletion(void)
 
     if (dir == IO_TYPE::FLUSH)
     {
-        POS_EVENT_ID eventId = POS_EVENT_ID::AIO_FLUSH_END;
+        POS_EVENT_ID eventId = EID(AIO_FLUSH_END);
         POS_TRACE_INFO_IN_MEMORY(ModuleInDebugLogDump::FLUSH_CMD,
             eventId, "Flush End in Aio, volume id : {}",
             volumeId);
@@ -178,7 +179,9 @@ AioCompletion::_SendUserCompletion(void)
         IVolumeIoManager* volumeManager = volumeService.GetVolumeManager(volumeIo->GetArrayId());
         if (likely(_GetMostCriticalError() != IOErrorType::VOLUME_UMOUNTED))
         {
-            volumeManager->DecreasePendingIOCount(volumeIo->GetVolumeId());
+            volumeManager->DecreasePendingIOCount(volumeIo->GetVolumeId(), static_cast<VolumeIoType>(dir));
+            airlog("UserWritePendingCnt", "user", volumeIo->GetVolumeId(), -1);
+            airlog("UserReadPendingCnt", "user", volumeIo->GetVolumeId(), -1);
         }
     }
     volumeIo = nullptr;
@@ -186,7 +189,7 @@ AioCompletion::_SendUserCompletion(void)
 }
 
 VolumeIoSmartPtr
-AIO::CreateVolumeIo(pos_io& posIo)
+AIO::_CreateVolumeIo(pos_io& posIo)
 {
     uint64_t sectorSize = ChangeByteToSector(posIo.length);
     void* buffer = nullptr;
@@ -213,7 +216,7 @@ AIO::CreateVolumeIo(pos_io& posIo)
         }
         default:
         {
-            POS_EVENT_ID eventId = POS_EVENT_ID::BLKHDLR_WRONG_IO_DIRECTION;
+            POS_EVENT_ID eventId = EID(BLKHDLR_WRONG_IO_DIRECTION);
             POS_TRACE_ERROR(eventId, "Wrong IO direction (only read/write types are suppoered)");
             throw eventId;
             break;
@@ -224,15 +227,47 @@ AIO::CreateVolumeIo(pos_io& posIo)
     volumeIo->SetSectorRba(sectorRba);
     volumeIo->SetEventType(BackendEvent::BackendEvent_FrontendIO);
 
-    CallbackSmartPtr aioCompletion(new AioCompletion(volumeIo, posIo,
-        ioContext));
+    return volumeIo;
+}
 
-    volumeIo->SetCallback(aioCompletion);
-
+void
+AIO::_IncreaseIoContextCnt(bool needPollingNecessary)
+{
     ioContext.cnt++;
-    if (volumeIo->IsPollingNecessary())
+    if (needPollingNecessary)
     {
         ioContext.needPollingCount++;
+    }
+}
+
+VolumeIoSmartPtr
+AIO::CreateVolumeIo(pos_io& posIo)
+{
+    VolumeIoSmartPtr volumeIo = _CreateVolumeIo(posIo);
+    CallbackSmartPtr aioCompletion(new AioCompletion(volumeIo, posIo,
+        ioContext));
+    volumeIo->SetCallback(aioCompletion);
+
+    _IncreaseIoContextCnt(volumeIo->IsPollingNecessary());
+
+    return volumeIo;
+}
+
+VolumeIoSmartPtr
+AIO::CreatePosReplicatorVolumeIo(pos_io& posIo, uint64_t lsn)
+{
+    VolumeIoSmartPtr volumeIo = _CreateVolumeIo(posIo);
+
+    if (lsn != REPLICATOR_INVALID_LSN)
+    {
+        CallbackSmartPtr aioCompletion(new AioCompletion(volumeIo, posIo,
+            ioContext));
+        volumeIo->SetCallback(aioCompletion);
+        _IncreaseIoContextCnt(volumeIo->IsPollingNecessary());
+    }
+    else
+    {
+        volumeIo->SetCallback(nullptr);
     }
 
     return volumeIo;
@@ -245,7 +280,7 @@ AIO::_CreateFlushIo(pos_io& posIo)
     FlushIoSmartPtr flushIo(new FlushIo(arrayId));
     flushIo->SetVolumeId(posIo.volume_id);
 
-    POS_EVENT_ID eventId = POS_EVENT_ID::AIO_FLUSH_START;
+    POS_EVENT_ID eventId = EID(AIO_FLUSH_START);
     POS_TRACE_INFO_IN_MEMORY(ModuleInDebugLogDump::FLUSH_CMD,
         eventId, "Flush Start in Aio, volume id : {}",
         posIo.volume_id);
@@ -277,7 +312,7 @@ AIO::SubmitAsyncIO(VolumeIoSmartPtr volumeIo)
     {
         case UbioDir::Write:
         {
-            airlog("PERF_ARR_VOL", "AIR_WRITE", arr_vol_id, volumeIo->GetSize());
+            airlog("PERF_ARR_VOL", "write", arr_vol_id, volumeIo->GetSize());
             SpdkEventScheduler::ExecuteOrScheduleEvent(core,
                 std::make_shared<WriteSubmission>(volumeIo));
         }
@@ -285,7 +320,7 @@ AIO::SubmitAsyncIO(VolumeIoSmartPtr volumeIo)
 
         case UbioDir::Read:
         {
-            airlog("PERF_ARR_VOL", "AIR_READ", arr_vol_id, volumeIo->GetSize());
+            airlog("PERF_ARR_VOL", "read", arr_vol_id, volumeIo->GetSize());
             SpdkEventScheduler::ExecuteOrScheduleEvent(core,
                 std::make_shared<ReadSubmission>(volumeIo));
         }
@@ -293,7 +328,7 @@ AIO::SubmitAsyncIO(VolumeIoSmartPtr volumeIo)
 
         default:
         {
-            POS_EVENT_ID eventId = POS_EVENT_ID::BLKHDLR_WRONG_IO_DIRECTION;
+            POS_EVENT_ID eventId = EID(BLKHDLR_WRONG_IO_DIRECTION);
             POS_TRACE_ERROR(eventId, "Wrong IO direction (only read/write types are suppoered)");
             throw eventId;
             break;
@@ -306,9 +341,10 @@ AIO::CompleteIOs(void)
 {
     uint32_t reactor_id = EventFrameworkApiSingleton::Instance()->GetCurrentReactor();
     int cnt = ioContext.cnt;
-    airlog("CNT_AIO_CompleteIOs", "AIR_BASE", reactor_id, cnt);
-    DeviceManagerSingleton::Instance()->HandleCompletedCommand();
+    airlog("CNT_AIO_CompleteIOs", "base", reactor_id, cnt);
+    IODispatcher::CompleteForThreadLocalDeviceList();
 }
+
 void
 AIO::SubmitAsyncAdmin(pos_io& io, IArrayInfo* arrayInfo)
 {
@@ -363,6 +399,9 @@ AdminCompletion::_DoSpecificJob(void)
         ioContext.needPollingCount--;
     }
     io->complete_cb(io, POS_IO_STATUS_SUCCESS);
+
+    airlog("CompleteUserAdminIo", "user", GetEventType(), 1);
+
     return true;
 }
 

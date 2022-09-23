@@ -38,8 +38,8 @@
 
 #include "spdk/nvme.h"
 #include "src/device/base/ublock_device.h"
-#include "src/spdk_wrapper/caller/spdk_nvme_caller.h"
 #include "src/spdk_wrapper/caller/spdk_env_caller.h"
+#include "src/spdk_wrapper/caller/spdk_nvme_caller.h"
 
 namespace pos
 {
@@ -57,22 +57,37 @@ public:
         SpdkNvmeCaller* spdkNvmeCaller = new SpdkNvmeCaller(),
         SpdkEnvCaller* spdkEnvCaller = new SpdkEnvCaller());
     virtual ~UnvmeSsd() override;
-
     struct spdk_nvme_ns* GetNs(void);
-
     void DecreaseOutstandingAdminCount(void);
+    void SetHotDetached(void)
+    {
+        isHotDetached = true;
+    }
+    bool IsSupportedExtSmart(void)
+    {
+        return isSupportedExtendedSmart;
+    }
 
 private:
     DeviceContext* _AllocateDeviceContext(void) override;
     void _ReleaseDeviceContext(DeviceContext* deviceContextToRelease) override;
 
     std::string _GetSN();
+    std::string _GetFR();
     std::string _GetMN();
     int _GetNuma();
+    void _SetSupportedExtSmart(void)
+    {
+        isSupportedExtendedSmart = true;
+    }
+    void _ClassifyDevice(DeviceProperty* property);
 
+    UnvmeDrv* driver;
     spdk_nvme_ns* ns;
     SpdkNvmeCaller* spdkNvmeCaller;
     SpdkEnvCaller* spdkEnvCaller;
+    bool isHotDetached = false;
+    bool isSupportedExtendedSmart;
 };
 } // namespace pos
 

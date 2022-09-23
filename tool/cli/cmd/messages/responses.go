@@ -92,20 +92,20 @@ type ArrayInfoResult struct {
 // The commands will be merged and this should be revised.
 type Array struct {
 	ARRAYINDEX         int      `json:"index"`
-	UNIQUEID           int      `json:"unique_id"`
+	UNIQUEID           int      `json:"uniqueId"`
 	ARRAYNAME          string   `json:"name"`
 	STATUS             string   `json:"status,omitempty"`
 	STATE              string   `json:"state,omitempty"`
 	SITUATION          string   `json:"situation,omitempty"`
-	CREATEDATETIME     string   `json:"create_datetime,omitempty"`
-	UPDATEDATETIME     string   `json:"update_datetime,omitempty"`
-	REBUILDINGPROGRESS uint32   `json:"rebuilding_progress,omitempty"`
-	CAPACITY           uint64   `json:"capacity,omitempty"`
-	USED               uint64   `json:"used,omitempty"`
-	GCMODE             string   `json:"gc_mode,omitempty"`
-	METARAID           string   `json:"meta_raid,omitempty"`
-	DATARAID           string   `json:"data_raid,omitempty"`
-	WRITETHROUGH       bool     `json:"write_through_enabled,omitempty"`
+	CREATEDATETIME     string   `json:"createDatetime,omitempty"`
+	UPDATEDATETIME     string   `json:"updateDatetime,omitempty"`
+	REBUILDINGPROGRESS uint32   `json:"rebuildingProgress,omitempty"`
+	CAPACITY           string   `json:"capacity,omitempty"`
+	USED               string   `json:"used,omitempty"`
+	GCMODE             string   `json:"gcMode,omitempty"`
+	METARAID           string   `json:"metaRaid,omitempty"`
+	DATARAID           string   `json:"dataRaid,omitempty"`
+	WRITETHROUGH       bool     `json:"writeThroughEnabled,omitempty"`
 	DEVICELIST         []Device `json:"devicelist"`
 }
 
@@ -114,10 +114,10 @@ type Device struct {
 	DEVICETYPE string `json:"type"`
 	ADDRESS    string `json:"addr,omitempty"`
 	CLASS      string `json:"class,omitempty"`
-	MN         string `json:"mn,omitempty"`
+	MN         string `json:"modelNumber,omitempty"`
 	NUMA       string `json:"numa,omitempty"`
 	SIZE       uint64 `json:"size,omitempty"`
-	SERIAL     string `json:"sn,omitempty"`
+	SERIAL     string `json:"serialNumber,omitempty"`
 }
 
 // Response for LOGGERINFO command
@@ -134,15 +134,15 @@ type LoggerInfoResult struct {
 }
 
 type LoggerInfoResData struct {
-	MINORLOGPATH         string `json:"minor_log_path"`
-	MAJORLOGPATH         string `json:"major_log_path"`
-	LOGFILESIZEINBM      string `json:"logfile_size_in_mb"`
-	LOGFILEROTATIONCOUNT int    `json:"logfile_rotation_count"`
-	MINALLOWABLELOGLEVEL string `json:"min_allowable_log_level"`
-	FILTERENABLED        int    `json:"filter_enabled"`
-	FILTERINCLUDED       string `json:"filter_included"`
-	FILTEREXCLUDED       string `json:"filter_excluded"`
-	STRUCTUREDLOGGING    bool   `json:"structured_logging"`
+	MINORLOGPATH         string `json:"minorLogPath"`
+	MAJORLOGPATH         string `json:"majorLogPath"`
+	LOGFILESIZEINBM      string `json:"logfileSizeInMb"`
+	LOGFILEROTATIONCOUNT int    `json:"logfileRotationCount"`
+	MINALLOWABLELOGLEVEL string `json:"minAllowableLogLevel"`
+	FILTERENABLED        int    `json:"filterEnabled"`
+	FILTERINCLUDED       string `json:"filterIncluded"`
+	FILTEREXCLUDED       string `json:"filterExcluded"`
+	STRUCTUREDLOGGING    bool   `json:"structuredLogging"`
 }
 
 // Response for GETLOGLEVEL command
@@ -176,35 +176,35 @@ type SMARTLOGResult struct {
 }
 
 type SMARTLog struct {
-	AVAILABLESPARESPACE     string `json:"available_spare_space"`
+	AVAILABLESPARESPACE     string `json:"availableSpareSpace"`
 	TEMPERATURE             string `json:"temperature"`
-	DEVICERELIABILITY       string `json:"device_reliability"`
-	READONLY                string `json:"read_only"`
-	VOLATILEMEMORYBACKUP    string `json:"volatile_memory_backup"`
-	CURRENTTEMPERATURE      string `json:"current_temperature"`
-	AVAILABLESPARE          string `json:"available_spare"`
-	AVAILABLESPARETHRESHOLD string `json:"available_spare_threshold"`
-	LIFEPERCENTAGEUSED      string `json:"life_percentage_used"`
-	DATAUNITSREAD           string `json:"data_units_read"`
-	DATAUNITSWRITTEN        string `json:"data_units_written"`
-	HOSTREADCOMMANDS        string `json:"host_read_commands"`
-	HOSTWRITECOMMANDS       string `json:"host_write_commands"`
-	CONTROLLERBUSYTIME      string `json:"controller_busy_time"`
-	POWERCYCLES             string `json:"power_cycles"`
-	POWERONHOURS            string `json:"power_on_hours"`
-	UNSAFESHUTDOWNS         string `json:"unsafe_shutdowns"`
-	UNRECOVERABLEMEDIAERROS string `json:"unrecoverable_media_errors"`
-	LIFETIMEERRORLOGENTRIES string `json:"lifetime_error_log_entries"`
-	WARNINGTEMPERATURETIME  string `json:"warning_temperature_time"`
-	CRITICALTEMPERATURETIME string `json:"critical_temperature_time"`
-	TEMPERATURESENSOR1      string `json:"temperature_sensor1,omitempty"`
-	TEMPERATURESENSOR2      string `json:"temperature_sensor2,omitempty"`
-	TEMPERATURESENSOR3      string `json:"temperature_sensor3,omitempty"`
-	TEMPERATURESENSOR4      string `json:"temperature_sensor4,omitempty"`
-	TEMPERATURESENSOR5      string `json:"temperature_sensor5,omitempty"`
-	TEMPERATURESENSOR6      string `json:"temperature_sensor6,omitempty"`
-	TEMPERATURESENSOR7      string `json:"temperature_sensor7,omitempty"`
-	TEMPERATURESENSOR8      string `json:"temperature_sensor8,omitempty"`
+	DEVICERELIABILITY       string `json:"deviceReliability"`
+	READONLY                string `json:"readOnly"`
+	VOLATILEMEMORYBACKUP    string `json:"volatileMemoryBackup"`
+	CURRENTTEMPERATURE      string `json:"currentTemperature"`
+	AVAILABLESPARE          string `json:"availableSpare"`
+	AVAILABLESPARETHRESHOLD string `json:"availableSpareThreshold"`
+	LIFEPERCENTAGEUSED      string `json:"lifePercentageUsed"`
+	DATAUNITSREAD           string `json:"dataUnitsRead"`
+	DATAUNITSWRITTEN        string `json:"dataUnitsWritten"`
+	HOSTREADCOMMANDS        string `json:"hostReadCommands"`
+	HOSTWRITECOMMANDS       string `json:"hostWriteCommands"`
+	CONTROLLERBUSYTIME      string `json:"controllerBusyTime"`
+	POWERCYCLES             string `json:"powerCycles"`
+	POWERONHOURS            string `json:"powerOnHours"`
+	UNSAFESHUTDOWNS         string `json:"unsafeShutdowns"`
+	UNRECOVERABLEMEDIAERROS string `json:"unrecoverableMediaErrors"`
+	LIFETIMEERRORLOGENTRIES string `json:"lifetimeErrorLogEntries"`
+	WARNINGTEMPERATURETIME  string `json:"warningTemperatureTime"`
+	CRITICALTEMPERATURETIME string `json:"criticalTemperatureTime"`
+	TEMPERATURESENSOR1      string `json:"temperatureSensor1,omitempty"`
+	TEMPERATURESENSOR2      string `json:"temperatureSensor2,omitempty"`
+	TEMPERATURESENSOR3      string `json:"temperatureSensor3,omitempty"`
+	TEMPERATURESENSOR4      string `json:"temperatureSensor4,omitempty"`
+	TEMPERATURESENSOR5      string `json:"temperatureSensor5,omitempty"`
+	TEMPERATURESENSOR6      string `json:"temperatureSensor6,omitempty"`
+	TEMPERATURESENSOR7      string `json:"temperatureSensor7,omitempty"`
+	TEMPERATURESENSOR8      string `json:"temperatureSensor8,omitempty"`
 }
 
 // Response for VOLUMEINFO command
@@ -240,7 +240,7 @@ type ListVolumeResData struct {
 
 type Volume struct {
 	VOLUMENAME string `json:"name"`
-	VOLUMEID   int    `json:"id,omitempty"`
+	INDEX      int    `json:"index,omitempty"`
 	TOTAL      uint64 `json:"total"`
 	REMAIN     uint64 `json:"remain"`
 	STATUS     string `json:"status"`
@@ -268,14 +268,14 @@ type ListDeviceResult struct {
 }
 
 type ListDeviceResData struct {
-	DEVICELIST []Device `json:"devicelist"`
+	DEVICELIST []Device `json:"deviceList"`
 }
 
 type ListDeviceInfo struct {
 	CAPACITY           int    `json:"capacity"`
-	REBUILDINGPROGRESS string `json"rebulidingProgress"`
+	REBUILDINGPROGRESS string `json:"rebulidingProgress"`
 	STATE              string `json:"NOT_EXIST"`
-	USED               int    `"json:used"`
+	USED               int    `json:"used"`
 }
 
 type ListQosResponse struct {
@@ -333,22 +333,22 @@ type ListSubsystemResData struct {
 }
 
 type Subsystem struct {
-	NQN             string        `json:"nqn"`
+	NQN             string        `json:"subnqn"`
 	SUBTYPE         string        `json:"subtype"`
-	LISTENADDRESSES []AddressInfo `json:"listen_addresses"`
-	ALLOWANYHOST    int           `json:"allow_any_host"`
+	LISTENADDRESSES []AddressInfo `json:"listenAddresses"`
+	ALLOWANYHOST    int           `json:"allowAnyHost"`
 	HOSTS           []Host        `json:"hosts"`
-	SERIAL          string        `json:"serial_number,omitempty"`
-	MODEL           string        `json:"model_number,omitempty"`
-	MAXNAMESPACES   int           `json:"max_namespaces,omitempty"`
+	SERIAL          string        `json:"serialNumber,omitempty"`
+	MODEL           string        `json:"modelNumber,omitempty"`
+	MAXNAMESPACES   int           `json:"maxNamespaces,omitempty"`
 	NAMESPACES      []Namespace   `json:"namespaces,omitempty"`
 }
 
 type AddressInfo struct {
-	TRANSPORTTYPE      string `json:"transport_type"`
-	ADDRESSFAMILY      string `json:"address_family"`
-	TARGETADDRESS      string `json:"target_address"`
-	TRANSPORTSERVICEID string `json:"transport_service_id"`
+	TRANSPORTTYPE      string `json:"transportType"`
+	ADDRESSFAMILY      string `json:"addressFamily"`
+	TARGETADDRESS      string `json:"targetAddress"`
+	TRANSPORTSERVICEID string `json:"transportServiceId"`
 }
 
 type Host struct {
@@ -357,6 +357,6 @@ type Host struct {
 
 type Namespace struct {
 	NSID     int    `json:"nsid"`
-	BDEVNAME string `json:"bdev_name,omitempty"`
+	BDEVNAME string `json:"bdevName,omitempty"`
 	UUID     string `json:"uuid,omitempty"`
 }

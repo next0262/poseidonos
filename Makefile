@@ -2,12 +2,15 @@ POS_ROOT_DIR := $(abspath $(CURDIR))
 SPDK_ROOT_DIR := $(abspath $(CURDIR)/lib/spdk)
 SPDLOG_SOURCE := spdlog-1.4.2
 SPDLOG_ROOT_DIR := $(abspath $(CURDIR)/lib/$(SPDLOG_SOURCE))
+OTEL_ROOT_DIR := $(abspath $(POS_ROOT_DIR)/lib/opentelemetry-cpp)
 
 TOP = $(POS_ROOT_DIR)
 PROTO_DIR = $(TOP)/proto
 PROTO_CPP_GENERATED_DIR = $(PROTO_DIR)/generated/cpp
 
 DPDK_ROOT_DIR := $(abspath $(CURDIR)/lib/dpdk)
+
+POS_EVENT_DOCUMENATION_TOOL_DIR := $(abspath $(CURDIR)/tool/document_tool)
 
 include $(SPDK_ROOT_DIR)/mk/spdk.common.mk
 include $(SPDK_ROOT_DIR)/mk/spdk.modules.mk
@@ -27,7 +30,7 @@ DOCDIR = $(TOP)/doc
 #################################################
 # nvme driver : unvme, libaio
 
-POS_VERSION = v0.11.0-rc2
+POS_VERSION = v0.11.0-rc6
 
 DEFINE += -DPOS_VERSION=\"$(POS_VERSION)\"
 DEFINE += -DUNVME_BUILD
@@ -48,9 +51,9 @@ endif
 endif
 endif
 
-SPDK_LIB_LIST += accel event_bdev event_iscsi event_net event_scsi event_nvmf event_vmd event_accel event_sock event
+SPDK_LIB_LIST += accel event_bdev event_iscsi event_scsi event_nvmf event_vmd event_accel event_sock event
 SPDK_LIB_LIST += nvmf trace log conf thread util bdev iscsi scsi rpc jsonrpc json
-SPDK_LIB_LIST += net sock notify
+SPDK_LIB_LIST += sock notify
 
 
 ifeq ($(OS),Linux)
@@ -124,13 +127,36 @@ DEFINE += -DAIR_CFG=$(TOP)/config/air.cfg
 INCLUDE += -I$(SPDLOG_ROOT_DIR)/include -I$(SPDLOG_ROOT_DIR)/include/spdlog
 LDFLAGS += -L./lib/$(SPDLOG_SOURCE)/lib -lspdlog
 
+INCLUDE += -I$(OTEL_ROOT_DIR)/include
+LDFLAGS += -L$(OTEL_ROOT_DIR)/lib \
+				-lopentelemetry_trace \
+				-lopentelemetry_exporter_otlp_http \
+				-lopentelemetry_exporter_otlp_http_client \
+				-lopentelemetry_otlp_recordable \
+				-lopentelemetry_proto \
+				-lopentelemetry_resources \
+				-lopentelemetry_common \
+				-lopentelemetry_http_client_curl \
+				-lpthread -lcurl
+DEFINE += -DHAVE_ABSEIL
+
 CXXFLAGS += $(INCLUDE)
 
 LDFLAGS += -ljsoncpp -ljsonrpccpp-common -ljsonrpccpp-client
-LDFLAGS += -no-pie -laio -ltcmalloc
+LDFLAGS += -no-pie -laio
 LDFLAGS += -lnuma
 LDFLAGS += -lyaml-cpp
 LDFLAGS += -ltbb
+LDFLAGS += -lrocksdb
+LDFLAGS += -lstdc++fs
+LDFLAGS += -lisal
+
+ifeq ($(CONFIG_ASAN), y)
+CPPFLAGS += -fno-omit-frame-pointer -fsanitize=address
+LDFLAGS += -fno-omit-frame-pointer -fsanitize=address
+else
+LDFLAGS += -ltcmalloc
+endif
 
 CLI_CERT_DIR = /etc/pos/cert
 CLI_DIR = $(TOP)/tool/cli
@@ -149,6 +175,8 @@ LDEXTRAFLAGS = -rdynamic
 CONFIG_DIR = /etc/pos/
 CONFIG_FILE = $(CONFIG_DIR)/pos.conf
 TELEMETRY_CONFIG_FILE = $(CONFIG_DIR)/telemetry_default.yaml
+PUBLICATION_LIST_FILE = $(CONFIG_DIR)/publication_list_default.yaml
+POS_EVENT_FILE = $(CONFIG_DIR)/pos_event.yaml
 ifeq ($(CONFIG_LIBRARY_BUILD), y)
 LDEXTRAFLAGS += -shared -Wl,-z,nodelete
 endif
@@ -160,7 +188,7 @@ UDEV_FILE = $(UDEV_DIR)/99-custom-nvme.rules
 
 ################################################
 
-all : $(APP) pos-exporter
+all : $(APP) pos-exporter gen_doc
 	@:
 
 install: 
@@ -183,6 +211,12 @@ install:
 
 	@echo "copy default telemetry config file"
 	@cp ./config/telemetry_default.yaml ${TELEMETRY_CONFIG_FILE};
+
+	@echo "copy default telemetry publication list"
+	@cp ./config/publication_list_default.yaml ${PUBLICATION_LIST_FILE};
+
+	@echo "copy event table"
+	@cp ./src/event/pos_event.yaml ${POS_EVENT_FILE};
 
 #	@echo "make cert dir" \
 	@if test -d ${CLI_CERT_DIR}; then \
@@ -231,6 +265,8 @@ gen_proto:
 	@`[ -d $(PROTO_CPP_GENERATED_DIR) ] || mkdir -p $(PROTO_CPP_GENERATED_DIR)`
 	protoc --cpp_out=$(PROTO_CPP_GENERATED_DIR) --grpc_out=$(PROTO_CPP_GENERATED_DIR) --plugin=protoc-gen-grpc=/usr/local/bin/grpc_cpp_plugin --proto_path=$(PROTO_DIR) $(PROTO_DIR)/*.proto
 
+gen_doc:
+	python3 $(POS_EVENT_DOCUMENATION_TOOL_DIR)/events_to_markdown_table.py
 
 pos-exporter:
 	@echo Build Telemetry Collector

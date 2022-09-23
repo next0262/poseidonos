@@ -1,6 +1,6 @@
 /*
  *   BSD LICENSE
- *   Copyright (c) 2021 Samsung Electronics Corporation
+ *   Copyright (c) 2022 Samsung Electronics Corporation
  *   All rights reserved.
  *
  *   Redistribution and use in source and binary forms, with or without
@@ -36,6 +36,7 @@
 #include <sched.h>
 
 #include <string>
+#include <vector>
 
 #include "test/unit-tests/metafs/mim/metafs_io_request_mock.h"
 #include "test/unit-tests/metafs/mim/metafs_io_scheduler_mock.h"
@@ -47,17 +48,20 @@ using ::testing::Return;
 
 namespace pos
 {
+class MetaFsIoScheduler;
+using SchedulerMap = std::unordered_map<uint32_t, MetaFsIoScheduler*>;
+
 TEST(MetaIoManager, CheckSuccess)
 {
-    MetaIoManager* mgr = new MetaIoManager();
-    EXPECT_TRUE(mgr->IsSuccess(POS_EVENT_ID::SUCCESS));
-    EXPECT_FALSE(mgr->IsSuccess(POS_EVENT_ID::MFS_ERROR_MESSAGE));
+    MetaIoManager* mgr = new MetaIoManager(false);
+    EXPECT_TRUE(mgr->IsSuccess(EID(SUCCESS)));
+    EXPECT_FALSE(mgr->IsSuccess(EID(MFS_ERROR_MESSAGE)));
     delete mgr;
 }
 
 TEST(MetaIoManager, CheckInit)
 {
-    MetaIoManager* mgr = new MetaIoManager();
+    MetaIoManager* mgr = new MetaIoManager(false);
     mgr->Init();
     delete mgr;
 }
@@ -65,9 +69,9 @@ TEST(MetaIoManager, CheckInit)
 TEST(MetaIoManager, CheckSanity)
 {
     MockMetaFsIoRequest* req = new MockMetaFsIoRequest();
-    MetaIoManager* mgr = new MetaIoManager();
+    MetaIoManager* mgr = new MetaIoManager(false);
 
-    EXPECT_EQ(mgr->CheckReqSanity(*req), POS_EVENT_ID::SUCCESS);
+    EXPECT_EQ(mgr->CheckReqSanity(*req), EID(SUCCESS));
 
     delete mgr;
     delete req;
@@ -78,9 +82,12 @@ TEST(MetaIoManager, ProcessNewReq_testIfReturnsSuccessWhenSyncIoIsEnabledAndIoHa
     const int arrayId = 0;
     cpu_set_t cpuSet;
     const std::string threadName = "testThread";
+    const std::vector<int> weight = {1, 1, 1, 1};
     NiceMock<MockMetaFsIoScheduler>* scheduler =
-        new NiceMock<MockMetaFsIoScheduler>(0, 0, 0, threadName, cpuSet, nullptr, nullptr);
+        new NiceMock<MockMetaFsIoScheduler>(0, 0, 0, threadName, cpuSet, nullptr, nullptr, nullptr, weight, false);
     EXPECT_CALL(*scheduler, EnqueueNewReq).Times(AtLeast(1));
+    SchedulerMap schedulerList;
+    schedulerList.insert({0, scheduler});
 
     MockMetaFsIoRequest* req = new MockMetaFsIoRequest();
     req->ioMode = MetaIoMode::Async;
@@ -91,13 +98,13 @@ TEST(MetaIoManager, ProcessNewReq_testIfReturnsSuccessWhenSyncIoIsEnabledAndIoHa
 
     NiceMock<MockMetaStorageSubsystem>* storage = new NiceMock<MockMetaStorageSubsystem>(arrayId);
 
-    MetaIoManager* mgr = new MetaIoManager(scheduler, storage);
+    MetaIoManager* mgr = new MetaIoManager(false, schedulerList, storage);
     mgr->Init();
 
-    EXPECT_EQ(mgr->ProcessNewReq(*req), POS_EVENT_ID::SUCCESS);
+    EXPECT_EQ(mgr->ProcessNewReq(*req), EID(SUCCESS));
 
     req->reqType = MetaIoRequestType::Write;
-    EXPECT_EQ(mgr->ProcessNewReq(*req), POS_EVENT_ID::SUCCESS);
+    EXPECT_EQ(mgr->ProcessNewReq(*req), EID(SUCCESS));
 
     delete mgr;
     delete req;
@@ -109,9 +116,12 @@ TEST(MetaIoManager, ProcessNewReq_testIfReturnsSuccessWhenReqTypeIsReadAndIoMode
     const int arrayId = 0;
     cpu_set_t cpuSet;
     const std::string threadName = "testThread";
+    const std::vector<int> weight = {1, 1, 1, 1};
     NiceMock<MockMetaFsIoScheduler>* scheduler =
-        new NiceMock<MockMetaFsIoScheduler>(0, 0, 0, threadName, cpuSet, nullptr, nullptr);
+        new NiceMock<MockMetaFsIoScheduler>(0, 0, 0, threadName, cpuSet, nullptr, nullptr, nullptr, weight, false);
     EXPECT_CALL(*scheduler, EnqueueNewReq).Times(AtLeast(1));
+    SchedulerMap schedulerList;
+    schedulerList.insert({0, scheduler});
 
     MockMetaFsIoRequest* req = new MockMetaFsIoRequest();
     req->ioMode = MetaIoMode::Sync;
@@ -122,13 +132,13 @@ TEST(MetaIoManager, ProcessNewReq_testIfReturnsSuccessWhenReqTypeIsReadAndIoMode
 
     NiceMock<MockMetaStorageSubsystem>* storage = new NiceMock<MockMetaStorageSubsystem>(arrayId);
 
-    MetaIoManager* mgr = new MetaIoManager(scheduler, storage);
+    MetaIoManager* mgr = new MetaIoManager(false, schedulerList, storage);
     mgr->Init();
 
-    EXPECT_EQ(mgr->ProcessNewReq(*req), POS_EVENT_ID::SUCCESS);
+    EXPECT_EQ(mgr->ProcessNewReq(*req), EID(SUCCESS));
 
     req->reqType = MetaIoRequestType::Write;
-    EXPECT_EQ(mgr->ProcessNewReq(*req), POS_EVENT_ID::SUCCESS);
+    EXPECT_EQ(mgr->ProcessNewReq(*req), EID(SUCCESS));
 
     delete mgr;
     delete req;
@@ -140,14 +150,17 @@ TEST(MetaIoManager, CheckArray)
     const int arrayId = 0;
     cpu_set_t cpuSet;
     const std::string threadName = "testThread";
+    const std::vector<int> weight = {1, 1, 1, 1};
     NiceMock<MockMetaFsIoScheduler>* scheduler =
-        new NiceMock<MockMetaFsIoScheduler>(0, 0, 0, threadName, cpuSet, nullptr, nullptr);
+        new NiceMock<MockMetaFsIoScheduler>(0, 0, 0, threadName, cpuSet, nullptr, nullptr, nullptr, weight, false);
     EXPECT_CALL(*scheduler, AddArrayInfo).WillRepeatedly(Return(true));
     EXPECT_CALL(*scheduler, RemoveArrayInfo).WillRepeatedly(Return(true));
+    SchedulerMap schedulerList;
+    schedulerList.insert({0, scheduler});
 
     NiceMock<MockMetaStorageSubsystem>* storage = new NiceMock<MockMetaStorageSubsystem>(arrayId);
 
-    MetaIoManager* mgr = new MetaIoManager(scheduler, storage);
+    MetaIoManager* mgr = new MetaIoManager(false, schedulerList, storage);
     mgr->Init();
 
     MaxMetaLpnMapPerMetaStorage map;

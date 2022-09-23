@@ -43,7 +43,7 @@ namespace pos
 const FileBufType MetaFsIoRequest::INVALID_BUF = nullptr;
 InstanceTagIdAllocator ioReqTagIdAllocator;
 
-MetaFsIoRequest::MetaFsIoRequest(void)
+MetaFsIoRequest::MetaFsIoRequest(const uint32_t numaId)
 : reqType(MetaIoRequestType::Max),
   ioMode(MetaIoMode::Max),
   isFullFileIo(true),
@@ -62,6 +62,7 @@ MetaFsIoRequest::MetaFsIoRequest(void)
   requestCount(0),
   fileCtx(nullptr),
   priority(RequestPriority::Normal),
+  numaId(numaId),
   retryFlag(false),
   ioDone(false),
   error(0)
@@ -69,28 +70,31 @@ MetaFsIoRequest::MetaFsIoRequest(void)
     StoreTimestamp(IoRequestStage::Create);
 }
 
-void
-MetaFsIoRequest::CopyUserReqMsg(const MetaFsIoRequest& req)
+// copy except retryFlag, ioDone and error
+MetaFsIoRequest::MetaFsIoRequest(const MetaFsIoRequest& req)
+: reqType(req.reqType),
+  ioMode(req.ioMode),
+  isFullFileIo(req.isFullFileIo),
+  fd(req.fd),
+  arrayId(req.arrayId),
+  buf(req.buf),
+  byteOffsetInFile(req.byteOffsetInFile),
+  byteSize(req.byteSize),
+  targetMediaType(req.targetMediaType),
+  aiocb(req.aiocb),
+  tagId(req.tagId),
+  baseMetaLpn(req.baseMetaLpn),
+  extents(req.extents),
+  extentsCount(req.extentsCount),
+  originalMsg(nullptr),
+  requestCount(0),
+  fileCtx(req.fileCtx),
+  priority(req.priority),
+  numaId(req.numaId),
+  retryFlag(false),
+  ioDone(false),
+  error(0)
 {
-    this->reqType = req.reqType;
-    this->ioMode = req.ioMode;
-    this->isFullFileIo = req.isFullFileIo;
-    this->fd = req.fd;
-    this->arrayId = req.arrayId;
-    this->buf = req.buf;
-    this->byteOffsetInFile = req.byteOffsetInFile;
-    this->byteSize = req.byteSize;
-    this->targetMediaType = req.targetMediaType;
-    this->aiocb = req.aiocb;
-    this->tagId = req.tagId;
-    this->baseMetaLpn = req.baseMetaLpn;
-    this->extents = req.extents;
-    this->extentsCount = req.extentsCount;
-    this->ioDone = false;
-    this->error = false;
-    this->fileCtx = req.fileCtx;
-    this->priority = req.priority;
-
     if (MetaIoMode::Sync == req.ioMode)
     {
         if (nullptr == req.originalMsg)
@@ -166,7 +170,7 @@ MetaFsIoRequest::SuspendUntilIoCompletion(void)
         usleep(1);
     }
 
-    MFS_TRACE_DEBUG((int)POS_EVENT_ID::MFS_DEBUG_MESSAGE,
+    MFS_TRACE_DEBUG(EID(MFS_DEBUG_MESSAGE),
         "[MIO ][WaitForDone] type={}, req.tagId={}, io done={}", reqType, tagId, ioDone);
 
     ioDone = false;
@@ -187,7 +191,7 @@ MetaFsIoRequest::NotifyIoCompletionToClient(void)
         }
     }
 
-    MFS_TRACE_DEBUG((int)POS_EVENT_ID::MFS_DEBUG_MESSAGE,
+    MFS_TRACE_DEBUG(EID(MFS_DEBUG_MESSAGE),
         "[MIO ][NotifyIO   ] NotifyIOCompletionToClient tagId = {}", tagId);
 }
 
@@ -205,5 +209,40 @@ MetaFsIoRequest::GetLogString(void) const
     log.append(", byteSize: " + std::to_string(byteSize));
     log.append(", priority: " + (int)priority);
     return log;
+}
+
+MetaLpnType
+MetaFsIoRequest::GetStartLpn(void) const
+{
+    MetaLpnType start = 0;
+    MetaLpnType offsetInLpn = byteOffsetInFile / fileCtx->chunkSize;
+
+    for (int i = 0; i < extentsCount; ++i)
+    {
+        int64_t result = offsetInLpn - extents[i].GetCount();
+        if (result < 0)
+        {
+            start = extents[i].GetStartLpn() + offsetInLpn;
+            break;
+        }
+        offsetInLpn -= extents[i].GetCount();
+    }
+
+    return start;
+}
+
+size_t
+MetaFsIoRequest::GetRequestLpnCount(void) const
+{
+    size_t startLpn = byteOffsetInFile / fileCtx->chunkSize;
+    size_t endLpn = (byteOffsetInFile + byteSize - 1) / fileCtx->chunkSize;
+
+    return endLpn - startLpn + 1;
+}
+
+MetaFileType
+MetaFsIoRequest::GetFileType(void) const
+{
+    return fileCtx->fileType;
 }
 } // namespace pos

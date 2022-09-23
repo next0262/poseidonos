@@ -35,6 +35,7 @@
 
 #include <list>
 #include <vector>
+#include <utility>
 
 #include "method.h"
 #include "src/resource_manager/memory_manager.h"
@@ -49,18 +50,20 @@ class BufferPool;
 class Raid5 : public Method
 {
 public:
-    explicit Raid5(const PartitionPhysicalSize* pSize);
+    explicit Raid5(const PartitionPhysicalSize* pSize, uint64_t bufferCntPerNuma);
     virtual ~Raid5();
-    virtual bool AllocParityPools(uint64_t maxParityBufferCntPerNuma,
+    virtual bool AllocParityPools(uint64_t parityBufferCntPerNuma,
         AffinityManager* affMgr = AffinityManagerSingleton::Instance(),
         MemoryManager* memoryMgr = MemoryManagerSingleton::Instance());
     virtual void ClearParityPools();
     virtual list<FtEntry> Translate(const LogicalEntry& le) override;
     virtual int MakeParity(list<FtWriteEntry>& ftl, const LogicalWriteEntry& src) override;
-    virtual list<FtBlkAddr> GetRebuildGroup(FtBlkAddr fba) override;
-    virtual RaidState GetRaidState(vector<ArrayDeviceState> devs) override;
+    virtual list<FtBlkAddr> GetRebuildGroup(FtBlkAddr fba, const vector<uint32_t>& abnormals) override;
+    RecoverFunc GetRecoverFunc(vector<uint32_t> targets, vector<uint32_t> abnormals) override;
+    virtual RaidState GetRaidState(const vector<ArrayDeviceState>& devs) override;
     vector<uint32_t> GetParityOffset(StripeId lsid) override;
     bool CheckNumofDevsToConfigure(uint32_t numofDevs) override;
+    vector<pair<vector<uint32_t>, vector<uint32_t>>> GetRebuildGroupPairs(vector<uint32_t>& targetIndexs) override;
 
     // This function is for unit testing only
     virtual int GetParityPoolSize();
@@ -74,6 +77,8 @@ private:
     vector<BufferPool*> parityPools;
     AffinityManager* affinityManager = nullptr;
     MemoryManager* memoryManager = nullptr;
+    uint64_t parityBufferCntPerNuma = 0;
+    RecoverFunc recoverFunc = nullptr;
 };
 
 } // namespace pos

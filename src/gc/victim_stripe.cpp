@@ -31,33 +31,34 @@
  */
 
 #include "src/gc/victim_stripe.h"
-#include "src/mapper/include/mapper_const.h"
-#include "src/io/general_io/io_submit_handler.h"
-#include "src/event_scheduler/callback.h"
-#include "src/logger/logger.h"
-#include "src/mapper_service/mapper_service.h"
-#include "src/include/meta_const.h"
-#include "src/volume/volume_service.h"
-#include "src/include/branch_prediction.h"
 
-#include "Air.h"
+#include <air/Air.h>
+
+#include "src/event_scheduler/callback.h"
+#include "src/include/branch_prediction.h"
+#include "src/include/meta_const.h"
+#include "src/io/general_io/io_submit_handler.h"
+#include "src/logger/logger.h"
+#include "src/mapper/include/mapper_const.h"
+#include "src/mapper_service/mapper_service.h"
+#include "src/volume/volume_service.h"
 
 namespace pos
 {
 VictimStripe::VictimStripe(IArrayInfo* array)
 : VictimStripe(array,
-            MapperServiceSingleton::Instance()->GetIReverseMap(array->GetName()),
-            MapperServiceSingleton::Instance()->GetIVSAMap(array->GetName()),
-            MapperServiceSingleton::Instance()->GetIStripeMap(array->GetName()),
-            VolumeServiceSingleton::Instance()->GetVolumeManager(array->GetIndex()))
+      MapperServiceSingleton::Instance()->GetIReverseMap(array->GetName()),
+      MapperServiceSingleton::Instance()->GetIVSAMap(array->GetName()),
+      MapperServiceSingleton::Instance()->GetIStripeMap(array->GetName()),
+      VolumeServiceSingleton::Instance()->GetVolumeManager(array->GetIndex()))
 {
 }
 
 VictimStripe::VictimStripe(IArrayInfo* array,
-                        IReverseMap* inputRevMap,
-                        IVSAMap* inputIVSAMap,
-                        IStripeMap* inputIStripeMap,
-                        IVolumeIoManager* inputVolumeManager)
+    IReverseMap* inputRevMap,
+    IVSAMap* inputIVSAMap,
+    IStripeMap* inputIStripeMap,
+    IVolumeIoManager* inputVolumeManager)
 : myLsid(UNMAP_STRIPE),
   dataBlks(0),
   chunkIndex(0),
@@ -91,7 +92,7 @@ void
 VictimStripe::Load(StripeId _lsid, CallbackSmartPtr callback)
 {
     uint64_t objAddr = reinterpret_cast<uint64_t>(callback.get());
-    airlog("LAT_VictimLoad", "AIR_BEGIN", 0, objAddr);
+    airlog("LAT_VictimLoad", "begin", 0, objAddr);
     _InitValue(_lsid);
     _LoadReverseMap(callback);
 }
@@ -123,8 +124,8 @@ VictimStripe::LoadValidBlock(void)
         return true;
     }
 
-    POS_TRACE_INFO((int)POS_EVENT_ID::GC_LOAD_VALID_BLOCKS,
-        "[LoadValidBlock] blockOffset:{}, myLsid:{}, validBlkInfos.empty():{}",
+    POS_TRACE_DEBUG(EID(GC_LOAD_VALID_BLOCKS),
+        "LoadValidBlock, blockOffset:{}, myLsid:{}, validBlkInfos.empty():{}",
         blockOffset, myLsid, validBlkInfos.empty());
 
     for (; blockOffset < dataBlks; blockOffset++)
@@ -161,8 +162,8 @@ VictimStripe::LoadValidBlock(void)
 
         if ((UNMAP_STRIPE <= blkInfo.vsa.stripeId) || (UNMAP_OFFSET <= blkInfo.vsa.offset))
         {
-            POS_TRACE_INFO((int)POS_EVENT_ID::GC_GET_UNMAP_VSA,
-                "loaded Unmap VSA, volId:{}, rba:{}, stripeId:{}, vsaOffset:{}",
+            POS_TRACE_INFO(EID(GC_GET_UNMAP_VSA),
+                "volId:{}, rba:{}, stripeId:{}, vsaOffset:{}",
                 blkInfo.volID, blkInfo.rba, blkInfo.vsa.stripeId, blkInfo.vsa.offset);
             continue;
         }
@@ -170,20 +171,20 @@ VictimStripe::LoadValidBlock(void)
         StripeAddr lsa = iStripeMap->GetLSA(blkInfo.vsa.stripeId);
         if (true == IsUnMapStripe(lsa.stripeId))
         {
-            POS_TRACE_ERROR((int)POS_EVENT_ID::GC_GET_UNMAP_LSA,
-                "Get Unmap LSA, volId:{}, rba:{}, vsaStripeId:{}, vsaOffset:{}, lsaStripeId:{}",
+            POS_TRACE_ERROR(EID(GC_GET_UNMAP_LSA),
+                "volId:{}, rba:{}, vsaStripeId:{}, vsaOffset:{}, lsaStripeId:{}",
                 blkInfo.volID, blkInfo.rba, blkInfo.vsa.stripeId, blkInfo.vsa.offset, lsa.stripeId);
             continue;
         }
 
         if ((lsa.stripeId == myLsid) && (blockOffset == blkInfo.vsa.offset))
         {
-            if (unlikely(EID(SUCCESS)
-                != volumeManager->IncreasePendingIOCountIfNotZero(blkInfo.volID, VolumeStatus::Unmounted)))
+            if (unlikely(EID(SUCCESS) != volumeManager->IncreasePendingIOCountIfNotZero(blkInfo.volID, VolumeIoType::InternalIo)))
             {
                 break;
             }
 
+            airlog("InternalIoPendingCnt", "user", blkInfo.volID, 1);
             blkInfoList.push_back(blkInfo);
             validBlockCnt++;
         }

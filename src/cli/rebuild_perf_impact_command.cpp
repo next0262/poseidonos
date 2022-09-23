@@ -52,14 +52,15 @@ string
 RebuildPerfImpactCommand::Execute(json& doc, string rid)
 {
     JsonFormat jFormat;
+    string level = "lowest";
 
     if (doc["param"].contains("level"))
     {
-        string level = doc["param"]["level"].get<std::string>();
+        level = doc["param"]["level"].get<std::string>();
         qos_backend_policy newBackendPolicy;
         if (level.compare("highest") == 0)
         {
-            newBackendPolicy.priorityImpact = PRIORITY_HIGHEST;
+            newBackendPolicy.priorityImpact = PRIORITY_HIGH;
         }
         else if (level.compare("medium") == 0)
         {
@@ -67,7 +68,7 @@ RebuildPerfImpactCommand::Execute(json& doc, string rid)
         }
         else if (level.compare("lowest") == 0)
         {
-            newBackendPolicy.priorityImpact = PRIORITY_LOWEST;
+            newBackendPolicy.priorityImpact = PRIORITY_LOW;
         }
         else
         {
@@ -80,7 +81,7 @@ RebuildPerfImpactCommand::Execute(json& doc, string rid)
             return jFormat.MakeResponse("REBUILDPERFIMPACT", rid, BADREQUEST, "FAILED", GetPosInfo());
         }
         return jFormat.MakeResponse("REBUILDPERFIMPACT", rid, retVal,
-            "rebuild perf impact is set.", GetPosInfo());
+            "rebuild perf impact is set to " + level + "." , GetPosInfo());
     }
     return jFormat.MakeResponse("REBUILDPERFIMPACT", rid, BADREQUEST,
         "wrong request", GetPosInfo());

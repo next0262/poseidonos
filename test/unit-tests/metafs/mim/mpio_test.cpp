@@ -86,6 +86,7 @@ private:
 TEST(MpioTester, Mpio_testConstructor)
 {
     MpioIoInfo ioInfo;
+    ioInfo.fileType = MetaFileType::Journal;
     char* buf = (char*)malloc(MetaFsIoConfig::META_PAGE_SIZE_IN_BYTES);
     memset(buf, 0, MetaFsIoConfig::META_PAGE_SIZE_IN_BYTES);
 
@@ -93,6 +94,7 @@ TEST(MpioTester, Mpio_testConstructor)
     mpio.Setup(ioInfo, true, true);
 
     EXPECT_EQ(mpio.GetCurrState(), MpAioState::Init);
+    EXPECT_EQ(mpio.GetFileType(), ioInfo.fileType);
 
     free(buf);
 }
@@ -118,7 +120,6 @@ TEST(MpioTester, Mpio_testCallbackForMemcpy)
 TEST(MpioTester, Id_testIfMpiosCanHaveThereUniqueIdThatIncreasesOneMpioAfterAnother)
 {
     const uint64_t COUNT = 100;
-    MpioIoInfo ioInfo;
     char* buf = (char*)malloc(MetaFsIoConfig::META_PAGE_SIZE_IN_BYTES);
     memset(buf, 0, MetaFsIoConfig::META_PAGE_SIZE_IN_BYTES);
     std::list<std::shared_ptr<Mpio>> mpioList;
@@ -143,5 +144,94 @@ TEST(MpioTester, Id_testIfMpiosCanHaveThereUniqueIdThatIncreasesOneMpioAfterAnot
 
     mpioList.clear();
     free(buf);
+}
+
+TEST(MpioTester, IsCached_testIfTheResultReturnsByMpioCacheState)
+{
+    // given
+    char* buf = (char*)malloc(MetaFsIoConfig::META_PAGE_SIZE_IN_BYTES);
+    memset(buf, 0, MetaFsIoConfig::META_PAGE_SIZE_IN_BYTES);
+    MpioTester mpio(buf);
+
+    // then
+    EXPECT_FALSE(mpio.IsCached());
+
+    // when
+    mpio.ChangeCacheStateTo(MpioCacheState::Read);
+
+    // then
+    EXPECT_TRUE(mpio.IsCached());
+
+    // when
+    mpio.ChangeCacheStateTo(MpioCacheState::Merge);
+
+    // then
+    EXPECT_TRUE(mpio.IsCached());
+
+    // when
+    mpio.ChangeCacheStateTo(MpioCacheState::Write);
+
+    // then
+    EXPECT_TRUE(mpio.IsCached());
+}
+
+
+TEST(MpioTester, IsMergeable_testIfTheResultReturnsByMpioCacheState)
+{
+    // given
+    char* buf = (char*)malloc(MetaFsIoConfig::META_PAGE_SIZE_IN_BYTES);
+    memset(buf, 0, MetaFsIoConfig::META_PAGE_SIZE_IN_BYTES);
+    MpioTester mpio(buf);
+
+    // then
+    EXPECT_FALSE(mpio.IsMergeable());
+
+    // when
+    mpio.ChangeCacheStateTo(MpioCacheState::Read);
+
+    // then
+    EXPECT_FALSE(mpio.IsMergeable());
+
+    // when
+    mpio.ChangeCacheStateTo(MpioCacheState::Merge);
+
+    // then
+    EXPECT_FALSE(mpio.IsMergeable());
+
+    // when
+    mpio.ChangeCacheStateTo(MpioCacheState::Write);
+
+    // then
+    EXPECT_TRUE(mpio.IsMergeable());
+}
+
+TEST(MpioTester, IsCacheableVolumeType_testIfTheResultReturnsByMetaStorageType)
+{
+    // given
+    MpioIoInfo ioInfo;
+    char* buf = (char*)malloc(MetaFsIoConfig::META_PAGE_SIZE_IN_BYTES);
+    memset(buf, 0, MetaFsIoConfig::META_PAGE_SIZE_IN_BYTES);
+    MpioTester mpio(buf);
+
+    // when
+    ioInfo.targetMediaType = MetaStorageType::NVRAM;
+    mpio.Setup(ioInfo, true, true);
+
+    // when
+    EXPECT_TRUE(mpio.IsCacheableVolumeType());
+
+    // when
+    ioInfo.targetMediaType = MetaStorageType::JOURNAL_SSD;
+    mpio.Setup(ioInfo, true, true);
+
+    // when
+    EXPECT_TRUE(mpio.IsCacheableVolumeType());
+
+    // when
+    ioInfo.targetMediaType = MetaStorageType::SSD;
+    mpio.Setup(ioInfo, true, true);
+
+    // when
+    EXPECT_FALSE(mpio.IsCacheableVolumeType());
 }
 } // namespace pos

@@ -34,12 +34,14 @@
 
 #include "src/include/rebuild_state.h"
 #include "rebuild_behavior_factory.h"
+#include "src/array/rebuild/quick_rebuild_pair.h"
 #include "src/array/rebuild/rebuild_progress.h"
-#include "src/array/rebuild/rebuild_context.h"
 
 #include <list>
 #include <mutex>
 #include <string>
+#include <vector>
+#include <utility>
 
 using namespace std;
 
@@ -52,12 +54,10 @@ class RebuildTarget;
 class ArrayRebuild
 {
 public:
-    ArrayRebuild(void) {}
-    ArrayRebuild(string arrayName, uint32_t arrayId,
-            ArrayDevice* dev, RebuildComplete cb,
-            list<RebuildTarget*> tgt, RebuildBehaviorFactory* factory, bool isWT = false);
-    virtual void Init(string array, ArrayDevice* dev, RebuildComplete cb,
-        list<PartitionRebuild*> tgt, RebuildProgress* prog, RebuildLogger* logger);
+    ArrayRebuild(string arrayName, uint32_t arrayId, vector<IArrayDevice*>& dst,
+        RebuildComplete cb, list<RebuildTarget*>& tgt, RebuildBehaviorFactory* factory);
+    ArrayRebuild(string arrayName, uint32_t arrayId, QuickRebuildPair& rebuildPair,
+        RebuildComplete cb, list<RebuildTarget*>& tgt, RebuildBehaviorFactory* factory);
     virtual ~ArrayRebuild(void);
     virtual void Start(void);
     virtual void Discard(void);
@@ -66,13 +66,12 @@ public:
     virtual uint64_t GetProgress(void);
 
 private:
-    void _RebuildNext(void);
-    void _RebuildDone(RebuildResult res);
+    void _RebuildNextPartition(void);
+    void _PartitionRebuildDone(RebuildResult res);
     void _RebuildCompleted(RebuildResult res);
     string arrayName = "";
-    ArrayDevice* targetDev = nullptr;
-    RebuildState state = RebuildState::READY;
     RebuildComplete rebuildComplete;
+    RebuildState state = RebuildState::READY;
     list<PartitionRebuild*> tasks;
     RebuildProgress* progress = nullptr;
     RebuildLogger* rebuildLogger = nullptr;

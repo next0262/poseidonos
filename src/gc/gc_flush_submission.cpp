@@ -105,8 +105,8 @@ GcFlushSubmission::Execute(void)
         return false;
     }
 
-    Stripe* stripe = AllocateStripe(volumeId);
-    if (stripe == nullptr)
+    Stripe* allocatedStripe = _AllocateStripe(volumeId);
+    if (allocatedStripe == nullptr)
     {
         if (0 < token)
         {
@@ -114,6 +114,8 @@ GcFlushSubmission::Execute(void)
         }
         return false;
     }
+
+    StripeSmartPtr stripe(allocatedStripe);
 
     for (uint32_t offset = 0; offset < blkInfoList->size(); offset++)
     {
@@ -153,7 +155,7 @@ GcFlushSubmission::Execute(void)
         .stripeId = logicalStripeId,
         .offset = 0};
 
-    POS_EVENT_ID eventId = POS_EVENT_ID::FLUSH_DEBUG_SUBMIT;
+    POS_EVENT_ID eventId = EID(FLUSH_DEBUG_SUBMIT);
 
     POS_TRACE_DEBUG_IN_MEMORY(ModuleInDebugLogDump::IO_FLUSH, eventId,
         "Flush Submission vsid  {}: StartLSA.stripeId : {} blocksInStripe : {}",
@@ -168,7 +170,7 @@ GcFlushSubmission::Execute(void)
         iArrayInfo->GetIndex(),
         false);
 
-    POS_TRACE_DEBUG((int)POS_EVENT_ID::GC_STRIPE_FLUSH_SUBMIT,
+    POS_TRACE_DEBUG(EID(GC_STRIPE_FLUSH_SUBMIT),
         "gc flush submission, arrayName:{}, stripeUserLsid:{}, result:{}",
         arrayName,
         logicalStripeId,
@@ -178,7 +180,7 @@ GcFlushSubmission::Execute(void)
 }
 
 Stripe*
-GcFlushSubmission::AllocateStripe(uint32_t volumeId)
+GcFlushSubmission::_AllocateStripe(uint32_t volumeId)
 {
     Stripe* stripe = iBlockAllocator->AllocateGcDestStripe(volumeId);
     return stripe;

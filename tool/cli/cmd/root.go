@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -12,10 +13,12 @@ import (
 	"github.com/zpatrick/go-bytesize"
 
 	"cli/cmd/arraycmds"
+	"cli/cmd/clustercmds"
 	"cli/cmd/develcmds"
 	"cli/cmd/devicecmds"
 	"cli/cmd/globals"
 	"cli/cmd/loggercmds"
+	"cli/cmd/otelmgr"
 	"cli/cmd/qoscmds"
 	"cli/cmd/subsystemcmds"
 	"cli/cmd/systemcmds"
@@ -109,6 +112,7 @@ func init() {
 	regGlobalFlags()
 	log.SetOutput(RootDir)
 	addCmd()
+	regTracer()
 }
 
 func regFlags() {
@@ -125,6 +129,9 @@ func regGlobalFlags() {
 	RootCmd.PersistentFlags().BoolVar(&globals.IsJSONRes, "json-res", false, "Print response in JSON form.")
 	RootCmd.PersistentFlags().BoolVar(&globals.DisplayUnit, "unit", false, "Display unit (B, KB, MB, ...) when displaying capacity.")
 	RootCmd.PersistentFlags().StringVar(&globals.FieldSeparator, "fs", "|", "Field separator for the output.")
+	RootCmd.PersistentFlags().StringVar(&globals.NodeName, "node", "",
+		`Name of the node to send this command. When both --ip and this flag are specified, this flag is applied only.`)
+	RootCmd.PersistentFlags().Uint32Var(&globals.ReqTimeout, "timeout", 180, "Timeout for this command in seconds. (Note: array unmount command has 30 minutes timeout.)")
 }
 
 func addCmd() {
@@ -140,6 +147,14 @@ func addCmd() {
 	RootCmd.AddCommand(qoscmds.QosCmd)
 	RootCmd.AddCommand(telemetrycmds.TelemetryCmd)
 	RootCmd.AddCommand(completionCmd)
+	RootCmd.AddCommand(clustercmds.ClusterCmd)
+}
+
+func regTracer() {
+	err := otelmgr.GetOtelManagerInstance().InitTracerProvider(context.Background(), globals.OTEL_SERVICE_NAME, getVersion())
+	if err != nil {
+		fmt.Printf("fail to initialize TracerProvider")
+	}
 }
 
 // TODO(mj): this function remains for wbt and file commands. This needs to be revised.

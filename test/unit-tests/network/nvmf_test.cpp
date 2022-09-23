@@ -159,10 +159,10 @@ TEST(Nvmf, VolumeCreated_Success)
     uint64_t maxBw = 0;
     std::string arrayName("array");
     Nvmf nvmf(arrayName, 0, &mockVolumeEventPublisher, mockNvmfVolumePos);
-    int actual, expected{(int)POS_EVENT_ID::VOL_EVENT_OK};
+    int actual, expected{EID(VOL_EVENT_OK)};
 
     VolumeEventBase volumeEventBase;
-    nvmf.SetVolumeBase(&volumeEventBase, volId, volSizeByte, volName, "", "");
+    nvmf.SetVolumeBase(&volumeEventBase, volId, volSizeByte, volName, "", "", "");
     VolumeEventPerf volumeMountPerf;
     nvmf.SetVolumePerf(&volumeMountPerf, maxIops, maxBw);
     VolumeArrayInfo volumeArrayInfo;
@@ -190,10 +190,10 @@ TEST(Nvmf, VolumeCreated_Fail)
     uint64_t maxBw = 0;
     std::string arrayName("array");
     Nvmf nvmf(arrayName, 0, &mockVolumeEventPublisher, mockNvmfVolumePos);
-    int actual, expected{(int)POS_EVENT_ID::VOL_EVENT_FAIL};
+    int actual, expected{EID(VOL_EVENT_FAIL)};
 
     VolumeEventBase volumeEventBase;
-    nvmf.SetVolumeBase(&volumeEventBase, volId, volSizeByte, volName, "", "");
+    nvmf.SetVolumeBase(&volumeEventBase, volId, volSizeByte, volName, "", "", "");
     VolumeEventPerf volumeMountPerf;
     nvmf.SetVolumePerf(&volumeMountPerf, maxIops, maxBw);
     VolumeArrayInfo volumeArrayInfo;
@@ -219,9 +219,9 @@ TEST(Nvmf, VolumeDeleted_Success)
     uint64_t volSizeByte = 1073741824;
     std::string arrayName("array");
     Nvmf nvmf(arrayName, 0, &mockVolumeEventPublisher, mockNvmfVolumePos);
-    int actual, expected{(int)POS_EVENT_ID::VOL_EVENT_OK};
+    int actual, expected{EID(VOL_EVENT_OK)};
     VolumeEventBase volumeEventBase;
-    nvmf.SetVolumeBase(&volumeEventBase, volId, volSizeByte, volName, "", "");
+    nvmf.SetVolumeBase(&volumeEventBase, volId, volSizeByte, volName, "", "", "");
     VolumeArrayInfo volumeArrayInfo;
     nvmf.SetVolumeArrayInfo(&volumeArrayInfo, 0, arrayName);
 
@@ -245,9 +245,9 @@ TEST(Nvmf, VolumeDeleted_Fail)
     uint64_t volSizeByte = 1073741824;
     std::string arrayName("array");
     Nvmf nvmf(arrayName, 0, &mockVolumeEventPublisher, mockNvmfVolumePos);
-    int actual, expected{(int)POS_EVENT_ID::VOL_EVENT_FAIL};
+    int actual, expected{EID(VOL_EVENT_FAIL)};
     VolumeEventBase volumeEventBase;
-    nvmf.SetVolumeBase(&volumeEventBase, volId, volSizeByte, volName, "", "");
+    nvmf.SetVolumeBase(&volumeEventBase, volId, volSizeByte, volName, "", "", "");
     VolumeArrayInfo volumeArrayInfo;
     nvmf.SetVolumeArrayInfo(&volumeArrayInfo, 0, arrayName);
 
@@ -274,10 +274,10 @@ TEST(Nvmf, VolumeMounted_Success)
     uint64_t maxBw = 0;
     std::string arrayName("array");
     Nvmf nvmf(arrayName, 0, &mockVolumeEventPublisher, mockNvmfVolumePos);
-    int actual, expected{(int)POS_EVENT_ID::VOL_EVENT_OK};
+    int actual, expected{EID(VOL_EVENT_OK)};
 
     VolumeEventBase volumeEventBase;
-    nvmf.SetVolumeBase(&volumeEventBase, volId, volSizeByte, volName, "", "");
+    nvmf.SetVolumeBase(&volumeEventBase, volId, volSizeByte, volName, "", "", "");
     VolumeEventPerf volumeMountPerf;
     nvmf.SetVolumePerf(&volumeMountPerf, maxIops, maxBw);
     VolumeArrayInfo volumeArrayInfo;
@@ -302,10 +302,10 @@ TEST(Nvmf, VolumeUnmounted_Success)
     int volId = 0;
     std::string arrayName("array");
     Nvmf nvmf(arrayName, 0, &mockVolumeEventPublisher, mockNvmfVolumePos);
-    int actual, expected{(int)POS_EVENT_ID::VOL_EVENT_OK};
+    int actual, expected{EID(VOL_EVENT_OK)};
 
     VolumeEventBase volumeEventBase;
-    nvmf.SetVolumeBase(&volumeEventBase, volId, 0, volName, "", "");
+    nvmf.SetVolumeBase(&volumeEventBase, volId, 0, volName, "", "", "");
     VolumeArrayInfo volumeArrayInfo;
     nvmf.SetVolumeArrayInfo(&volumeArrayInfo, 0, arrayName);
 
@@ -328,10 +328,10 @@ TEST(Nvmf, VolumeUnmounted_Fail)
     int volId = 0;
     std::string arrayName("array");
     Nvmf nvmf(arrayName, 0, &mockVolumeEventPublisher, mockNvmfVolumePos);
-    int actual, expected{(int)POS_EVENT_ID::VOL_EVENT_FAIL};
+    int actual, expected{EID(VOL_EVENT_FAIL)};
 
     VolumeEventBase volumeEventBase;
-    nvmf.SetVolumeBase(&volumeEventBase, volId, 0, volName, "", "");
+    nvmf.SetVolumeBase(&volumeEventBase, volId, 0, volName, "", "", "");
     VolumeArrayInfo volumeArrayInfo;
     nvmf.SetVolumeArrayInfo(&volumeArrayInfo, 0, arrayName);
 
@@ -357,10 +357,10 @@ TEST(Nvmf, VolumeLoaded_SuccessWithVolumeCreate)
     uint64_t maxBw = 0;
     std::string arrayName("array");
     Nvmf nvmf(arrayName, 0, &mockVolumeEventPublisher, mockNvmfVolumePos);
-    int actual, expected{(int)POS_EVENT_ID::VOL_EVENT_OK};
+    int actual, expected{EID(VOL_EVENT_OK)};
 
     VolumeEventBase volumeEventBase;
-    nvmf.SetVolumeBase(&volumeEventBase, volId, 0, volName, "", "");
+    nvmf.SetVolumeBase(&volumeEventBase, volId, 0, volName, "", "", "");
     VolumeEventPerf volumeMountPerf;
     nvmf.SetVolumePerf(&volumeMountPerf, maxIops, maxBw);
     VolumeArrayInfo volumeArrayInfo;
@@ -388,10 +388,10 @@ TEST(Nvmf, VolumeUpdated_Success)
     uint64_t maxBw = 0;
     std::string arrayName("array");
     Nvmf nvmf(arrayName, 0, &mockVolumeEventPublisher, mockNvmfVolumePos);
-    int actual, expected{(int)POS_EVENT_ID::VOL_EVENT_OK};
+    int actual, expected{EID(VOL_EVENT_OK)};
 
     VolumeEventBase volumeEventBase;
-    nvmf.SetVolumeBase(&volumeEventBase, volId, 0, volName, "", "");
+    nvmf.SetVolumeBase(&volumeEventBase, volId, 0, volName, "", "", "");
     VolumeEventPerf volumeMountPerf;
     nvmf.SetVolumePerf(&volumeMountPerf, maxIops, maxBw);
     VolumeArrayInfo volumeArrayInfo;
@@ -415,7 +415,7 @@ TEST(Nvmf, VolumeDetached_Success)
     vector<int> volList{0, 1, 2};
     std::string arrayName("array");
     Nvmf nvmf(arrayName, 0, &mockVolumeEventPublisher, mockNvmfVolumePos);
-    int actual, expected{(int)POS_EVENT_ID::VOL_EVENT_OK};
+    int actual, expected{EID(VOL_EVENT_OK)};
 
     VolumeArrayInfo volumeArrayInfo;
     nvmf.SetVolumeArrayInfo(&volumeArrayInfo, 0, arrayName);

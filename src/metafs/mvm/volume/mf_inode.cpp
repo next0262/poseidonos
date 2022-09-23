@@ -90,15 +90,15 @@ MetaFileInode::BuildNewEntry(MetaFileInodeCreateReq& req, FileSizeType dataChunk
     data.basic.field.versionSignature = MetaFsConfig::SIGNATURE_INODE_VERSION;
     data.basic.field.inUse = true;
 
-    POS_TRACE_INFO((int)POS_EVENT_ID::MFS_INFO_MESSAGE,
-        "New Inode, fd: {}, fileName: {}, fileByteSize: {}, pagemapCnt: {}",
-        req.fd, *req.fileName, req.fileByteSize, data.basic.field.pagemapCnt);
+    POS_TRACE_INFO(EID(MFS_INFO_MESSAGE),
+        "New Inode, fd: {}, fileName: {}, fileByteSize: {}, pagemapCnt: {}, fileType: {}",
+        req.fd, *req.fileName, req.fileByteSize, data.basic.field.pagemapCnt, (int)req.ioAttribute.type);
 
         for (int i = 0; i < (int)req.extentList->size(); ++i)
     {
         data.basic.field.pagemap[i] = req.extentList->at(i);
 
-        POS_TRACE_INFO((int)POS_EVENT_ID::MFS_INFO_MESSAGE,
+        POS_TRACE_INFO(EID(MFS_INFO_MESSAGE),
             "pagemap[{}] {}, {}",
             i, data.basic.field.pagemap[i].GetStartLpn(),
             data.basic.field.pagemap[i].GetCount());

@@ -32,10 +32,11 @@
 
 #include "unvme_drv.h"
 
+#include <air/Air.h>
+
 #include <memory>
 #include <utility>
 
-#include "Air.h"
 #include "spdk/thread.h"
 #include "src/bio/ubio.h"
 #include "src/device/unvme/unvme_device_context.h"
@@ -82,10 +83,13 @@ AsyncIOComplete(void* ctx, const struct spdk_nvme_cpl* completion)
 {
     UnvmeIOContext* ioCtx = static_cast<UnvmeIOContext*>(ctx);
     UnvmeDeviceContext* devCtx = ioCtx->GetDeviceContext();
+    uint64_t ssdId = reinterpret_cast<uint64_t>(ioCtx->GetDeviceContext());
 
     if (likely(!ioCtx->IsAsyncIOCompleted()))
     {
         devCtx->DecreasePendingIO();
+        airlog("CNT_PendingIO", "ssd", ssdId, -1);
+        airlog("SSD_Complete", "internal", ssdId, 1);
         if (unlikely(ioCtx->IsAdminCommand()))
         {
             devCtx->DecAdminCommandCount();
@@ -93,7 +97,7 @@ AsyncIOComplete(void* ctx, const struct spdk_nvme_cpl* completion)
 
         if (!ioCtx->IsFrontEnd())
         {
-            POS_EVENT_ID eventId = POS_EVENT_ID::UNVME_DEBUG_COMPLETE_IO;
+            POS_EVENT_ID eventId = EID(UNVME_DEBUG_COMPLETE_IO);
             POS_TRACE_DEBUG_IN_MEMORY(ModuleInDebugLogDump::IO_GENERAL,
                 eventId, "Complete IO in unvme_drv, startLBA: {}, sectorCount : {}, direction : {}, sc : {}, sct : {} deviceName : {}",
                 ioCtx->GetStartSectorOffset(),
@@ -124,30 +128,31 @@ AsyncIOComplete(void* ctx, const struct spdk_nvme_cpl* completion)
         {
             auto dir = ioCtx->GetOpcode();
             uint64_t size = ioCtx->GetByteCount();
-            uint64_t ssdId =
-                reinterpret_cast<uint64_t>(ioCtx->GetDeviceContext());
             if (UbioDir::Read == dir)
             {
-                airlog("PERF_SSD", "AIR_READ", ssdId, size);
+                airlog("PERF_SSD", "read", ssdId, size);
                 switch (ioCtx->GetEventType())
                 {
                     case BackendEvent::BackendEvent_Unknown:
-                        airlog("PERF_SSD_Read", "AIR_UNKNOWN", ssdId, size);
+                        airlog("PERF_SSD_Read", "unknown", ssdId, size);
+                        break;
+                    case BackendEvent::BackendEvent_JournalIO:
+                        airlog("PERF_SSD_Read", "journal", ssdId, size);
                         break;
                     case BackendEvent::BackendEvent_MetaIO:
-                        airlog("PERF_SSD_Read", "AIR_META", ssdId, size);
+                        airlog("PERF_SSD_Read", "meta", ssdId, size);
                         break;
                     case BackendEvent::BackendEvent_GC:
-                        airlog("PERF_SSD_Read", "AIR_GC", ssdId, size);
+                        airlog("PERF_SSD_Read", "gc", ssdId, size);
                         break;
                     case BackendEvent::BackendEvent_FrontendIO:
-                        airlog("PERF_SSD_Read", "AIR_HOST", ssdId, size);
+                        airlog("PERF_SSD_Read", "host", ssdId, size);
                         break;
                     case BackendEvent::BackendEvent_Flush:
-                        airlog("PERF_SSD_Read", "AIR_FLUSH", ssdId, size);
+                        airlog("PERF_SSD_Read", "flush", ssdId, size);
                         break;
                     case BackendEvent::BackendEvent_UserdataRebuild:
-                        airlog("PERF_SSD_Read", "AIR_REBUILD", ssdId, size);
+                        airlog("PERF_SSD_Read", "rebuild", ssdId, size);
                         break;
                     default:
                         break;
@@ -155,26 +160,29 @@ AsyncIOComplete(void* ctx, const struct spdk_nvme_cpl* completion)
             }
             else if (UbioDir::Write == dir)
             {
-                airlog("PERF_SSD", "AIR_WRITE", ssdId, size);
+                airlog("PERF_SSD", "write", ssdId, size);
                 switch (ioCtx->GetEventType())
                 {
                     case BackendEvent::BackendEvent_Unknown:
-                        airlog("PERF_SSD_Write", "AIR_UNKNOWN", ssdId, size);
+                        airlog("PERF_SSD_Write", "unknown", ssdId, size);
+                        break;
+                    case BackendEvent::BackendEvent_JournalIO:
+                        airlog("PERF_SSD_Write", "journal", ssdId, size);
                         break;
                     case BackendEvent::BackendEvent_MetaIO:
-                        airlog("PERF_SSD_Write", "AIR_META", ssdId, size);
+                        airlog("PERF_SSD_Write", "meta", ssdId, size);
                         break;
                     case BackendEvent::BackendEvent_GC:
-                        airlog("PERF_SSD_Write", "AIR_GC", ssdId, size);
+                        airlog("PERF_SSD_Write", "gc", ssdId, size);
                         break;
                     case BackendEvent::BackendEvent_FrontendIO:
-                        airlog("PERF_SSD_Write", "AIR_HOST", ssdId, size);
+                        airlog("PERF_SSD_Write", "host", ssdId, size);
                         break;
                     case BackendEvent::BackendEvent_Flush:
-                        airlog("PERF_SSD_Write", "AIR_FLUSH", ssdId, size);
+                        airlog("PERF_SSD_Write", "flush", ssdId, size);
                         break;
                     case BackendEvent::BackendEvent_UserdataRebuild:
-                        airlog("PERF_SSD_Write", "AIR_REBUILD", ssdId, size);
+                        airlog("PERF_SSD_Write", "rebuild", ssdId, size);
                         break;
                     default:
                         break;
@@ -223,6 +231,7 @@ UnvmeDrv::~UnvmeDrv(void)
     if (nullptr != nvmeSsd)
     {
         nvmeSsd->Stop();
+        delete nvmeSsd;
     }
     if (nullptr != unvmeCmd)
     {
@@ -240,12 +249,18 @@ UnvmeDrv::GetDaemon(void)
     return nvmeSsd;
 }
 
+void
+UnvmeDrv::SpdkDetach(struct spdk_nvme_ns* ns)
+{
+    nvmeSsd->SpdkDetach(ns);
+}
+
 int
 UnvmeDrv::DeviceDetached(std::string sn)
 {
     if (nullptr == detach_event)
     {
-        POS_EVENT_ID eventId = POS_EVENT_ID::UNVME_SSD_DETACH_NOTIFICATION_FAILED;
+        POS_EVENT_ID eventId = EID(UNVME_SSD_DETACH_NOTIFICATION_FAILED);
         POS_TRACE_ERROR(eventId, "Failed to notify uNVMe device detachment: Device name: {}", sn);
         return (int)eventId;
     }
@@ -265,13 +280,13 @@ UnvmeDrv::DeviceAttached(struct spdk_nvme_ns* ns, int nsid,
         uint64_t diskSize = spdkNvmeCaller->SpdkNvmeNsGetSize(ns);
         UblockSharedPtr dev = make_shared<UnvmeSsd>(deviceName, diskSize, this,
             ns, trid->traddr);
-        POS_EVENT_ID eventId = POS_EVENT_ID::UNVME_SSD_DEBUG_CREATED;
+        POS_EVENT_ID eventId = EID(UNVME_SSD_DEBUG_CREATED);
         POS_TRACE_DEBUG(eventId, "Create Ublock, Pointer : {}", deviceName);
         attach_event(dev);
     }
     else
     {
-        POS_EVENT_ID eventId = POS_EVENT_ID::UNVME_SSD_ATTACH_NOTIFICATION_FAILED;
+        POS_EVENT_ID eventId = EID(UNVME_SSD_ATTACH_NOTIFICATION_FAILED);
         POS_TRACE_ERROR(eventId, "Failed to notify uNVMe device attachment: Device name: {}", deviceName);
         ret = (int)eventId;
     }
@@ -304,9 +319,12 @@ UnvmeDrv::_SubmitAsyncIOInternal(UnvmeDeviceContext* deviceContext,
 {
     int retValue = 0, retValueComplete = 0;
     int completions = 0;
+    uint64_t ssdId = reinterpret_cast<uint64_t>(ioCtx->GetDeviceContext());
 
     ioCtx->ClearAsyncIOCompleted();
     deviceContext->IncreasePendingIO();
+    airlog("CNT_PendingIO", "ssd", ssdId, 1);
+    airlog("SSD_Submit", "internal", ssdId, 1);
 
     retValue = unvmeCmd->RequestIO(deviceContext, AsyncIOComplete, ioCtx);
     if (unlikely(-ENOMEM == retValue)) // Usually ENOMEM means the submissuion queue is full
@@ -315,7 +333,7 @@ UnvmeDrv::_SubmitAsyncIOInternal(UnvmeDeviceContext* deviceContext,
                 ioCtx->GetOutOfMemoryRetryCount()))
         {
             // submission timed out.
-            POS_EVENT_ID eventId = POS_EVENT_ID::UNVME_SUBMISSION_RETRY_EXCEED;
+            POS_EVENT_ID eventId = EID(UNVME_SUBMISSION_RETRY_EXCEED);
             uint64_t offset = 0, sectorCount = 0;
 
             offset = ioCtx->GetStartSectorOffset();
@@ -453,7 +471,7 @@ UnvmeDrv::CompleteErrors(DeviceContext* deviceContext)
         }
         else if (ioCtx->CheckAndDecreaseErrorRetryCount() == true)
         {
-            POS_EVENT_ID eventId = POS_EVENT_ID::UNVME_DEBUG_RETRY_IO;
+            POS_EVENT_ID eventId = EID(UNVME_DEBUG_RETRY_IO);
             POS_TRACE_INFO(eventId, "Retry IO in unvme_drv, startLBA: {}, sectorCount : {}, direction : {}, deviceName : {}",
                 ioCtx->GetStartSectorOffset(),
                 ioCtx->GetSectorCount(),

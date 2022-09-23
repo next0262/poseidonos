@@ -32,6 +32,7 @@
 
 #pragma once
 
+#include <mutex>
 #include <string>
 
 #include "src/volume/i_volume_manager.h"
@@ -55,6 +56,7 @@ namespace pos
 {
 
 class VolumeBase;
+class TelemetryPublisher;
 
 class VolumeManager : public IVolumeManager, public IMountSequence, public IStateObserver
 {
@@ -67,12 +69,16 @@ public:
     void Shutdown(void) override;
     void Flush(void) override;
 
-    int Create(std::string name, uint64_t size, uint64_t maxiops, uint64_t maxbw) override;
+    int Create(std::string name, uint64_t size, uint64_t maxiops, uint64_t maxbw, bool checkWalVolume, std::string uuid) override;
     int Delete(std::string name) override;
     int Mount(std::string name, std::string subnqn) override;
     int Unmount(std::string name) override;
-    int UpdateQoS(std::string name, uint64_t maxiops, uint64_t maxbw, uint64_t miniops, uint64_t minbw) override;
+    int Unmount(int volId) override;
+    int UpdateQoSProperty(std::string name, uint64_t maxiops, uint64_t maxbw, uint64_t miniops, uint64_t minbw) override;
+    int UpdateVolumeReplicationState(std::string name, VolumeReplicationState state) override;
+    int UpdateVolumeReplicationRoleProperty(std::string name, VolumeReplicationRoleProperty nodeProperty) override;
     int Rename(std::string oldname, std::string newname) override;
+    int SaveVolumeMeta(void) override;
     int CheckVolumeValidity(std::string name) override;
 
     void DetachVolumes(void) override;
@@ -81,6 +87,8 @@ public:
     int GetVolumeID(std::string volName) override;
     int GetVolumeCount(void) override;
     int GetVolumeStatus(int volId) override;
+    int GetVolumeReplicationState(int volId) override;
+    int GetVolumeReplicationRoleProperty(int volId) override;
     int CheckVolumeValidity(int volId) override;
     uint64_t EntireVolumeSize(void) override;
     int GetVolumeSize(int volId, uint64_t& volSize) override;
@@ -88,8 +96,8 @@ public:
     std::string GetStatusStr(VolumeStatus status) override;
     int CancelVolumeReplay(int volId) override;
 
-    int IncreasePendingIOCountIfNotZero(int volId, VolumeStatus mounted = VolumeStatus::Mounted, uint32_t ioCountToSubmit = 1) override;
-    int DecreasePendingIOCount(int volId, VolumeStatus mounted = VolumeStatus::Mounted, uint32_t ioCountCompleted = 1) override;
+    int IncreasePendingIOCountIfNotZero(int volId, VolumeIoType volumeIoType, uint32_t ioCountToSubmit = 1) override;
+    int DecreasePendingIOCount(int volId, VolumeIoType volumeIoType, uint32_t ioCountCompleted = 1) override;
     VolumeBase* GetVolume(int volId) override;
     std::string GetArrayName(void) override;
 
@@ -98,6 +106,11 @@ public:
 private:
     int _LoadVolumes(void);
     int _CheckPrerequisite(void);
+    void _ClearLock(void);
+    void _PublishTelemetryVolumeState(std::string name, VolumeStatus status);
+    void _PublishTelemetryVolumeCapacity(std::string name, uint64_t size);
+    void _PublishTelemetryArrayUsage(void);
+
     bool initialized = false;
     bool stopped = false;
 
@@ -108,6 +121,11 @@ private:
 
     IArrayInfo* arrayInfo;
     IStateControl* state;
+
+    TelemetryPublisher* tp;
+
+    std::mutex volumeEventLock;
+    std::mutex volumeExceptionLock;
 };
 
 } // namespace pos

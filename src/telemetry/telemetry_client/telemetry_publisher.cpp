@@ -44,6 +44,8 @@ TelemetryPublisher::TelemetryPublisher(std::string name_)
     defaultlabelList.emplace(TEL_PUBNAME_LABEL_KEY, name);
     std::string runId = to_string(InstanceIdProviderSingleton::Instance()->GetInstanceId());
     defaultlabelList.emplace(TEL_RUNID_LABEL_KEY, runId);
+    
+    _LoadPublicationList(DEFAULT_PUBLICATION_LIST_FILE_PATH);
 }
 
 TelemetryPublisher::~TelemetryPublisher(void)
@@ -54,12 +56,6 @@ void
 TelemetryPublisher::SetMaxEntryLimit(int limit)
 {
     dataPool.SetMaxEntryLimit(limit);
-}
-
-int
-TelemetryPublisher::GetNumEntries(void)
-{
-    return dataPool.GetNumEntries();
 }
 
 std::string
@@ -114,10 +110,11 @@ TelemetryPublisher::AllocatePOSMetricVector(void)
 int
 TelemetryPublisher::PublishData(std::string id, POSMetricValue value, POSMetricTypes type)
 {
-    if (turnOn == false)
+    if ((turnOn == false) || (_ShouldPublish(id) == false))
     {
         return -1;
     }
+
     POSMetric metric(id, type);
     if (type == MT_COUNT)
     {
@@ -142,10 +139,11 @@ TelemetryPublisher::PublishData(std::string id, POSMetricValue value, POSMetricT
 int
 TelemetryPublisher::PublishMetric(POSMetric metric)
 {
-    if (turnOn == false)
+    if ((turnOn == false) || (_ShouldPublish(metric.GetName()) == false))
     {
         return -1;
     }
+
     POSMetricVector* metricList = AllocatePOSMetricVector();
     metricList->push_back(metric);
     int ret = globalPublisher->PublishToServer(&defaultlabelList, metricList);
@@ -163,6 +161,13 @@ TelemetryPublisher::PublishMetricList(POSMetricVector* metricList)
         delete metricList;
         return -1;
     }
+    _RemoveMetricNotToPublish(metricList);
+
+    if (metricList->size() <= 0)
+    {
+        return -1;
+    }
+
     int ret = globalPublisher->PublishToServer(&defaultlabelList, metricList);
     metricList->clear();
     delete metricList;
@@ -180,11 +185,74 @@ TelemetryPublisher::AddDefaultLabel(std::string key, std::string value)
 {
     if (defaultlabelList.size() == MAX_NUM_LABEL)
     {
-        POS_TRACE_ERROR(EID(TELEMETRY_CLIENT_ERROR), "[Telemetry] Failed to add Default Label, numLabel is overflowed!!!!, key:{}, value:{}", key, value);
+        POS_TRACE_WARN(EID(TELEMETRY_PUBLISHER_LABEL_ADD_FAILURE_MAXNUM_VIOLATION),
+            "key:{}, value:{}, defaultlabellist_size:{}, max_num_label:{}", 
+            key, value, defaultlabelList.size(), MAX_NUM_LABEL);
         return -1;
     }
     defaultlabelList.emplace(key, value);
     return 0;
+}
+
+void
+TelemetryPublisher::LoadPublicationList(std::string filePath)
+{
+    _LoadPublicationList(filePath);
+}
+
+void
+TelemetryPublisher::_LoadPublicationList(std::string filePath)
+{
+    YAML::Node list;
+
+    try
+    {
+        list = YAML::LoadFile(filePath)[PUBLICATION_LIST_ROOT];
+
+        for (auto it = list.begin(); it != list.end(); ++it)
+        {
+            std::string tag = it->first.as<std::string>();
+            std::pair<std::string, bool> metricToPublish (tag, true);            
+            publicationList.insert(metricToPublish);
+        }
+
+        POS_TRACE_INFO(EID(TELEMETRY_PUBLISHER_PUBLICATION_LIST_LOAD_SUCCESS),
+            "filePath:{}, list_size:{}", filePath, publicationList.size());
+    }
+    catch (YAML::Exception& e)
+    {
+        POS_TRACE_WARN(EID(TELEMETRY_PUBLISHER_PUBLICATION_LIST_LOAD_FAILURE),
+            "filePath:{}, yaml_exception:{}", filePath, e.msg);
+        selectivePublication = false;
+    }
+}
+
+void
+TelemetryPublisher::_RemoveMetricNotToPublish(POSMetricVector* metricList)
+{
+    auto it = metricList->begin();
+    while(it != metricList->end())
+    {
+        if (_ShouldPublish(it->GetName()) == false)
+        {
+            it = metricList->erase(it);
+        }
+        else
+        {
+            ++it;
+        }
+    }
+}
+
+bool
+TelemetryPublisher::_ShouldPublish(std::string metricId)
+{
+    if (selectivePublication == false)
+    {
+        return true;
+    }
+
+    return (publicationList.find(metricId) != publicationList.end());
 }
 
 } // namespace pos

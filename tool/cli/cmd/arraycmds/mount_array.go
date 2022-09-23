@@ -1,15 +1,14 @@
 package arraycmds
 
 import (
-	"encoding/json"
-
+	pb "cli/api"
 	"cli/cmd/displaymgr"
 	"cli/cmd/globals"
-	"cli/cmd/messages"
-	"cli/cmd/socketmgr"
+	"cli/cmd/grpcmgr"
+	"fmt"
 
-	"github.com/labstack/gommon/log"
 	"github.com/spf13/cobra"
+	"google.golang.org/protobuf/encoding/protojson"
 )
 
 var MountArrayCmd = &cobra.Command{
@@ -26,32 +25,47 @@ Example:
 	poseidonos-cli array mount --array-name Array0
 	
          `,
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 
 		var command = "MOUNTARRAY"
 
-		param := messages.MountArrayParam{
-			ARRAYNAME: mount_array_arrayName,
-			ENABLEWT:  mount_array_enableWriteThrough,
+		req, buildErr := buildMountArrayReq(command)
+		if buildErr != nil {
+			fmt.Printf("failed to build request: %v", buildErr)
+			return buildErr
 		}
 
-		uuid := globals.GenerateUUID()
-
-		req := messages.BuildReqWithParam(command, uuid, param)
-
-		reqJSON, err := json.Marshal(req)
+		reqJson, err := protojson.Marshal(req)
 		if err != nil {
-			log.Error("error:", err)
+			fmt.Printf("failed to marshal the protobuf request: %v", err)
+			return err
+		}
+		displaymgr.PrintRequest(string(reqJson))
+
+		res, gRpcErr := grpcmgr.SendMountArray(req)
+		if gRpcErr != nil {
+			globals.PrintErrMsg(gRpcErr)
+			return gRpcErr
 		}
 
-		displaymgr.PrintRequest(string(reqJSON))
-
-		// Do not send request to server and print response when testing request build.
-		if !(globals.IsTestingReqBld) {
-			resJSON := socketmgr.SendReqAndReceiveRes(string(reqJSON))
-			displaymgr.PrintResponse(command, resJSON, globals.IsDebug, globals.IsJSONRes, globals.DisplayUnit)
+		printErr := displaymgr.PrintProtoResponse(command, res)
+		if printErr != nil {
+			fmt.Printf("failed to print the response: %v", printErr)
+			return printErr
 		}
+
+		return nil
 	},
+}
+
+func buildMountArrayReq(command string) (*pb.MountArrayRequest, error) {
+	uuid := globals.GenerateUUID()
+
+	param := &pb.MountArrayRequest_Param{Name: mount_array_arrayName,
+		EnableWriteThrough: &mount_array_enableWriteThrough}
+	req := &pb.MountArrayRequest{Command: command, Rid: uuid, Requestor: "cli", Param: param}
+
+	return req, nil
 }
 
 // Note (mj): In Go-lang, variables are shared among files in a package.
@@ -59,6 +73,7 @@ Example:
 // we use the following naming rule: filename_variablename. We can replace this if there is a better way.
 var mount_array_arrayName = ""
 var mount_array_enableWriteThrough = false
+var mount_array_targetAddress = ""
 
 func init() {
 	MountArrayCmd.Flags().StringVarP(&mount_array_arrayName,
@@ -69,4 +84,8 @@ func init() {
 	MountArrayCmd.Flags().BoolVarP(&mount_array_enableWriteThrough,
 		"enable-write-through", "w", false,
 		`When specified, the array to be mounted will work with write through mode.`)
+
+	MountArrayCmd.Flags().StringVarP(&mount_array_targetAddress,
+		"traddr", "i", "",
+		`Default target IP address for the array.`)
 }

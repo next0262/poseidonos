@@ -41,8 +41,9 @@
 #include "src/journal_manager/i_journal_status_provider.h"
 #include "src/journal_manager/i_journal_writer.h"
 #include "src/journal_manager/journaling_status.h"
+#include "src/journal_manager/log_buffer/i_versioned_segment_context.h"
 #include "src/journal_manager/log_write/i_journal_volume_event_handler.h"
-#include "src/journal_manager/log_buffer/versioned_segment_ctx.h"
+#include "src/rocksdb_log_buffer/rocksdb_log_buffer.h"
 
 namespace pos
 {
@@ -66,7 +67,6 @@ class JournalStatusProvider;
 class CheckpointManager;
 class DirtyMapManager;
 class LogBufferWriteDoneNotifier;
-class CallbackSequenceController;
 class BufferedSegmentContextManager;
 
 class Stripe;
@@ -100,14 +100,13 @@ public:
         LogWriteHandler* writeHandler,
         JournalVolumeEventHandler* journalVolumeEventHandler,
         JournalWriter* journalWriter,
-        JournalLogBuffer* journalLogBuffer,
+        IJournalLogBuffer* journalLogBuffer,
         BufferOffsetAllocator* bufferOffsetAllocator,
         LogGroupReleaser* groupReleaser,
         CheckpointManager* checkpointManager,
-        VersionedSegmentCtx* versionedSegCtx_,
+        IVersionedSegmentContext* versionedSegCtx_,
         DirtyMapManager* dirtyManager,
         LogBufferWriteDoneNotifier* logBufferWriteDoneNotifier,
-        CallbackSequenceController* sequenceController,
         ReplayHandler* replayHandler,
         IArrayInfo* arrayInfo,
         TelemetryPublisher* tp);
@@ -134,10 +133,13 @@ public:
     IJournalWriter* GetJournalWriter(void);
     IJournalVolumeEventHandler* GetVolumeEventHandler(void);
     IJournalStatusProvider* GetJournalStatusProvider(void);
+    IVersionedSegmentContext* GetVersionedSegmentContext(void);
 
 protected:
-    void _InitModules(TelemetryClient* tc, IVSAMap* vsaMap, IStripeMap* stripeMap,
-        IMapFlush* mapFlush,
+    IVersionedSegmentContext* _CreateVersionedSegmentCtx(void);
+
+    void _InitModules(TelemetryClient* tc, IVSAMap* vsaMap,
+        IStripeMap* stripeMap, IMapFlush* mapFlush,
         ISegmentCtx* segmentCtx, IWBStripeAllocator* wbStripeAllocator,
         IContextManager* contextManager, IContextReplayer* contextReplayer,
         IVolumeInfoManager* volumeManager, EventScheduler* eventScheduler);
@@ -160,7 +162,7 @@ protected:
     JournalStatusProvider* statusProvider;
     JournalingStatus journalingStatus;
 
-    JournalLogBuffer* logBuffer;
+    IJournalLogBuffer* logBuffer;
 
     LogWriteContextFactory* logFactory;
     JournalEventFactory* eventFactory;
@@ -172,14 +174,15 @@ protected:
     LogGroupReleaser* logGroupReleaser;
 
     CheckpointManager* checkpointManager;
-    VersionedSegmentCtx* versionedSegCtx;
+    IVersionedSegmentContext* versionedSegCtx;
     DirtyMapManager* dirtyMapManager;
     LogBufferWriteDoneNotifier* logFilledNotifier;
-    CallbackSequenceController* sequenceController;
 
     ReplayHandler* replayHandler;
     TelemetryPublisher* telemetryPublisher;
     TelemetryClient* telemetryClient;
+
+    bool isInitialized;
 };
 
 } // namespace pos

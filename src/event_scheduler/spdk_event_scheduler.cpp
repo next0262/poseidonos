@@ -47,7 +47,7 @@ SpdkEventScheduler::SendSpdkEvent(uint32_t core, EventSmartPtr event)
 {
     if (unlikely(nullptr == event))
     {
-        POS_EVENT_ID eventId = POS_EVENT_ID::EVENTFRAMEWORK_INVALID_EVENT;
+        POS_EVENT_ID eventId = EID(EVENTFRAMEWORK_INVALID_EVENT);
         POS_TRACE_ERROR(eventId, "Invalid Event to send");
 
         return false;
@@ -67,6 +67,22 @@ SpdkEventScheduler::ExecuteOrScheduleEvent(uint32_t core, EventSmartPtr event)
     {
         SendSpdkEvent(core, event);
     }
+}
+
+bool
+SpdkEventScheduler::SendSpdkEvent(EventSmartPtr event)
+{
+    if (unlikely(nullptr == event))
+    {
+        POS_EVENT_ID eventId = EID(EVENTFRAMEWORK_INVALID_EVENT);
+        POS_TRACE_ERROR(eventId, "Invalid Event to send");
+
+        return false;
+    }
+
+    EventSmartPtr* argument = new EventSmartPtr(event);
+
+    return EventFrameworkApiSingleton::Instance()->SendSpdkEvent(InvokeEvent, argument);
 }
 
 void

@@ -3,6 +3,7 @@
 #include <list>
 #include <vector>
 #include "src/allocator/context_manager/context_manager.h"
+#include "src/journal_manager/log_buffer/versioned_segment_ctx.h"
 
 namespace pos
 {
@@ -12,7 +13,7 @@ public:
     using ContextManager::ContextManager;
     MOCK_METHOD(void, Init, (), (override));
     MOCK_METHOD(void, Dispose, (), (override));
-    MOCK_METHOD(int, FlushContexts, (EventSmartPtr callback, bool sync), (override));
+    MOCK_METHOD(int, FlushContexts, (EventSmartPtr callback, bool sync, int logGroupId), (override));
     MOCK_METHOD(SegmentId, AllocateFreeSegment, (), (override));
     MOCK_METHOD(SegmentId, AllocateGCVictimSegment, (), (override));
     MOCK_METHOD(SegmentId, AllocateRebuildTargetSegment, (), (override));
@@ -35,6 +36,9 @@ public:
     MOCK_METHOD(GcCtx*, GetGcCtx, (), (override));
     MOCK_METHOD(std::mutex&, GetCtxLock, (), (override));
     MOCK_METHOD(BlockAllocationStatus*, GetAllocationStatus, (), (override));
+    MOCK_METHOD(void, PrepareVersionedSegmentCtx, (IVersionedSegmentContext* versionedSegCtx), (override));
+    MOCK_METHOD(void, ResetFlushedInfo, (int logGroupId), (override));
+    MOCK_METHOD(void, SetAllocateDuplicatedFlush, (bool flag), (override));
 };
 
 } // namespace pos

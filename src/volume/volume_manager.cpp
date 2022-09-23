@@ -40,25 +40,31 @@
 #include "src/include/branch_prediction.h"
 #include "src/include/pos_event_id.h"
 #include "src/logger/logger.h"
+#include "src/sys_info/space_info.h"
 #include "src/qos/qos_manager.h"
 #include "src/sys_event/volume_event_publisher.h"
+#include "src/telemetry/telemetry_client/telemetry_publisher.h"
 #include "src/volume/volume_creator.h"
 #include "src/volume/volume_base.h"
 #include "src/volume/volume_deleter.h"
 #include "src/volume/volume_detacher.h"
+#include "src/volume/volume_meta_saver.h"
 #include "src/volume/volume_mounter.h"
 #include "src/volume/volume_loader.h"
 #include "src/volume/volume_unmounter.h"
 #include "src/volume/volume_meta_intf.h"
 #include "src/volume/volume_renamer.h"
+#include "src/volume/volume_replicate_property_updater.h"
 #include "src/volume/volume_qos_updater.h"
+#include "src/telemetry/telemetry_client/telemetry_publisher.h"
 
 namespace pos
 {
 
 VolumeManager::VolumeManager(IArrayInfo* i, IStateControl* s)
 :arrayInfo(i),
-state(s)
+state(s),
+tp(nullptr)
 {
     state->Subscribe(this, typeid(*this).name());
 }
@@ -74,10 +80,21 @@ VolumeManager::Init(void)
     int result = 0;
 
     initialized = true;
+    _ClearLock();
     _LoadVolumes();
 
+    tp = new TelemetryPublisher(("Volume_Manager"));
+    tp->AddDefaultLabel("array_name", arrayInfo->GetName());
+
+    if (tp == nullptr)
+    {
+        tp = new TelemetryPublisher(("VolumeManager"));
+        tp->AddDefaultLabel("array_name", arrayInfo->GetName());
+        TelemetryClientSingleton::Instance()->RegisterPublisher(tp);
+    }
     result = VolumeServiceSingleton::Instance()->Register(arrayInfo->GetIndex(), this);
 
+    _PublishTelemetryArrayUsage();
     return result;
 }
 
@@ -98,8 +115,15 @@ VolumeManager::Dispose(void)
 {
     initialized = false;
     volumes.Clear();
+    _ClearLock();
 
     VolumeServiceSingleton::Instance()->Unregister(arrayInfo->GetIndex());
+    if (tp != nullptr)
+    {
+        TelemetryClientSingleton::Instance()->DeregisterPublisher(tp->GetName());
+        delete tp;
+        tp = nullptr;
+    }
 }
 
 void
@@ -151,26 +175,81 @@ VolumeManager::GetVolumeSize(int volId, uint64_t& volSize)
     return EID(VOL_NOT_FOUND);
 }
 
-int
-VolumeManager::Create(std::string name, uint64_t size, uint64_t maxIops, uint64_t maxBw)
+void
+VolumeManager::_PublishTelemetryVolumeState(string name, VolumeStatus status)
 {
-    if (initialized == false)
+    if (tp != nullptr)
     {
-        int eid = EID(CREATE_VOL_CAN_ONLY_BE_WHILE_ONLINE);
-        POS_TRACE_WARN(eid, "array_name: {}, vol_name: {}", arrayInfo->GetName(), name);
-        return eid;
+        POSMetric metric(TEL50020_VOL_VOLUME_STATE, POSMetricTypes::MT_GAUGE);
+        metric.SetGaugeValue(status);
+        metric.AddLabel("array_id", to_string(arrayInfo->GetIndex()));
+        metric.AddLabel("volume_name", name);
+        tp->PublishMetric(metric);
     }
+}
 
+void
+VolumeManager::_PublishTelemetryVolumeCapacity(string name, uint64_t size)
+{
+    if (tp != nullptr)
+    {
+        POSMetric metric(TEL50021_VOL_VOLUME_TOTAL_CAPACITY, POSMetricTypes::MT_GAUGE);
+        metric.SetGaugeValue(size);
+        metric.AddLabel("array_id", to_string(arrayInfo->GetIndex()));
+        metric.AddLabel("volume_name", name);
+        tp->PublishMetric(metric);
+    }
+}
+
+void
+VolumeManager::_PublishTelemetryArrayUsage(void)
+{
+    if (tp != nullptr)
+    {
+        uint64_t arrayUsage = SpaceInfo::Remaining(arrayInfo->GetIndex());
+        POSMetric metric(TEL60002_ARRAY_USAGE_BLK_CNT, POSMetricTypes::MT_GAUGE);
+        metric.SetGaugeValue(arrayUsage);
+        metric.AddLabel("array_id", to_string(arrayInfo->GetIndex()));
+        tp->PublishMetric(metric);
+    }
+}
+
+int
+VolumeManager::Create(std::string name, uint64_t size, uint64_t maxIops, uint64_t maxBw, bool checkWalVolume, std::string uuid)
+{
     int ret = _CheckPrerequisite();
     if (ret != EID(SUCCESS))
     {
         return ret;
     }
+
+    unique_lock<mutex> eventLock(volumeEventLock, std::defer_lock);
+    unique_lock<mutex> exceptionLock(volumeExceptionLock, std::defer_lock);
+
+    ret = std::try_lock(exceptionLock, eventLock);
+
+    if (ret != -1)
+    {
+        POS_TRACE_WARN(EID(CREATE_VOL_LOCK_FAIL), "failed try lock index : {} fail vol name: {}", ret, name);
+        
+        return EID(VOL_MGR_BUSY);
+    }
+
     VolumeCreator volumeCreator(volumes, arrayInfo->GetName(), arrayInfo->GetIndex());
     // setting default values for miniops and minbw
     uint64_t defaultMinIops = 0;
     uint64_t defaultMinBw = 0;
-    return volumeCreator.Do(name, size, maxIops, maxBw, defaultMinIops, defaultMinBw);
+
+    ret = volumeCreator.Do(name, size, maxIops, maxBw, defaultMinIops, defaultMinBw, uuid, checkWalVolume);
+
+    if (EID(SUCCESS) == ret)
+    {
+        _PublishTelemetryVolumeState(name, VolumeStatus::Unmounted);
+        _PublishTelemetryVolumeCapacity(name, size);
+        _PublishTelemetryArrayUsage();
+    }
+
+    return ret;
 }
 
 int
@@ -179,11 +258,33 @@ VolumeManager::Delete(std::string name)
     int ret = _CheckPrerequisite();
     if (ret != EID(SUCCESS))
     {
+        POS_TRACE_WARN(EID(DELETE_VOL_DEBUG_MSG  ), "try alloc fail vol name: {}", name);
         return ret;
     }
 
+    unique_lock<mutex> eventLock(volumeEventLock, std::defer_lock);
+    unique_lock<mutex> exceptionLock(volumeExceptionLock, std::defer_lock);
+
+    ret = std::try_lock(exceptionLock, eventLock);
+
+    if (ret != -1)
+    {
+        POS_TRACE_WARN(EID(DELETE_VOL_LOCK_FAIL), "failed try lock index : {} fail vol name: {}", ret, name);
+        
+        return EID(VOL_MGR_BUSY);
+    }
+
     VolumeDeleter volumeDeleter(volumes, arrayInfo->GetName(), arrayInfo->GetIndex());
-    return volumeDeleter.Do(name);
+    ret = volumeDeleter.Do(name);
+    
+    if (EID(SUCCESS) == ret)
+    {
+        _PublishTelemetryVolumeState(name, VolumeStatus::Offline);
+        _PublishTelemetryVolumeCapacity(name, 0);
+        _PublishTelemetryArrayUsage();
+    }
+
+    return ret;
 }
 
 int
@@ -205,8 +306,41 @@ VolumeManager::Mount(std::string name, std::string subnqn)
         return ret;
     }
 
+    unique_lock<mutex> eventLock(volumeEventLock, std::defer_lock);
+    unique_lock<mutex> exceptionLock(volumeExceptionLock, std::defer_lock);
+
+    ret = std::try_lock(exceptionLock, eventLock);
+
+    if (ret != -1)
+    {
+        POS_TRACE_WARN(EID(MOUNT_VOL_LOCK_FAIL), "failed try lock index : {} fail vol name: {}", ret, name);
+        
+        return EID(VOL_MGR_BUSY);
+    }
+
     VolumeMounter volumeMounter(volumes, arrayInfo->GetName(), arrayInfo->GetIndex());
-    return volumeMounter.Do(name, subnqn);
+    ret = volumeMounter.Do(name, subnqn);
+
+    if (EID(SUCCESS) == ret)
+    {
+        _PublishTelemetryVolumeState(name, VolumeStatus::Mounted);
+    }
+
+    return ret;
+}
+
+int
+VolumeManager::Unmount(int volId)
+{
+    string name;
+    int ret = GetVolumeName(volId, name);
+
+    if (ret != EID(SUCCESS))
+    {
+        return ret;
+    }
+
+    return Unmount(name);
 }
 
 int
@@ -218,12 +352,31 @@ VolumeManager::Unmount(std::string name)
         return ret;
     }
 
+    unique_lock<mutex> eventLock(volumeEventLock, std::defer_lock);
+    unique_lock<mutex> exceptionLock(volumeExceptionLock, std::defer_lock);
+
+    ret = std::try_lock(exceptionLock, eventLock);
+
+    if (ret != -1)
+    {
+        POS_TRACE_WARN(EID(UNMOUNT_VOL_LOCK_FAIL), "failed try lock index : {} fail vol name: {}", ret, name);
+        
+        return EID(VOL_MGR_BUSY);
+    }
+
     VolumeUnmounter volumeUnmounter(volumes, arrayInfo->GetName(), arrayInfo->GetIndex());
-    return volumeUnmounter.Do(name);
+    ret = volumeUnmounter.Do(name);
+
+    if (EID(SUCCESS) == ret)
+    {
+        _PublishTelemetryVolumeState(name, VolumeStatus::Unmounted);
+    }
+
+    return ret;
 }
 
 int
-VolumeManager::UpdateQoS(std::string name, uint64_t maxIops, uint64_t maxBw, uint64_t minIops, uint64_t minBw)
+VolumeManager::UpdateQoSProperty(std::string name, uint64_t maxIops, uint64_t maxBw, uint64_t minIops, uint64_t minBw)
 {
     int ret = _CheckPrerequisite();
     if (ret != EID(SUCCESS))
@@ -231,8 +384,78 @@ VolumeManager::UpdateQoS(std::string name, uint64_t maxIops, uint64_t maxBw, uin
         return ret;
     }
 
+    unique_lock<mutex> eventLock(volumeEventLock, std::defer_lock);
+    unique_lock<mutex> exceptionLock(volumeExceptionLock, std::defer_lock);
+
+    ret = std::try_lock(exceptionLock, eventLock);
+
+    if (ret != -1)
+    {
+        POS_TRACE_WARN(EID(VOL_UPDATE_LOCK_FAIL), "failed try lock index : {} fail vol name: {}", ret, name);
+        
+        return EID(VOL_MGR_BUSY);
+    }
+
     VolumeQosUpdater volumeQosUpdater(volumes, arrayInfo->GetName(), arrayInfo->GetIndex());
-    return volumeQosUpdater.Do(name, maxIops, maxBw, minIops, minBw);
+    ret = volumeQosUpdater.Do(name, maxIops, maxBw, minIops, minBw);
+
+    return ret;
+}
+
+int
+VolumeManager::UpdateVolumeReplicationState(std::string name, VolumeReplicationState state)
+{
+    int ret = _CheckPrerequisite();
+    if (ret != EID(SUCCESS))
+    {
+        return ret;
+    }
+
+    unique_lock<mutex> eventLock(volumeEventLock, std::defer_lock);
+    unique_lock<mutex> exceptionLock(volumeExceptionLock, std::defer_lock);
+
+    ret = std::try_lock(exceptionLock, eventLock);
+
+    if (ret != -1)
+    {
+        POS_TRACE_WARN(EID(VOL_UPDATE_LOCK_FAIL), "failed try lock index : {} fail vol name: {}", ret, name);
+        
+        return EID(VOL_MGR_BUSY);
+    }
+
+    VolumeReplicatePropertyUpdater volumeReplicatePropertyUpdater(volumes, arrayInfo->GetName(), arrayInfo->GetIndex());
+
+    ret = volumeReplicatePropertyUpdater.Do(name, state);
+
+    return ret;
+}
+
+int
+VolumeManager::UpdateVolumeReplicationRoleProperty(std::string name, VolumeReplicationRoleProperty nodeProperty)
+{
+    int ret = _CheckPrerequisite();
+    if (ret != EID(SUCCESS))
+    {
+        return ret;
+    }
+
+    unique_lock<mutex> eventLock(volumeEventLock, std::defer_lock);
+    unique_lock<mutex> exceptionLock(volumeExceptionLock, std::defer_lock);
+
+    ret = std::try_lock(exceptionLock, eventLock);
+
+    if (ret != -1)
+    {
+        POS_TRACE_WARN(EID(VOL_UPDATE_LOCK_FAIL), "failed try lock index : {} fail vol name: {}", ret, name);
+        
+        return EID(VOL_MGR_BUSY);
+    }
+
+    VolumeReplicatePropertyUpdater volumeReplicatePropertyUpdater(volumes, arrayInfo->GetName(), arrayInfo->GetIndex());
+
+    ret = volumeReplicatePropertyUpdater.Do(name, nodeProperty);
+
+    return ret;
 }
 
 int
@@ -244,8 +467,47 @@ VolumeManager::Rename(std::string oldName, std::string newName)
         return ret;
     }
 
+    unique_lock<mutex> eventLock(volumeEventLock, std::defer_lock);
+    unique_lock<mutex> exceptionLock(volumeExceptionLock, std::defer_lock);
+
+    ret = std::try_lock(exceptionLock, eventLock);
+
+    if (ret != -1)
+    {
+        POS_TRACE_WARN(EID(VOL_UPDATE_LOCK_FAIL), "failed try lock index : {} fail vol name: {}", ret, oldName);
+        
+        return EID(VOL_MGR_BUSY);
+    }
+
     VolumeRenamer volumeRenamer(volumes, arrayInfo->GetName(), arrayInfo->GetIndex());
-    return volumeRenamer.Do(oldName, newName);
+    ret = volumeRenamer.Do(oldName, newName);
+
+    return ret;
+}
+
+int
+VolumeManager::SaveVolumeMeta(void)
+{
+    int ret = _CheckPrerequisite();
+    if (ret != EID(SUCCESS))
+    {
+        return ret;
+    }
+
+    unique_lock<mutex> eventLock(volumeEventLock, std::defer_lock);
+    unique_lock<mutex> exceptionLock(volumeExceptionLock, std::defer_lock);
+
+    ret = std::try_lock(exceptionLock, eventLock);
+
+    if (ret != -1)
+    {
+        POS_TRACE_WARN(EID(VOL_UPDATE_LOCK_FAIL), "failed try lock index : {}", ret);
+        
+        return EID(VOL_MGR_BUSY);
+    }
+
+    VolumeMetaSaver volumeMetaSaver(volumes, arrayInfo->GetName(), arrayInfo->GetIndex());
+    return volumeMetaSaver.Do();
 }
 
 int
@@ -292,6 +554,36 @@ VolumeManager::GetVolumeStatus(int volId)
 }
 
 int
+VolumeManager::GetVolumeReplicationState(int volId)
+{
+    VolumeBase* vol = volumes.GetVolume(volId);
+
+    if (vol == nullptr)
+    {
+        POS_TRACE_WARN(EID(VOL_NOT_FOUND), "volId: {}", volId);
+        return EID(VOL_NOT_FOUND);
+    }
+
+    VolumeReplicationState status = vol->GetReplicationState();
+    return static_cast<int>(status);
+}
+
+int
+VolumeManager::GetVolumeReplicationRoleProperty(int volId)
+{
+    VolumeBase* vol = volumes.GetVolume(volId);
+
+    if (vol == nullptr)
+    {
+        POS_TRACE_WARN(EID(VOL_NOT_FOUND), "volId: {}", volId);
+        return EID(VOL_NOT_FOUND);
+    }
+
+    VolumeReplicationRoleProperty status = vol->GetReplicateRoleProperty();
+    return static_cast<int>(status);
+}
+
+int
 VolumeManager::_LoadVolumes(void)
 {
     VolumeLoader volumeLoader(volumes, arrayInfo->GetName(), arrayInfo->GetIndex());
@@ -299,7 +591,7 @@ VolumeManager::_LoadVolumes(void)
 }
 
 int
-VolumeManager::IncreasePendingIOCountIfNotZero(int volId, VolumeStatus volumeStatus, uint32_t ioCountToSubmit)
+VolumeManager::IncreasePendingIOCountIfNotZero(int volId, VolumeIoType volumeIoType, uint32_t ioCountToSubmit)
 {
     VolumeBase* vol = volumes.GetVolume(volId);
     if (unlikely(nullptr == vol))
@@ -307,7 +599,7 @@ VolumeManager::IncreasePendingIOCountIfNotZero(int volId, VolumeStatus volumeSta
         POS_TRACE_WARN(EID(VOL_NOT_FOUND), "volId: {}", volId);
         return EID(VOL_NOT_FOUND);
     }
-    bool success = volumes.IncreasePendingIOCountIfNotZero(volId, volumeStatus, ioCountToSubmit);
+    bool success = volumes.IncreasePendingIOCountIfNotZero(volId, volumeIoType, ioCountToSubmit);
     if (success)
     {
         return EID(SUCCESS);
@@ -317,7 +609,7 @@ VolumeManager::IncreasePendingIOCountIfNotZero(int volId, VolumeStatus volumeSta
 }
 
 int
-VolumeManager::DecreasePendingIOCount(int volId, VolumeStatus volumeStatus, uint32_t ioCountCompleted)
+VolumeManager::DecreasePendingIOCount(int volId, VolumeIoType volumeIoType, uint32_t ioCountCompleted)
 {
     VolumeBase* vol = volumes.GetVolume(volId);
     if (unlikely(nullptr == vol))
@@ -325,13 +617,22 @@ VolumeManager::DecreasePendingIOCount(int volId, VolumeStatus volumeStatus, uint
         POS_TRACE_WARN(EID(VOL_NOT_FOUND), "vol_id: {}", volId);
         return EID(VOL_NOT_FOUND);
     }
-    volumes.DecreasePendingIOCount(volId, volumeStatus, ioCountCompleted);
+    volumes.DecreasePendingIOCount(volId, volumeIoType, ioCountCompleted);
     return EID(SUCCESS);
 }
 
 void
 VolumeManager::DetachVolumes(void)
 {
+    while(true)
+    {
+        if (volumeExceptionLock.try_lock() == true)
+        {
+            break;
+        }
+        usleep(1000);
+    }
+
     VolumeDetacher volumeDetacher(volumes, arrayInfo->GetName(), arrayInfo->GetIndex());
     volumeDetacher.DoAll();
 }
@@ -385,7 +686,14 @@ VolumeManager::StateChanged(StateContext* prev, StateContext* next)
 int
 VolumeManager::_CheckPrerequisite(void)
 {
-    if (stopped == true)
+    if (initialized == false)
+    {
+        int eid = EID(VOL_MGR_NOT_INITIALIZED);
+        POS_TRACE_WARN(eid, "volume manager was not initialized");
+        return eid;
+    }
+
+    if ((stopped == true) || (arrayInfo->GetState() == ArrayStateEnum::BROKEN))
     {
         POS_TRACE_WARN(EID(VOL_REQ_REJECTED_IN_BROKEN_ARRAY),
             "array_name: {}", GetArrayName());
@@ -393,6 +701,13 @@ VolumeManager::_CheckPrerequisite(void)
     }
 
     return EID(SUCCESS);
+}
+
+void
+VolumeManager::_ClearLock(void)
+{
+    volumeExceptionLock.try_lock();
+    volumeExceptionLock.unlock();
 }
 
 std::string

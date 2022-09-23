@@ -1,4 +1,5 @@
 #include "journal_volume_integration_test.h"
+#include <iostream>
 
 using ::testing::_;
 using ::testing::AtLeast;
@@ -46,7 +47,7 @@ void
 JournalVolumeIntegrationTest::DeleteVolumes(Volumes& volumesToDelete)
 {
     EXPECT_CALL(*testMapper, FlushDirtyMpages).Times(AtLeast(1));
-    EXPECT_CALL(*(testAllocator->GetIContextManagerMock()), FlushContexts(_, false)).Times(volumesToDelete.size());
+    EXPECT_CALL(*(testAllocator->GetIContextManagerMock()), FlushContexts(_, false, _)).Times(volumesToDelete.size());
     for (auto volId : volumesToDelete)
     {
         EXPECT_TRUE(journal->VolumeDeleted(volId) == 0);
@@ -78,7 +79,6 @@ JournalVolumeIntegrationTest::CheckVolumeDeleteLogsWritten(Volumes& volumesToDel
 
         logs.pop_front();
     }
-
     EXPECT_TRUE(deleteVolumeLogFound == static_cast<int>(volumesToDelete.size()));
 }
 

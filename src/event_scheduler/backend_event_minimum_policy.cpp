@@ -83,6 +83,9 @@ BackendEventMinimumPolicy::EnqueueEvent(EventSmartPtr input)
             case BackendEvent_UserdataRebuild:
                 eventQueue[BackendEvent_UserdataRebuild]->EnqueueEvent(input);
                 break;
+            case BackendEvent_JournalIO:
+                eventQueue[BackendEvent_JournalIO]->EnqueueEvent(input);
+                break;
             case BackendEvent_MetaIO:
                 eventQueue[BackendEvent_MetaIO]->EnqueueEvent(input);
                 break;
@@ -281,8 +284,7 @@ BackendEventMinimumPolicy::Run(void)
         workerID = _GetWorkerIDMinimumJobs(event->GetNumaId());
         if (unlikely(workerID >= workerCount))
         {
-            PosEventId::Print(POS_EVENT_ID::EVTSCHDLR_INVALID_WORKER_ID,
-                EventLevel::WARNING);
+            POS_TRACE_WARN(EID(EVTSCHDLR_INVALID_WORKER_ID), "");
             return 1;
         }
         (*workerArray)[workerID]->EnqueueEvent(event);

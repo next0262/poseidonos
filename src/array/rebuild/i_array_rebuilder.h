@@ -34,8 +34,11 @@
 
 #include <string>
 #include <list>
+#include <vector>
+
 #include "rebuild_context.h"
 #include "src/array/rebuild/rebuild_target.h"
+#include "src/array/rebuild/quick_rebuild_pair.h"
 
 using namespace std;
 
@@ -44,8 +47,10 @@ namespace pos
 class IArrayRebuilder
 {
 public:
-    virtual void Rebuild(string array, uint32_t arrayId, ArrayDevice* dev,
-                        RebuildComplete cb, list<RebuildTarget*>& tgt, bool isWT = false) = 0;
+    virtual void Rebuild(string array, uint32_t arrayId, vector<IArrayDevice*> dst,
+        RebuildComplete cb, list<RebuildTarget*>& tgt) = 0;
+    virtual void QuickRebuild(string array, uint32_t arrayId, QuickRebuildPair rebuildPair,
+        RebuildComplete cb, list<RebuildTarget*>& tgt) = 0;
     virtual void StopRebuild(string array) = 0;
     virtual void RebuildDone(RebuildResult result) = 0;
     virtual void WaitRebuildDone(string array) = 0;

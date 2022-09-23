@@ -70,7 +70,7 @@ TEST(Raid5, Raid5_testIfConstructorIsInvoked)
     MockAffinityManager mockAffMgr = BuildDefaultAffinityManagerMock();
 
     // When
-    Raid5 raid5(&physicalSize);
+    Raid5 raid5(&physicalSize, 0);
 }
 
 TEST(Raid5, Raid5_testIfTranslateCalculatesDestinationOffsetProperly)
@@ -92,7 +92,7 @@ TEST(Raid5, Raid5_testIfTranslateCalculatesDestinationOffsetProperly)
     src.blkCnt = 1;
 
     MockAffinityManager mockAffMgr = BuildDefaultAffinityManagerMock();
-    Raid5 raid5(&physicalSize);
+    Raid5 raid5(&physicalSize, 0);
     list<FtEntry> dest;
 
     // When
@@ -128,7 +128,7 @@ TEST(Raid5, MakeParity_testIfParityBufferIsProperlyCalculated)
     EXPECT_CALL(mockBufferPool, TryGetBuffer).WillOnce(Return(&mem));
     MockMemoryManager mockMemoryManager;
     EXPECT_CALL(mockMemoryManager, CreateBufferPool).WillOnce(Return(&mockBufferPool));
-    Raid5 raid5(&physicalSize);
+    Raid5 raid5(&physicalSize, 0);
     raid5.AllocParityPools(physicalSize.blksPerChunk * 2, &mockAffMgr, &mockMemoryManager);
 
     std::list<BufferEntry> buffers;
@@ -175,7 +175,7 @@ TEST(Raid5, GetRebuildGroup_testIfRebuildGroupDoesNotContainTargetFtBlockAddr)
         .stripesPerSegment = 0/* not interesting */,
         .totalSegments = 0/* not interesting */};
     MockAffinityManager mockAffMgr = BuildDefaultAffinityManagerMock();
-    Raid5 raid5(&physicalSize);
+    Raid5 raid5(&physicalSize, 0);
     StripeId STRIPE_ID = 1234;
     BlkOffset BLK_OFFSET = 400;
 
@@ -183,8 +183,11 @@ TEST(Raid5, GetRebuildGroup_testIfRebuildGroupDoesNotContainTargetFtBlockAddr)
         .stripeId = STRIPE_ID,
         .offset = BLK_OFFSET};
 
+    vector<uint32_t> abnormaiDeviceIndex;
+    uint32_t testTargetDeviceIndex = 0;
+    abnormaiDeviceIndex.push_back(testTargetDeviceIndex);
     // When
-    list<FtBlkAddr> actual = raid5.GetRebuildGroup(fba);
+    list<FtBlkAddr> actual = raid5.GetRebuildGroup(fba, abnormaiDeviceIndex);
 
     // Then
     int expectedChunkIndex = BLK_OFFSET / physicalSize.blksPerChunk; // 400 / 27 == 14
@@ -203,7 +206,7 @@ TEST(Raid5, Getters_testIfGettersAreInvoked)
         .stripesPerSegment = 0/* not interesting */,
         .totalSegments = 0/* not interesting */};
     MockAffinityManager mockAffMgr = BuildDefaultAffinityManagerMock();
-    Raid5 raid5(&physicalSize);
+    Raid5 raid5(&physicalSize, 0);
 
     // When & Then
     ASSERT_EQ(27, raid5.GetSizeInfo()->blksPerChunk);
@@ -234,13 +237,14 @@ TEST(Raid5, AllocResetParityPools_testIfPoolCreateAndDeletedProperlyWithTwoNuma)
         .Times(numaCount)
         .WillRepeatedly(Return(&mockBufferPool));
     EXPECT_CALL(mockMemoryManager, DeleteBufferPool).Times(numaCount);
-    Raid5 raid5(&physicalSize);
+    Raid5 raid5(&physicalSize, 0);
     
     // When : Alloc Pools
     bool ret = raid5.AllocParityPools(0, &mockAffinityManager, &mockMemoryManager);
 
     // Then
     EXPECT_TRUE(ret);
+    EXPECT_EQ(raid5.GetParityPoolSize(), 2);
 
     // When : Reset Pools
     raid5.ClearParityPools();
@@ -266,7 +270,7 @@ TEST(Raid5, GetRaidState_testIfRaid5IsFailure)
         .stripesPerSegment = 0/* not interesting */,
         .totalSegments = 0/* not interesting */};
     MockAffinityManager mockAffMgr = BuildDefaultAffinityManagerMock();
-    Raid5 raid5(&physicalSize);
+    Raid5 raid5(&physicalSize, 0);
 
     // When
     RaidState actual = raid5.GetRaidState(devs);
@@ -292,7 +296,7 @@ TEST(Raid5, GetRaidState_testIfRaid5IsDegraded)
         .stripesPerSegment = 0/* not interesting */,
         .totalSegments = 0/* not interesting */};
     MockAffinityManager mockAffMgr = BuildDefaultAffinityManagerMock();
-    Raid5 raid5(&physicalSize);
+    Raid5 raid5(&physicalSize, 0);
 
     // When
 
@@ -320,7 +324,7 @@ TEST(Raid5, GetRaidState_testIfRaid5IsNormal)
         .stripesPerSegment = 0/* not interesting */,
         .totalSegments = 0/* not interesting */};
     MockAffinityManager mockAffMgr = BuildDefaultAffinityManagerMock();
-    Raid5 raid5(&physicalSize);
+    Raid5 raid5(&physicalSize, 0);
 
     // When
     RaidState actual = raid5.GetRaidState(devs);

@@ -1,6 +1,6 @@
 /*
  *   BSD LICENSE
- *   Copyright (c) 2021 Samsung Electronics Corporation
+ *   Copyright (c) 2022 Samsung Electronics Corporation
  *   All rights reserved.
  *
  *   Redistribution and use in source and binary forms, with or without
@@ -35,6 +35,7 @@
 #include <string>
 
 #include "src/metafs/include/metafs_service.h"
+#include "src/metafs/mim/metafs_io_scheduler_factory.h"
 
 using ::testing::_;
 using ::testing::Matcher;
@@ -55,10 +56,16 @@ MetaFsTestFixture::MetaFsTestFixture(void)
     EXPECT_CALL(*config, Init).WillRepeatedly(Return(true));
     EXPECT_CALL(*config, GetMioPoolCapacity).WillRepeatedly(Return(32 * 1024));
     EXPECT_CALL(*config, GetMpioPoolCapacity).WillRepeatedly(Return(32 * 1024));
-    EXPECT_CALL(*config, IsWriteMpioCacheEnabled).WillRepeatedly(Return(true));
     EXPECT_CALL(*config, GetWriteMpioCacheCapacity).WillRepeatedly(Return(32));
     EXPECT_CALL(*config, IsDirectAccessEnabled).WillRepeatedly(Return(true));
-    EXPECT_CALL(*config, GetTimeIntervalInMillisecondsForMetric).WillRepeatedly(Return(5000));
+    EXPECT_CALL(*config, GetTimeIntervalInMillisecondsForMetric).WillRepeatedly(Return(1000));
+    EXPECT_CALL(*config, GetSamplingSkipCount).WillRepeatedly(Return(100));
+    EXPECT_CALL(*config, GetWrrCountSpecialPurposeMap).WillRepeatedly(Return(2));
+    EXPECT_CALL(*config, GetWrrCountJournal).WillRepeatedly(Return(3));
+    EXPECT_CALL(*config, GetWrrCountMap).WillRepeatedly(Return(5));
+    EXPECT_CALL(*config, GetWrrCountGeneral).WillRepeatedly(Return(1));
+    EXPECT_CALL(*config, GetWrrWeight).WillRepeatedly(Return(std::vector<int>{2, 3, 5, 1}));
+    EXPECT_CALL(*config, NeedToIgnoreNumaDedicatedScheduling).WillRepeatedly(Return(true));
 
     _SetThreadModel();
 
@@ -71,7 +78,8 @@ MetaFsTestFixture::MetaFsTestFixture(void)
         comp->storage = new TestMetaStorageSubsystem(arrayId);
         comp->mgmt = new MetaFsManagementApi(arrayId, comp->storage);
         comp->ctrl = new MetaFsFileControlApi(arrayId, comp->storage, comp->mgmt);
-        comp->io = new MetaFsIoApi(arrayId, comp->ctrl, comp->storage, comp->tpForMetafs, concurrentMetaFsTimeInterval);
+        comp->io = new MetaFsIoApi(arrayId, comp->ctrl, comp->storage, comp->tpForMetafs,
+            concurrentMetaFsTimeInterval, false);
         comp->wbt = new MetaFsWBTApi(arrayId, comp->ctrl);
         comp->metaFs = new MetaFs(comp->arrayInfo, comp->isLoaded, comp->mgmt,
             comp->ctrl, comp->io, comp->wbt, comp->storage, comp->tpForMetafs);
@@ -89,7 +97,6 @@ MetaFsTestFixture::~MetaFsTestFixture(void)
         delete comp;
     }
     components.clear();
-    delete config;
     MetaFsServiceSingleton::ResetInstance();
 }
 
@@ -125,7 +132,8 @@ MetaFsTestFixture::_SetThreadModel(void)
     cpu_set_t schedulerCPUSet = _GetCpuSet(0, 0);
     cpu_set_t workerCPUSet = _GetCpuSet(1, 1);
 
-    MetaFsServiceSingleton::Instance(nullptr, config)
+    MetaFsServiceSingleton::ResetInstance();
+    MetaFsServiceSingleton::Instance(config, new MetaFsIoSchedulerFactory())
         ->Initialize(coreCount, schedulerCPUSet, workerCPUSet, tpForMetaIo);
 }
 

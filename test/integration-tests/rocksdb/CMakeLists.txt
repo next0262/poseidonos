@@ -1,0 +1,1 @@
+POS_ADD_INTEGRATION_TEST(rocksdb_log_buffer_it rocksdb_log_buffer_integration_test.cpp)

@@ -42,6 +42,10 @@ public:
     virtual void ValidateBlks(VirtualBlks blks) = 0;
     virtual bool InvalidateBlks(VirtualBlks blks, bool isForced) = 0;
     virtual bool UpdateOccupiedStripeCount(StripeId lsid) = 0;
+
+    virtual void ValidateBlocksWithGroupId(VirtualBlks blks, int logGroupId) = 0;
+    virtual bool InvalidateBlocksWithGroupId(VirtualBlks blks, bool isForced, int logGroupId) = 0;
+    virtual bool UpdateStripeCount(StripeId lsid, int logGroupId) = 0;
 };
 
 } // namespace pos

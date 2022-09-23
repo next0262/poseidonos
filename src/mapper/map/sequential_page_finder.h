@@ -71,14 +71,16 @@ struct MpageSet
 class SequentialPageFinder
 {
 public:
+    // for test
+    SequentialPageFinder(void) = default;
     explicit SequentialPageFinder(MpageList& pages);
     explicit SequentialPageFinder(BitMap* pages);
     // LCOV_EXCL_START
     virtual ~SequentialPageFinder(void);
     // LCOV_EXCL_STOP
 
-    MpageSet PopNextMpageSet(void);
-    bool IsRemaining(void);
+    virtual MpageSet PopNextMpageSet(void);
+    virtual bool IsRemaining(void);
 
 private:
     void _UpdateSequentialPageList(MpageList& pages);

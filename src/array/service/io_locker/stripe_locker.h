@@ -51,7 +51,8 @@ public:
     bool TryLock(StripeId val);
     void Unlock(StripeId val);
     bool TryBusyLock(StripeId from, StripeId to);
-    bool ResetBusyLock(void);
+    bool ResetBusyLock(bool force = false);
+    void WriteBusyLog(void);
 
 private:
     StripeLockerNormalState* normalLocker = nullptr;

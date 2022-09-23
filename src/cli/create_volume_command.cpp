@@ -69,6 +69,7 @@ CreateVolumeCommand::Execute(json& doc, string rid)
         uint64_t size = doc["param"]["size"].get<uint64_t>();
         uint64_t maxiops = 0;
         uint64_t maxbw = 0;
+        bool checkWalVol = doc["param"]["iswalvol"].get<bool>();
 
         if (doc["param"].contains("maxiops") &&
             doc["param"]["maxiops"].is_number_unsigned() == true)
@@ -81,23 +82,20 @@ CreateVolumeCommand::Execute(json& doc, string rid)
             maxbw = doc["param"]["maxbw"].get<uint64_t>();
         }
 
-        int ret = FAIL;
-
+        int ret = EID(CREATE_VOL_ARRAY_NAME_DOES_NOT_EXIST);
         ComponentsInfo* info = ArrayMgr()->GetInfo(arrayName);
         if (info == nullptr)
         {
+            POS_TRACE_WARN(ret, "array_name:{}", arrayName);
             return jFormat.MakeResponse("CREATEVOLUME", rid, ret,
                 "failed to create volume: " + volName, GetPosInfo());
         }
-        IArrayInfo* array = info->arrayInfo;
-        ArrayStateType arrayState = array->GetState();
-        if (arrayState == ArrayStateEnum::BROKEN)
-        {
-            int eventId = EID(CLI_COMMAND_FAILURE_ARRAY_BROKEN);
-            POS_TRACE_WARN(eventId, "arrayName: {}, arrayState: {}",
-                arrayName, arrayState.ToString());
 
-            return jFormat.MakeResponse("CREATEVOLUME", rid, ret,
+        if (info->arrayInfo->GetState() < ArrayStateEnum::NORMAL)
+        {
+            ret = EID(CREATE_VOL_CAN_ONLY_BE_WHILE_ONLINE);
+            POS_TRACE_WARN(ret, "array_name:{}, array_state:{}", arrayName, info->arrayInfo->GetState().ToString());
+             return jFormat.MakeResponse("CREATEVOLUME", rid, ret,
                 "failed to create volume: " + volName, GetPosInfo());
         }
 
@@ -110,19 +108,24 @@ CreateVolumeCommand::Execute(json& doc, string rid)
 
         IVolumeEventManager* volMgr =
             VolumeServiceSingleton::Instance()->GetVolumeManager(arrayName);
-
+        ret = EID(CREATE_VOL_INTERNAL_ERROR);
         if (volMgr != nullptr)
         {
-            ret = volMgr->Create(volName, size, maxiops, maxbw);
-        }
-
-        if (ret == SUCCESS)
-        {
-            return jFormat.MakeResponse("CREATEVOLUME", rid, SUCCESS,
-                volName + " has been created successfully.", GetPosInfo());
+            ret = volMgr->Create(volName, size, maxiops, maxbw, checkWalVol, "");
+            if (ret == SUCCESS)
+            {
+                return jFormat.MakeResponse("CREATEVOLUME", rid, SUCCESS,
+                    volName + " has been created successfully.", GetPosInfo());
+            }
+            else
+            {
+                return jFormat.MakeResponse("CREATEVOLUME", rid, ret,
+                    "failed to create " + volName, GetPosInfo());
+            }
         }
         else
         {
+            POS_TRACE_WARN(ret, "array_name:{}, vol_name:{}", arrayName, volName);
             return jFormat.MakeResponse(
                 "CREATEVOLUME", rid, ret,
                 "failed to create " + volName,

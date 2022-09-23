@@ -1,6 +1,6 @@
 /*
  *   BSD LICENSE
- *   Copyright (c) 2021 Samsung Electronics Corporation
+ *   Copyright (c) 2022 Samsung Electronics Corporation
  *   All rights reserved.
  *
  *   Redistribution and use in source and binary forms, with or without
@@ -35,6 +35,7 @@
 #include <string>
 #include <unordered_map>
 #include <utility>
+#include <vector>
 
 #include "src/include/pos_event_id.h"
 #include "src/master_context/config_manager.h"
@@ -46,16 +47,22 @@ enum class MetaFsConfigType
 {
     MioPoolCapacity,
     MpioPoolCapacity,
-    WriteMpioCacheEnabled,
     WriteMpioCacheCapacity,
     DirectAccessForJournalEnabled,
-    TimeIntervalInMillisecondsForMetric
+    TimeIntervalInMillisecondsForMetric,
+    SamplingSkipCount,
+    WrrCountSpecialPurposeMap,
+    WrrCountJournal,
+    WrrCountMap,
+    WrrCountGeneral,
+    SupportNumaDedicatedScheduling,
 };
 
 class MetaFsConfigManager
 {
 public:
-    MetaFsConfigManager(void) = delete;
+    // for test
+    MetaFsConfigManager(void) = default;
     MetaFsConfigManager(ConfigManager* configManager);
     virtual ~MetaFsConfigManager(void);
     virtual bool Init(void);
@@ -66,10 +73,6 @@ public:
     virtual size_t GetMpioPoolCapacity(void) const
     {
         return mpioPoolCapacity_;
-    }
-    virtual bool IsWriteMpioCacheEnabled(void) const
-    {
-        return writeMpioEnabled_;
     }
     virtual size_t GetWriteMpioCacheCapacity(void) const
     {
@@ -83,6 +86,54 @@ public:
     {
         return timeIntervalInMillisecondsForMetric_;
     }
+    virtual size_t GetSamplingSkipCount(void) const
+    {
+        return samplingSkipCount_;
+    }
+    virtual size_t GetWrrCountSpecialPurposeMap(void) const
+    {
+        return wrrCountSpecialPurposeMap_;
+    }
+    virtual size_t GetWrrCountJournal(void) const
+    {
+        return wrrCountJournal_;
+    }
+    virtual size_t GetWrrCountMap(void) const
+    {
+        return wrrCountMap_;
+    }
+    virtual size_t GetWrrCountGeneral(void) const
+    {
+        return wrrCountGeneral_;
+    }
+    virtual std::vector<int> GetWrrWeight(void) const
+    {
+        return {
+            (int)wrrCountSpecialPurposeMap_,
+            (int)wrrCountJournal_,
+            (int)wrrCountMap_,
+            (int)wrrCountGeneral_};
+    }
+    virtual bool IsRocksdbEnabled(void) const
+    {
+        return rocksdbEnabled_;
+    }
+    virtual std::string GetRocksDbPath(void) const
+    {
+        return rocksDbPath_;
+    }
+    virtual bool IsSupportingNumaDedicatedScheduling(void) const
+    {
+        return supportNumaDedicatedScheduling_;
+    }
+    virtual void SetIgnoreNumaDedicatedScheduling(const bool ignore)
+    {
+        needToIgnoreNumaDedicatedScheduling_ = ignore;
+    }
+    virtual bool NeedToIgnoreNumaDedicatedScheduling(void) const
+    {
+        return needToIgnoreNumaDedicatedScheduling_;
+    }
 
 protected:
     virtual bool _ValidateConfig(void) const;
@@ -95,7 +146,7 @@ private:
             (void*)value, (ConfigType)configMap_.at(type).second);
 
         if (ret)
-            POS_TRACE_INFO(static_cast<int>(POS_EVENT_ID::MFS_INFO_MESSAGE),
+            POS_TRACE_INFO(static_cast<int>(EID(MFS_INFO_MESSAGE)),
                 "Failed to read configuration from config file");
 
         return ret;
@@ -103,19 +154,34 @@ private:
     void _BuildConfigMap(void);
     size_t _GetMioPoolCapacity(void);
     size_t _GetMpioPoolCapacity(void);
-    bool _IsWriteMpioCacheEnabled(void);
     size_t _GetWriteMpioCacheCapacity(void);
     bool _IsDirectAccessEnabled(void);
     size_t _GetTimeIntervalInMillisecondsForMetric(void);
+    size_t _GetSamplingSkipCount(void);
+    size_t _GetWrrCountSpecialPurposeMap(void);
+    size_t _GetWrrCountJournal(void);
+    size_t _GetWrrCountMap(void);
+    size_t _GetWrrCountGeneral(void);
+    bool _IsRocksdbEnabled(void);
+    std::string _GetRocksDbPath(void);
+    bool _IsSupportingNumaDedicatedScheduling(void);
 
     std::unordered_map<MetaFsConfigType, std::pair<std::string, int>> configMap_;
     ConfigManager* configManager_;
     size_t mioPoolCapacity_;
     size_t mpioPoolCapacity_;
-    bool writeMpioEnabled_;
     size_t writeMpioCapacity_;
     bool directAccessEnabled_;
     size_t timeIntervalInMillisecondsForMetric_;
+    size_t samplingSkipCount_;
+    size_t wrrCountSpecialPurposeMap_;
+    size_t wrrCountJournal_;
+    size_t wrrCountMap_;
+    size_t wrrCountGeneral_;
+    bool rocksdbEnabled_;
+    std::string rocksDbPath_;
+    bool supportNumaDedicatedScheduling_;
+    bool needToIgnoreNumaDedicatedScheduling_;
 };
 
 } // namespace pos

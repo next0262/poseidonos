@@ -42,23 +42,22 @@
 namespace pos
 {
 BlockMapUpdate::BlockMapUpdate(VolumeIoSmartPtr volumeIo, IVSAMap* vsaMap,
-    ISegmentCtx* segmentCtx, IWBStripeAllocator* wbStripeAllocator)
-: BlockMapUpdate(volumeIo, vsaMap, segmentCtx, wbStripeAllocator,
-      new VsaRangeMaker(volumeIo->GetVolumeId(),
-          ChangeSectorToBlock(volumeIo->GetSectorRba()),
-          DivideUp(volumeIo->GetSize(), BLOCK_SIZE), volumeIo->GetArrayId()))
+    ISegmentCtx* segmentCtx_, IWBStripeAllocator* wbStripeAllocator)
+: BlockMapUpdate(volumeIo, vsaMap, segmentCtx_, wbStripeAllocator,
+    new VsaRangeMaker(volumeIo->GetVolumeId(),
+        ChangeSectorToBlock(volumeIo->GetSectorRba()),
+        DivideUp(volumeIo->GetSize(), BLOCK_SIZE), volumeIo->GetArrayId()))
 {
 }
 
 BlockMapUpdate::BlockMapUpdate(VolumeIoSmartPtr volumeIo, IVSAMap* vsaMap,
-    ISegmentCtx* segmentCtx, IWBStripeAllocator* wbStripeAllocator,
+    ISegmentCtx* segmentCtx_, IWBStripeAllocator* wbStripeAllocator,
     VsaRangeMaker* vsaRangeMaker)
-: Callback(EventFrameworkApiSingleton::Instance()->IsReactorNow()),
-  volumeIo(volumeIo),
-  vsaMap(vsaMap),
-  segmentCtx(segmentCtx),
-  wbStripeAllocator(wbStripeAllocator),
-  oldVsaRangeMaker(vsaRangeMaker)
+: MetaUpdateCallback(EventFrameworkApiSingleton::Instance()->IsReactorNow(), segmentCtx_),
+    volumeIo(volumeIo),
+    vsaMap(vsaMap),
+    wbStripeAllocator(wbStripeAllocator),
+    oldVsaRangeMaker(vsaRangeMaker)
 {
 }
 
@@ -87,17 +86,17 @@ BlockMapUpdate::_DoSpecificJob(void)
 
     uint32_t vsaRangeCount = oldVsaRangeMaker->GetCount();
     for (uint32_t vsaRangeIndex = 0; vsaRangeIndex < vsaRangeCount;
-         vsaRangeIndex++)
+        vsaRangeIndex++)
     {
         VirtualBlks& vsaRange = oldVsaRangeMaker->GetVsaRange(vsaRangeIndex);
         bool allowVictimSegRelease = false;
-        segmentCtx->InvalidateBlks(vsaRange, allowVictimSegRelease);
+        InvalidateBlks(vsaRange, allowVictimSegRelease);
 
-        POS_TRACE_DEBUG_IN_MEMORY(ModuleInDebugLogDump::META, POS_EVENT_ID::MAPPER_SUCCESS,
+        POS_TRACE_DEBUG_IN_MEMORY(ModuleInDebugLogDump::META, EID(MAPPER_SUCCESS),
             "Invalidate rba {} vsid {}", ChangeSectorToBlock(volumeIo->GetSectorRba()), vsaRange.startVsa.stripeId);
     }
 
-    segmentCtx->ValidateBlks(targetVsaRange);
+    ValidateBlks(targetVsaRange);
 
     return true;
 }
@@ -126,7 +125,7 @@ BlockMapUpdate::_GetStripe(StripeAddr& lsidEntry)
 
     if (unlikely(nullptr == foundStripe))
     {
-        POS_EVENT_ID eventId = POS_EVENT_ID::WRCMP_INVALID_STRIPE;
+        POS_EVENT_ID eventId = EID(WRCMP_INVALID_STRIPE);
         POS_TRACE_ERROR(static_cast<int>(eventId),
             "Stripe is null at WriteCompleting state");
         throw eventId;
@@ -134,5 +133,4 @@ BlockMapUpdate::_GetStripe(StripeAddr& lsidEntry)
 
     return *foundStripe;
 }
-
 } // namespace pos

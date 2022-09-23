@@ -36,6 +36,16 @@
 
 namespace pos
 {
+// for test
+ScalableMetaIoWorker::ScalableMetaIoWorker(void)
+: MetaFsIoHandlerBase(0, 0, "Test"),
+  topHalf_(nullptr),
+  bottomHalf_(nullptr),
+  tp_(nullptr),
+  needToDeleteTp_(false)
+{
+}
+
 ScalableMetaIoWorker::ScalableMetaIoWorker(const int threadId, const int coreId,
     const std::string& threadName, MetaFsConfigManager* config,
     TelemetryPublisher* tp)
@@ -68,8 +78,17 @@ ScalableMetaIoWorker::~ScalableMetaIoWorker(void)
         tp_ = nullptr;
     }
 
-    delete topHalf_;
-    delete bottomHalf_;
+    if (topHalf_)
+    {
+        delete topHalf_;
+        topHalf_ = nullptr;
+    }
+
+    if (bottomHalf_)
+    {
+        delete bottomHalf_;
+        bottomHalf_ = nullptr;
+    }
 }
 
 void
@@ -77,7 +96,7 @@ ScalableMetaIoWorker::StartThread(void)
 {
     th_ = new std::thread(AsEntryPointNoParam(&ScalableMetaIoWorker::Execute, this));
 
-    POS_TRACE_INFO((int)POS_EVENT_ID::MFS_INFO_MESSAGE,
+    POS_TRACE_INFO(EID(MFS_INFO_MESSAGE),
         "Start MioHandler, " + GetLogString() + ", thread id: {}",
         std::hash<std::thread::id>{}(th_->get_id()));
 }

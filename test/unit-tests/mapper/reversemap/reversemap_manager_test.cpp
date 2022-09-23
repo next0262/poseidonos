@@ -5,8 +5,8 @@
 #include "src/mapper/address/mapper_address_info.h"
 #include "test/unit-tests/mapper/address/mapper_address_info_mock.h"
 #include "test/unit-tests/mapper/i_stripemap_mock.h"
-#include "test/unit-tests/mapper/vsamap/vsamap_manager_mock.h"
 #include "test/unit-tests/volume/i_volume_info_manager_mock.h"
+#include "test/unit-tests/mapper/i_vsamap_mock.h"
 
 using ::testing::_;
 using testing::NiceMock;
@@ -29,7 +29,7 @@ GenerateReverseMapInfo(int startOffset, int endOffset)
 }
 
 void
-ExpectGetMapInfo(MockIVolumeInfoManager& volumeManager, MockVSAMapManager& ivsaMap, MockIStripeMap& iStripeMap,
+ExpectGetMapInfo(MockIVolumeInfoManager& volumeManager, MockIVSAMap& ivsaMap, MockIStripeMap& iStripeMap,
     uint32_t volumeId, StripeId vsid, StripeId lsid)
 {
     const uint64_t volumeSize = 128 * BLOCK_SIZE;
@@ -39,7 +39,7 @@ ExpectGetMapInfo(MockIVolumeInfoManager& volumeManager, MockVSAMapManager& ivsaM
         VirtualBlkAddr vsaToCheck{
             .stripeId = vsid,
             .offset = offset};
-        ON_CALL(ivsaMap, GetVSAWoCond(volumeId, startRba)).WillByDefault(Return(vsaToCheck));
+        ON_CALL(ivsaMap, GetVSAWithSyncOpen(volumeId, startRba)).WillByDefault(Return(vsaToCheck));
     }
     StripeAddr lsaToCheck{
         .stripeLoc = IN_WRITE_BUFFER_AREA,
@@ -52,13 +52,13 @@ TEST(ReverseMapManager, ReverseMapManager_TestInit)
     // Given
     NiceMock<MockMapperAddressInfo> addrInfo;
     NiceMock<MockIVolumeInfoManager> volumeManager;
-    NiceMock<MockVSAMapManager> ivsaMap;
+    NiceMock<MockIVSAMap> ivsaMap;
     NiceMock<MockIStripeMap> iStripeMap;
     EXPECT_CALL(addrInfo, IsUT).WillOnce(Return(true));
     EXPECT_CALL(addrInfo, GetNumWbStripes).WillOnce(Return(1003));
     ON_CALL(addrInfo, GetMaxVSID).WillByDefault(Return(103));
     EXPECT_CALL(addrInfo, GetArrayId).WillOnce(Return(0));
-    ReverseMapManager* revMap = new ReverseMapManager(&ivsaMap, &iStripeMap, &volumeManager, &addrInfo);
+    ReverseMapManager* revMap = new ReverseMapManager(&ivsaMap, &iStripeMap, &volumeManager, &addrInfo, nullptr);
     revMap->Init();
     delete revMap;
 }
@@ -68,10 +68,10 @@ TEST(ReverseMapManager, ReconstructMap_testIfFailToGetVolumeSize)
     // Given
     NiceMock<MockMapperAddressInfo> addrInfo;
     NiceMock<MockIVolumeInfoManager> volumeManager;
-    NiceMock<MockVSAMapManager> ivsaMap;
+    NiceMock<MockIVSAMap> ivsaMap;
     NiceMock<MockIStripeMap> iStripeMap;
     EXPECT_CALL(addrInfo, IsUT).WillOnce(Return(true));
-    ReverseMapManager revMap(&ivsaMap, &iStripeMap, &volumeManager, &addrInfo);
+    ReverseMapManager revMap(&ivsaMap, &iStripeMap, &volumeManager, &addrInfo, nullptr);
     EXPECT_CALL(addrInfo, GetNumWbStripes).WillOnce(Return(1003));
     EXPECT_CALL(addrInfo, GetMaxVSID).WillOnce(Return(103));
     EXPECT_CALL(addrInfo, GetArrayId).WillOnce(Return(0));
@@ -93,9 +93,9 @@ TEST(ReverseMapManager, ReconstructReverseMap_testIfExecutedSuccesfullyWithEmpty
     // Given
     NiceMock<MockMapperAddressInfo> addrInfo;
     NiceMock<MockIVolumeInfoManager> volumeManager;
-    NiceMock<MockVSAMapManager> ivsaMap;
+    NiceMock<MockIVSAMap> ivsaMap;
     NiceMock<MockIStripeMap> iStripeMap;
-    ReverseMapManager revMap(&ivsaMap, &iStripeMap, &volumeManager, &addrInfo);
+    ReverseMapManager revMap(&ivsaMap, &iStripeMap, &volumeManager, &addrInfo, nullptr);
     EXPECT_CALL(addrInfo, IsUT).WillOnce(Return(true));
     EXPECT_CALL(addrInfo, GetNumWbStripes).WillOnce(Return(1003));
     EXPECT_CALL(addrInfo, GetMaxVSID).WillOnce(Return(103));
@@ -131,9 +131,9 @@ TEST(ReverseMapManager, ReconstructMap_testIfFailToGetMapInfoWithEmptyReverseMap
     // Given
     NiceMock<MockMapperAddressInfo> addrInfo;
     NiceMock<MockIVolumeInfoManager> volumeManager;
-    NiceMock<MockVSAMapManager> ivsaMap;
+    NiceMock<MockIVSAMap> ivsaMap;
     NiceMock<MockIStripeMap> iStripeMap;
-    ReverseMapManager revMap(&ivsaMap, &iStripeMap, &volumeManager, &addrInfo);
+    ReverseMapManager revMap(&ivsaMap, &iStripeMap, &volumeManager, &addrInfo, nullptr);
     EXPECT_CALL(addrInfo, IsUT).WillOnce(Return(true));
     EXPECT_CALL(addrInfo, GetNumWbStripes).WillOnce(Return(1003));
     EXPECT_CALL(addrInfo, GetMaxVSID).WillOnce(Return(103));
@@ -146,7 +146,7 @@ TEST(ReverseMapManager, ReconstructMap_testIfFailToGetMapInfoWithEmptyReverseMap
     uint64_t startOffset = 0;
     uint64_t endOffset = 0;
     std::map<uint64_t, BlkAddr> revMapInfos = GenerateReverseMapInfo(startOffset, endOffset);
-    ON_CALL(ivsaMap, GetVSAWoCond).WillByDefault(Return(UNMAP_VSA));
+    ON_CALL(ivsaMap, GetVSAWithSyncOpen).WillByDefault(Return(UNMAP_VSA));
 
     StripeId vsid = 100;
     StripeId lsid = 1000;
@@ -169,9 +169,9 @@ TEST(ReverseMapManager, ReconstructMap_testIfExecutedSuccesfullyWithFullReverseM
     // Given
     NiceMock<MockMapperAddressInfo> addrInfo;
     NiceMock<MockIVolumeInfoManager> volumeManager;
-    NiceMock<MockVSAMapManager> ivsaMap;
+    NiceMock<MockIVSAMap> ivsaMap;
     NiceMock<MockIStripeMap> iStripeMap;
-    ReverseMapManager revMap(&ivsaMap, &iStripeMap, &volumeManager, &addrInfo);
+    ReverseMapManager revMap(&ivsaMap, &iStripeMap, &volumeManager, &addrInfo, nullptr);
     EXPECT_CALL(addrInfo, IsUT).WillOnce(Return(true));
     EXPECT_CALL(addrInfo, GetNumWbStripes).WillOnce(Return(1005));
     EXPECT_CALL(addrInfo, GetMaxVSID).WillOnce(Return(105));
@@ -208,9 +208,9 @@ TEST(ReverseMapManager, ReconstructMap_testIfExecutedSuccesfullyWithPartialRever
     // Given
     NiceMock<MockMapperAddressInfo> addrInfo;
     NiceMock<MockIVolumeInfoManager> volumeManager;
-    NiceMock<MockVSAMapManager> ivsaMap;
+    NiceMock<MockIVSAMap> ivsaMap;
     NiceMock<MockIStripeMap> iStripeMap;
-    ReverseMapManager revMap(&ivsaMap, &iStripeMap, &volumeManager, &addrInfo);
+    ReverseMapManager revMap(&ivsaMap, &iStripeMap, &volumeManager, &addrInfo, nullptr);
     EXPECT_CALL(addrInfo, IsUT).WillOnce(Return(true));
     EXPECT_CALL(addrInfo, GetNumWbStripes).WillOnce(Return(1005));
     EXPECT_CALL(addrInfo, GetMaxVSID).WillOnce(Return(105));
@@ -247,9 +247,9 @@ TEST(ReverseMapManager, ReconstructMap_testIfExecutedSuccesfullyWithPartialRever
     // Given
     NiceMock<MockMapperAddressInfo> addrInfo;
     NiceMock<MockIVolumeInfoManager> volumeManager;
-    NiceMock<MockVSAMapManager> ivsaMap;
+    NiceMock<MockIVSAMap> ivsaMap;
     NiceMock<MockIStripeMap> iStripeMap;
-    ReverseMapManager revMap(&ivsaMap, &iStripeMap, &volumeManager, &addrInfo);
+    ReverseMapManager revMap(&ivsaMap, &iStripeMap, &volumeManager, &addrInfo, nullptr);
     EXPECT_CALL(addrInfo, IsUT).WillOnce(Return(true));
     EXPECT_CALL(addrInfo, GetNumWbStripes).WillOnce(Return(1005));
     EXPECT_CALL(addrInfo, GetMaxVSID).WillOnce(Return(105));
@@ -284,9 +284,9 @@ TEST(ReverseMapManager, ReconstructMap_testIfExecutedSuccesfullyWithPartialRever
     // Given
     NiceMock<MockMapperAddressInfo> addrInfo;
     NiceMock<MockIVolumeInfoManager> volumeManager;
-    NiceMock<MockVSAMapManager> ivsaMap;
+    NiceMock<MockIVSAMap> ivsaMap;
     NiceMock<MockIStripeMap> iStripeMap;
-    ReverseMapManager revMap(&ivsaMap, &iStripeMap, &volumeManager, &addrInfo);
+    ReverseMapManager revMap(&ivsaMap, &iStripeMap, &volumeManager, &addrInfo, nullptr);
     EXPECT_CALL(addrInfo, IsUT).WillOnce(Return(true));
     EXPECT_CALL(addrInfo, GetNumWbStripes).WillOnce(Return(1003));
     EXPECT_CALL(addrInfo, GetMaxVSID).WillOnce(Return(103));
@@ -322,9 +322,9 @@ TEST(ReverseMapManager, ReconstructMap_testIfExecutedSuccesfullyWithSeveralParti
     // Given
     NiceMock<MockMapperAddressInfo> addrInfo;
     NiceMock<MockIVolumeInfoManager> volumeManager;
-    NiceMock<MockVSAMapManager> ivsaMap;
+    NiceMock<MockIVSAMap> ivsaMap;
     NiceMock<MockIStripeMap> iStripeMap;
-    ReverseMapManager revMap(&ivsaMap, &iStripeMap, &volumeManager, &addrInfo);
+    ReverseMapManager revMap(&ivsaMap, &iStripeMap, &volumeManager, &addrInfo, nullptr);
     EXPECT_CALL(addrInfo, IsUT).WillOnce(Return(true));
     EXPECT_CALL(addrInfo, GetNumWbStripes).WillOnce(Return(1003));
     EXPECT_CALL(addrInfo, GetMaxVSID).WillOnce(Return(103));

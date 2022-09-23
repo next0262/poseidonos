@@ -34,7 +34,6 @@
 
 #include <sched.h>
 
-#include "Air.h"
 #include "src/cpu_affinity/affinity_manager.h"
 #include "src/device/base/device_context.h"
 #include "src/device/base/device_driver.h"
@@ -80,7 +79,7 @@ UBlockDevice::_RegisterContextToCurrentCore(DeviceContext* devCtx)
         currentThreadVirtualId = ++lastVirtualId;
         if (MAX_THREAD_COUNT <= currentThreadVirtualId)
         {
-            POS_EVENT_ID eventId = POS_EVENT_ID::DEVICE_THREAD_REGISTERED_FAILED;
+            POS_EVENT_ID eventId = EID(DEVICE_THREAD_REGISTERED_FAILED);
             POS_TRACE_ERROR(static_cast<int>(eventId),
                 "Error: register device context failed: {}", GetName());
 
@@ -124,7 +123,7 @@ UBlockDevice::_RegisterThread(void)
     bool ret = _RegisterContextToCurrentCore(_AllocateDeviceContext());
     if (ret == false)
     {
-        POS_EVENT_ID eventId = POS_EVENT_ID::DEVICE_THREAD_REGISTERED_FAILED;
+        POS_EVENT_ID eventId = EID(DEVICE_THREAD_REGISTERED_FAILED);
         POS_TRACE_ERROR(static_cast<int>(eventId),
             "Error: register device context failed: {}", GetName());
         return false;
@@ -173,8 +172,6 @@ UBlockDevice::Open(void)
         return false;
     }
 
-    returnValue = _WrapupOpenDeviceSpecific(devCtx);
-
     return returnValue;
 }
 
@@ -186,7 +183,7 @@ UBlockDevice::_OpenDeviceDriver(DeviceContext* deviceContextToOpen)
 }
 
 bool
-UBlockDevice::_WrapupOpenDeviceSpecific(DeviceContext* devicecontext)
+UBlockDevice::WrapupOpenDeviceSpecific(void)
 {
     return true;
 }
@@ -205,7 +202,7 @@ UBlockDevice::SubmitAsyncIO(UbioSmartPtr bio)
     DeviceContext* deviceContext = _GetDeviceContext();
     if (likely(deviceContext == nullptr))
     {
-        POS_EVENT_ID eventId = POS_EVENT_ID::DEVICE_CONTEXT_NOT_FOUND;
+        POS_EVENT_ID eventId = EID(DEVICE_CONTEXT_NOT_FOUND);
         POS_TRACE_DEBUG(eventId, "Device context is not found: {}", GetName());
         IoCompleter ioCompleter(bio);
         ioCompleter.CompleteUbio(IOErrorType::DEVICE_ERROR, true);
@@ -213,7 +210,6 @@ UBlockDevice::SubmitAsyncIO(UbioSmartPtr bio)
         return completions;
     }
     completions = driver->SubmitAsyncIO(deviceContext, bio);
-    ProfilePendingIoCount(deviceContext->GetPendingIOCount());
     return completions;
 }
 
@@ -230,7 +226,7 @@ UBlockDevice::CompleteIOs(void)
     DeviceContext* deviceContext = _GetDeviceContext();
     if (unlikely(deviceContext == nullptr))
     {
-        POS_EVENT_ID eventId = POS_EVENT_ID::DEVICE_CONTEXT_NOT_FOUND;
+        POS_EVENT_ID eventId = EID(DEVICE_CONTEXT_NOT_FOUND);
         POS_TRACE_ERROR(eventId, "Device context is not found: {}", GetName());
         return 0;
     }
@@ -265,42 +261,13 @@ UBlockDevice::_Empty(DeviceContext* deviceContext)
 }
 
 void
-UBlockDevice::ProfilePendingIoCount(uint32_t pendingIOCount)
-{
-    if (GetType() == DeviceType::NVRAM)
-    {
-        if (EventFrameworkApiSingleton::Instance()->IsReactorNow() == true)
-        {
-            uint32_t reactor_id = EventFrameworkApiSingleton::Instance()->GetCurrentReactor();
-            airlog("CNT_PendingIO", "AIR_NVRAM", reactor_id, pendingIOCount);
-        }
-        else
-        {
-            airlog("CNT_PendingIO", "AIR_NVRAM", IO_WORKER_AID, pendingIOCount);
-        }
-    }
-    else if (GetType() == DeviceType::SSD)
-    {
-        if (EventFrameworkApiSingleton::Instance()->IsReactorNow() == true)
-        {
-            uint32_t reactor_id = EventFrameworkApiSingleton::Instance()->GetCurrentReactor();
-            airlog("CNT_PendingIO", "AIR_SSD", reactor_id, pendingIOCount);
-        }
-        else
-        {
-            airlog("CNT_PendingIO", "AIR_SSD", IO_WORKER_AID, pendingIOCount);
-        }
-    }
-}
-
-void
 UBlockDevice::AddPendingErrorCount(uint32_t errorsToAdd)
 {
     uint32_t oldPendingErrorCount = pendingErrorCount.fetch_add(errorsToAdd);
     if (unlikely((UINT32_MAX - oldPendingErrorCount) < errorsToAdd))
     {
         POS_EVENT_ID eventId =
-            POS_EVENT_ID::DEVICE_UNEXPECTED_PENDING_ERROR_COUNT;
+            EID(DEVICE_UNEXPECTED_PENDING_ERROR_COUNT);
         POS_TRACE_ERROR(static_cast<int>(eventId),
             "Unexpected pending error count: {}, Current pending error count: {}, Added or subtracted error count: {}",
             "overflow!!", oldPendingErrorCount, errorsToAdd);
@@ -314,7 +281,7 @@ UBlockDevice::SubtractPendingErrorCount(uint32_t errorsToSubtract)
     if (unlikely(oldPendingErrorCount < errorsToSubtract))
     {
         POS_EVENT_ID eventId =
-            POS_EVENT_ID::DEVICE_UNEXPECTED_PENDING_ERROR_COUNT;
+            EID(DEVICE_UNEXPECTED_PENDING_ERROR_COUNT);
         POS_TRACE_ERROR(static_cast<int>(eventId),
             "Unexpected pending error count: {}, Current pending error count: {}, Added or subtracted error count: {}",
             "underflow!!", oldPendingErrorCount, errorsToSubtract);
@@ -327,8 +294,8 @@ UBlockDevice::SetDedicatedIOWorker(IOWorker* ioWorker)
     if (unlikely(dedicatedIOWorker != nullptr))
     {
         POS_EVENT_ID eventId =
-            POS_EVENT_ID::DEVICE_OVERLAPPED_SET_IOWORKER;
-            POS_TRACE_WARN(static_cast<int>(eventId),
+            EID(DEVICE_OVERLAPPED_SET_IOWORKER);
+        POS_TRACE_WARN(static_cast<int>(eventId),
             "Overlapped setting for ioworker for single device: {} ",
             GetName());
     }
@@ -341,7 +308,7 @@ UBlockDevice::GetDedicatedIOWorker(void)
     if (unlikely(dedicatedIOWorker == nullptr))
     {
         POS_EVENT_ID eventId =
-            POS_EVENT_ID::DEVICE_NULLPTR_IOWORKER;
+            EID(DEVICE_NULLPTR_IOWORKER);
         POS_TRACE_WARN(static_cast<int>(eventId),
             "Overlapped setting for ioworker for single device: {} ",
             GetName());
@@ -400,5 +367,11 @@ UBlockDevice::GetProperty(void)
 void
 UBlockDevice::SetClass(DeviceClass cls)
 {
-    property->cls = cls;
+    if (property->cls != cls)
+    {
+        POS_TRACE_INFO(EID(DEVICE_DEBUG_MSG),
+            "{}({})'s class is changed:{}->{}(0-SYSTEM, 1-ARRAY)",
+            GetName(), GetSN(), property->cls, cls);
+        property->cls = cls;
+    }
 }

@@ -126,7 +126,8 @@ public:
       arrayId(0),
       fileByteSize(MetaFsCommonConst::INVALID_BYTE_SIZE),
       volType(MetaVolumeType::Max),
-      lock(MetaFileLockType::Default)
+      lock(MetaFileLockType::Default),
+      fileProperty()
     {
     }
 

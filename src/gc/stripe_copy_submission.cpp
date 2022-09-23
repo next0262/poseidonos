@@ -35,22 +35,21 @@
 #include <list>
 #include <memory>
 
-#include "Air.h"
-#include "src/gc/stripe_copier.h"
-#include "src/logger/logger.h"
 #include "src/event_scheduler/event_scheduler.h"
+#include "src/gc/stripe_copier.h"
 #include "src/include/backend_event.h"
+#include "src/logger/logger.h"
 
 namespace pos
 {
 StripeCopySubmission::StripeCopySubmission(StripeId baseStripeId, CopierMeta* meta, uint32_t copyIndex)
 : StripeCopySubmission(baseStripeId, meta, copyIndex,
-                        nullptr, EventSchedulerSingleton::Instance())
+      nullptr, EventSchedulerSingleton::Instance())
 {
 }
 
 StripeCopySubmission::StripeCopySubmission(StripeId baseStripeId, CopierMeta* meta, uint32_t copyIndex,
-                                        EventSmartPtr inputEvent, EventScheduler* inputEventScheduler)
+    EventSmartPtr inputEvent, EventScheduler* inputEventScheduler)
 : Callback(false, CallbackType_StripeCopySubmission),
   baseStripeId(baseStripeId),
   meta(meta),
@@ -81,7 +80,7 @@ StripeCopySubmission::_DoSpecificJob(void)
             meta->GetVictimStripe(copyIndex, index)->LoadValidBlock();
         }
 
-        POS_TRACE_DEBUG((int)POS_EVENT_ID::GC_LOAD_VALID_BLOCKS,
+        POS_TRACE_DEBUG(EID(GC_LOAD_VALID_BLOCKS),
             "valid blocks loaded, startStripeId:{}", baseStripeId);
 
         isLoaded = true;
@@ -107,8 +106,8 @@ StripeCopySubmission::_DoSpecificJob(void)
         eventScheduler->EnqueueEvent(stripeCopier);
     }
 
-    POS_TRACE_DEBUG((int)POS_EVENT_ID::GC_STRIPE_COPIER_SUBMIT,
-            "stripe copier submit, startStripeId:{}", baseStripeId);
+    POS_TRACE_DEBUG(EID(GC_STRIPE_COPIER_SUBMIT),
+        "stripe copier submit, startStripeId:{}", baseStripeId);
 
     return true;
 }

@@ -38,13 +38,14 @@ namespace pos
 {
 GrpcGlobalPublisher::GrpcGlobalPublisher(std::shared_ptr<grpc::Channel> channel_)
 {
-    std::string serverAddr = TEL_SERVER_IP; // TODO: temporary
+    std::string serverAddr = GRPC_TEL_SERVER_SOCKET_ADDRESS; // TODO: temporary
     std::shared_ptr<grpc::Channel> channel = channel_;
     if (channel == nullptr)
     {
         channel = grpc::CreateChannel(serverAddr, grpc::InsecureChannelCredentials());
     }
     stub = ::MetricManager::NewStub(channel);
+    publishFailureCount = 0;
 }
 
 GrpcGlobalPublisher::~GrpcGlobalPublisher(void)
@@ -61,11 +62,7 @@ GrpcGlobalPublisher::PublishToServer(MetricLabelMap* defaultLabelList, POSMetric
     for (auto& mit : (*metricList))
     {
         cnt++;
-        if (cnt > MAX_NUM_METRICLIST)
-        {
-            POS_TRACE_ERROR(EID(TELEMETRY_CLIENT_ERROR), "[Telemetry] Failed to add MetricList, numMetric overflowed!!!, name:{}, numMetric:{}", mit.GetName(), metricList->size());
-            break;
-        }
+
         // set values
         Metric* metric = request->add_metrics();
         metric->set_name(mit.GetName());
@@ -93,7 +90,7 @@ GrpcGlobalPublisher::PublishToServer(MetricLabelMap* defaultLabelList, POSMetric
             }
             histValue->set_sum(mit.GetHistogramValue()->GetSum());
             histValue->set_totalcount(mit.GetHistogramValue()->GetTotalCount());
-            
+
             /**
              newly created HistogramValue will be removed by gRPC
              ref : https://developers.google.com/protocol-buffers/docs/reference/cpp-generated  , void set_allocated_foo(string* value
@@ -137,15 +134,21 @@ GrpcGlobalPublisher::_SendMessage(MetricPublishRequest* request, uint32_t numMet
     grpc::Status status = stub->MetricPublish(&cliContext, *request, &response);
     if (status.ok() != true)
     {
-        POS_TRACE_INFO(EID(TELEMETRY_CLIENT_ERROR), "[TelemetryClient] Failed to send PublishRequest by gRPC, errorcode:{}, errormsg:{}", status.error_code(), status.error_message());
-        return -1;
+        if (publishFailureCount > publishFailureLogThreshold)
+        {
+            POS_TRACE_INFO(EID(TELEMETRY_CLIENT_PUBLISHREQUEST_SEND_FAILURE),
+                "publish_failure_count:{}, grpc_status_errorcode:{}, grpc_status_errormsg:{}", publishFailureCount, status.error_code(), status.error_message());
+            publishFailureCount = 0;
+            return -1;
+        }
+        publishFailureCount++;
     }
     else
     {
         uint32_t numReceived = response.totalreceivedmetrics();
         if (numReceived != numMetrics)
         {
-            POS_TRACE_INFO(EID(TELEMETRY_CLIENT_ERROR), "[TelemetryClient] TelemetryManager responsed with error: received data count mismatch, expected:{}, received:{}", numMetrics, numReceived);
+            POS_TRACE_DEBUG(EID(TELEMETRY_CLIENT_PUBLISHRESPONSE_COUNT_NOT_MATCH), "expected:{}, received:{}", numMetrics, numReceived);
             return -1;
         }
     }

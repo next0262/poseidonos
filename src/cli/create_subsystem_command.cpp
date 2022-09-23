@@ -60,7 +60,7 @@ CreateSubsystemCommand::Execute(json& doc, string rid)
     if (ret != SUCCESS)
     {
         return jFormat.MakeResponse(
-            command, rid, ERROR_CODE, errorMessage, GetPosInfo());
+            command, rid, ret, errorMessage, GetPosInfo());
     }
 
     return jFormat.MakeResponse(
@@ -135,7 +135,7 @@ CreateSubsystemCommand::_SetDefaultOptions(json& doc)
 {
     string key("subsystem");
     string number;
-
+    serialNumber = DEFAULT_SERIAL_NUMBER;
     size_t found = subnqn.rfind(key);
     if (found != string::npos)
     {

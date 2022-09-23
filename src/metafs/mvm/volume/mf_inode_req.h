@@ -48,12 +48,10 @@ public:
     : fd(MetaFsCommonConst::INVALID_FD),
       fileName(nullptr),
       fileByteSize(0),
+      ioAttribute(),
       media(MetaStorageType::Default),
       extentList(nullptr)
     {
-        ioAttribute.ioAccPattern = MetaFileAccessPattern::Default;
-        ioAttribute.ioOpType = MetaFileDominant::Default;
-        ioAttribute.integrity = MetaFileIntegrityType::Default;
     }
 
     void

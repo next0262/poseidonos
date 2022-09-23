@@ -32,13 +32,13 @@
 
 #include "reset_log_buffer.h"
 
-#include "../log_buffer/journal_log_buffer.h"
+#include "../log_buffer/i_journal_log_buffer.h"
 #include "src/include/pos_event_id.h"
 #include "src/logger/logger.h"
 
 namespace pos
 {
-ResetLogBuffer::ResetLogBuffer(JournalLogBuffer* logBuffer, ReplayProgressReporter* reporter)
+ResetLogBuffer::ResetLogBuffer(IJournalLogBuffer* logBuffer, ReplayProgressReporter* reporter)
 : ReplayTask(reporter),
   logBuffer(logBuffer)
 {
@@ -57,7 +57,7 @@ ResetLogBuffer::GetNumSubTasks(void)
 int
 ResetLogBuffer::Start(void)
 {
-    int eventId = static_cast<int>(POS_EVENT_ID::JOURNAL_REPLAY_STATUS);
+    int eventId = static_cast<int>(EID(JOURNAL_REPLAY_STATUS));
     POS_TRACE_DEBUG(eventId, "[ReplayTask] Reset journal log buffer");
 
     int ret = logBuffer->SyncResetAll();

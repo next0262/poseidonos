@@ -39,38 +39,37 @@
 #include "src/logger/logger.h"
 namespace pos
 {
-ArrayRebuild::ArrayRebuild(string arrayName, uint32_t arrayId,
-                        ArrayDevice* dev, RebuildComplete cb,
-                        list<RebuildTarget*> tgt, RebuildBehaviorFactory* factory, bool isWT)
+ArrayRebuild::ArrayRebuild(string arrayName, uint32_t arrayId, vector<IArrayDevice*>& dst,
+    RebuildComplete cb, list<RebuildTarget*>& tgt, RebuildBehaviorFactory* factory)
+: arrayName(arrayName),
+  rebuildComplete(cb)
 {
-    POS_TRACE_INFO(EID(REBUILD_DEBUG_MSG),
-        "ArrayRebuild::ArrayRebuild() array {} with total {} tasks",
-        arrayName, tgt.size());
+    POS_TRACE_INFO(EID(ARRAY_REBUILD_INIT),
+        "array_name:{}, taskCnt:{}, dstCnt:{}",
+        arrayName, tgt.size(), dst.size());
 
     RebuildProgress* prog = new RebuildProgress(arrayName);
     RebuildLogger* rLogger = new RebuildLogger(arrayName);
-    list<PartitionRebuild*> partRebuild;
 
     for (RebuildTarget* tar : tgt)
     {
-        unique_ptr<RebuildContext> ctx = tar->GetRebuildCtx(dev);
+        unique_ptr<RebuildContext> ctx = tar->GetRebuildCtx(dst);
         if (ctx && factory != nullptr)
         {
-            ctx->isWT = isWT;
-            POS_TRACE_INFO(EID(REBUILD_DEBUG_MSG),
-                "Try to create PartitionRebuild for {}", PARTITION_TYPE_STR[ctx->part]);
+            ctx->array = arrayName;
+            ctx->arrayIndex = arrayId;
+            POS_TRACE_INFO(EID(ARRAY_REBUILD_INIT),
+                "Trying to create partition rebuild, part:{}", PARTITION_TYPE_STR[ctx->part]);
             RebuildBehavior* bhvr = factory->CreateRebuildBehavior(move(ctx));
             if (bhvr != nullptr)
             {
-                bhvr->GetContext()->array = arrayName;
-                bhvr->GetContext()->arrayIndex = arrayId;
                 bhvr->GetContext()->prog = prog;
                 bhvr->GetContext()->logger = rLogger;
                 bhvr->UpdateProgress(0);
                 PartitionRebuild* ptnRbd = new PartitionRebuild(bhvr);
                 if (ptnRbd->TotalStripes() > 0)
                 {
-                    partRebuild.push_back(ptnRbd);
+                    tasks.push_back(ptnRbd);
                 }
                 else
                 {
@@ -79,24 +78,54 @@ ArrayRebuild::ArrayRebuild(string arrayName, uint32_t arrayId,
             }
         }
     }
-    Init(arrayName, dev, cb, partRebuild, prog, rLogger);
-}
-
-void
-ArrayRebuild::Init(string array, ArrayDevice* dev, RebuildComplete cb,
-    list<PartitionRebuild*> tgt, RebuildProgress* prog, RebuildLogger* rLogger)
-{
-    POS_TRACE_INFO(EID(REBUILD_DEBUG_MSG),
-        "ArrayRebuild::Init() array {} with total {} tasks", array, tgt.size());
-
-    arrayName = array;
-    targetDev = dev;
-    rebuildComplete = cb;
-    tasks = tgt;
     progress = prog;
     rebuildLogger = rLogger;
     rebuildLogger->SetArrayRebuildStart();
-    rebuildDoneCb = bind(&ArrayRebuild::_RebuildDone, this, placeholders::_1);
+    rebuildDoneCb = bind(&ArrayRebuild::_PartitionRebuildDone, this, placeholders::_1);
+}
+
+ArrayRebuild::ArrayRebuild(string arrayName, uint32_t arrayId, QuickRebuildPair& rebuildPair,
+    RebuildComplete cb, list<RebuildTarget*>& tgt, RebuildBehaviorFactory* factory)
+: arrayName(arrayName),
+  rebuildComplete(cb)
+{
+    POS_TRACE_INFO(EID(ARRAY_REBUILD_INIT),
+        "QuickRebuild, array_name:{}, taskCnt:{}, pairCnt:{}",
+        arrayName, tgt.size(), rebuildPair.size());
+    RebuildProgress* prog = new RebuildProgress(arrayName);
+    RebuildLogger* rLogger = new RebuildLogger(arrayName);
+
+    for (RebuildTarget* tar : tgt)
+    {
+        unique_ptr<RebuildContext> ctx = tar->GetQuickRebuildCtx(rebuildPair);
+        if (ctx && factory != nullptr)
+        {
+            ctx->array = arrayName;
+            ctx->arrayIndex = arrayId;
+            POS_TRACE_INFO(EID(ARRAY_REBUILD_INIT),
+                "Trying to create partition rebuild, part:{}, pairCnt:{}", PARTITION_TYPE_STR[ctx->part], ctx->rp.size());
+            RebuildBehavior* bhvr = factory->CreateRebuildBehavior(move(ctx));
+            if (bhvr != nullptr)
+            {
+                bhvr->GetContext()->prog = prog;
+                bhvr->GetContext()->logger = rLogger;
+                bhvr->UpdateProgress(0);
+                PartitionRebuild* ptnRbd = new PartitionRebuild(bhvr);
+                if (ptnRbd->TotalStripes() > 0)
+                {
+                    tasks.push_back(ptnRbd);
+                }
+                else
+                {
+                    delete ptnRbd;
+                }
+            }
+        }
+    }
+    progress = prog;
+    rebuildLogger = rLogger;
+    rebuildLogger->SetArrayRebuildStart();
+    rebuildDoneCb = bind(&ArrayRebuild::_PartitionRebuildDone, this, placeholders::_1);
 }
 
 ArrayRebuild::~ArrayRebuild(void)
@@ -108,33 +137,29 @@ ArrayRebuild::~ArrayRebuild(void)
 void
 ArrayRebuild::Start(void)
 {
-    POS_TRACE_INFO(EID(REBUILD_DEBUG_MSG),
-        "ArrayRebuild::Start() array {} with total {} tasks", arrayName, tasks.size());
+    POS_TRACE_INFO(EID(ARRAY_REBUILD_START),
+        "array_name:{}, taskCnt:{}", arrayName, tasks.size());
 
     if (tasks.empty())
     {
         RebuildResult res;
         res.array = arrayName;
-        res.target = targetDev;
         res.result = RebuildState::READY;
         _RebuildCompleted(res);
     }
     else
     {
-        _RebuildNext();
+        _RebuildNextPartition();
     }
 }
 
 void
 ArrayRebuild::Discard(void)
 {
-    POS_TRACE_ERROR((int)POS_EVENT_ID::REBUILD_FAILED,
-        "Array {} Rebuild discarded. Cannot start rebuild due to failure in preparation process",
-        arrayName);
+    POS_TRACE_ERROR(EID(ARRAY_REBUILD_DISCARD), "array_name:{}", arrayName);
     tasks.clear();
     RebuildResult res;
     res.array = arrayName;
-    res.target = targetDev;
     res.result = RebuildState::FAIL;
     _RebuildCompleted(res);
 }
@@ -165,10 +190,10 @@ ArrayRebuild::GetProgress(void)
 }
 
 void
-ArrayRebuild::_RebuildNext(void)
+ArrayRebuild::_RebuildNextPartition(void)
 {
-    POS_TRACE_INFO(EID(REBUILD_DEBUG_MSG),
-        "ArrayRebuild::_RebuildNext() array {} has remaining {} tasks", arrayName, tasks.size());
+    POS_TRACE_INFO(EID(REBUILD_NEXT_PARTITION),
+        "array_name:{}, remainingTaskCnt:{}", arrayName, tasks.size());
     if (tasks.empty() == false)
     {
         PartitionRebuild* task = tasks.front();
@@ -178,10 +203,10 @@ ArrayRebuild::_RebuildNext(void)
 }
 
 void
-ArrayRebuild::_RebuildDone(RebuildResult res)
+ArrayRebuild::_PartitionRebuildDone(RebuildResult res)
 {
-    POS_TRACE_INFO(EID(REBUILD_DEBUG_MSG),
-        "ArrayRebuild::_RebuildDone array {} rebuild done with result {} ", arrayName, res.result);
+    POS_TRACE_INFO(EID(PARTITION_REBUILD_END),
+        "array_name:{}, remainingTaskCnt:{}", arrayName, tasks.size());
     RebuildState taskResult = res.result;
     state = taskResult;
 
@@ -207,36 +232,40 @@ ArrayRebuild::_RebuildDone(RebuildResult res)
     }
     else
     {
-        _RebuildNext();
+        _RebuildNextPartition();
     }
 }
 
 void
 ArrayRebuild::_RebuildCompleted(RebuildResult res)
 {
+    POS_TRACE_INFO(EID(ARRAY_REBUILD_END),
+        "array_name:{}, result:{}", arrayName,res.result);
     state = res.result;
-    POS_TRACE_DEBUG(EID(REBUILD_DEBUG_MSG),
-        "ArrayRebuild::_RebuildCompleted array {} rebuild completed with result {} ", arrayName, state);
     switch (state)
     {
         case RebuildState::PASS:
-            POS_TRACE_INFO((int)POS_EVENT_ID::REBUILD_RESULT_PASS,
-                "array {} rebuild completed sucessfully", arrayName);
-            rebuildLogger->SetResult("PASS");
+        {
+            POS_TRACE_INFO(EID(REBUILD_RESULT_PASS),
+                "array_name:{}", arrayName);
+            rebuildLogger->SetResult(REBUILD_STATE_STR[(int)state]);
             break;
+        }
         case RebuildState::FAIL:
-            POS_TRACE_ERROR((int)POS_EVENT_ID::REBUILD_FAILED,
-                "array {} rebuild failure", arrayName);
-            rebuildLogger->SetResult("FAIL");
+        {
+            POS_TRACE_INFO(EID(REBUILD_RESULT_FAILED),
+                "array_name:{}", arrayName);
+            rebuildLogger->SetResult(REBUILD_STATE_STR[(int)state]);
             break;
+        }
         case RebuildState::CANCELLED:
-            POS_TRACE_WARN((int)POS_EVENT_ID::REBUILD_RESULT_CANCELLED,
-                "array {} rebuild cancelled", arrayName);
-            rebuildLogger->SetResult("CANCELLED");
+        {
+            POS_TRACE_INFO(EID(REBUILD_RESULT_CANCELLED),
+                "array_name:{}", arrayName);
+            rebuildLogger->SetResult(REBUILD_STATE_STR[(int)state]);
             break;
+        }
         default:
-            POS_TRACE_ERROR((int)POS_EVENT_ID::REBUILD_FAILED,
-                "array {} unhandled rebuild result", arrayName);
             break;
     }
     rebuildLogger->WriteLog();

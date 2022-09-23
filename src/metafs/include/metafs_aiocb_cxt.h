@@ -56,9 +56,8 @@ public:
       nbytes(nbytes),
       buf(buf),
       callback(func),
-      rc(POS_EVENT_ID::MFS_END),
-      tagId(0),
-      priority(RequestPriority::Normal)
+      rc(EID(MFS_END)),
+      tagId(0)
     {
         callbackCount = 0;
     }
@@ -71,9 +70,8 @@ public:
       nbytes(0),
       buf(buf),
       callback(func),
-      rc(POS_EVENT_ID::MFS_END),
-      tagId(0),
-      priority(RequestPriority::Normal)
+      rc(EID(MFS_END)),
+      tagId(0)
     {
     }
 
@@ -85,9 +83,8 @@ public:
       nbytes(ctx->length),
       buf((void*)ctx->buffer),
       callback(AsEntryPointParam1(&AsyncMetaFileIoCtx::HandleIoComplete, ctx)),
-      rc(POS_EVENT_ID::MFS_END),
-      tagId(0),
-      priority(ctx->GetPriority())
+      rc(EID(MFS_END)),
+      tagId(0)
     {
         callbackCount = 0;
     }
@@ -108,7 +105,7 @@ public:
 
     bool CheckIOError(void)
     {
-        if (rc != POS_EVENT_ID::SUCCESS)
+        if (rc != EID(SUCCESS))
         {
             return true;
         }
@@ -120,21 +117,21 @@ public:
         // need more error handling
         if (err.first != 0)
         {
-            rc = POS_EVENT_ID::MFS_IO_FAILED_DUE_TO_ERROR;
+            rc = EID(MFS_IO_FAILED_DUE_TO_ERROR);
         }
         else if (err.second == true)
         {
-            rc = POS_EVENT_ID::MFS_IO_FAILED_DUE_TO_STOP_STATE;
+            rc = EID(MFS_IO_FAILED_DUE_TO_STOP_STATE);
         }
         else
         {
-            rc = POS_EVENT_ID::SUCCESS;
+            rc = EID(SUCCESS);
         }
     }
 
     void InvokeCallback(void)
     {
-        MFS_TRACE_DEBUG((int)POS_EVENT_ID::MFS_DEBUG_MESSAGE,
+        MFS_TRACE_DEBUG(EID(MFS_DEBUG_MESSAGE),
             "[Mio ][InvokeCb   ] type={}, req.tagId={}, status={}", opcode, tagId, rc);
 
         if (callback)
@@ -177,31 +174,6 @@ public:
         callbackCount = cnt;
     }
 
-    virtual void SetTopPriority(void)
-    {
-        priority = RequestPriority::Highest;
-    }
-
-    virtual void ClearTopPriority(void)
-    {
-        priority = RequestPriority::Normal;
-    }
-
-    virtual bool IsTopPriority(void) const
-    {
-        return (RequestPriority::Highest == priority);
-    }
-
-    virtual void SetPriority(const RequestPriority p)
-    {
-        priority = p;
-    }
-
-    virtual RequestPriority GetPriority(void) const
-    {
-        return priority;
-    }
-
 private:
     friend class MetaFsIoApi;
 
@@ -216,6 +188,5 @@ private:
     POS_EVENT_ID rc;
     uint32_t tagId;
     std::atomic<int> callbackCount;
-    RequestPriority priority;
 };
 } // namespace pos

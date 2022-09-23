@@ -55,8 +55,31 @@ enum VolumeStatus
 {
     Unmounted,
     Mounted,
-    InitialSyncMode,
+    Offline,
     MaxVolumeStatus
+};
+
+enum VolumeReplicationState
+{
+    VolumeCopyState,
+    LiveReplicationState,
+    StandAloneState,
+    MaxVolumeReplicationState
+};
+
+enum VolumeReplicationRoleProperty
+{
+    Primary,
+    Secondary,
+    MaxNodeCnt
+};
+
+enum VolumeIoType
+{
+    UserRead,
+    UserWrite,
+    InternalIo,
+    MaxVolumeIoTypeCnt
 };
 
 const uint32_t KIOPS = 1000;
@@ -69,8 +92,10 @@ const uint64_t MAX_BW_LIMIT = UINT64_MAX / MIB_IN_BYTE;
 class VolumeBase
 {
 public:
-    VolumeBase(std::string arrayName, int arrayIdx, std::string volName, uint64_t volSizeByte);
-    VolumeBase(std::string arrayName, int arrayIdx, std::string volName, std::string uuid, uint64_t volSizeByte, uint64_t maxiops, uint64_t maxbw);
+    VolumeBase(std::string arrayName, int arrayIdx, std::string volName, uint64_t volSizeByte,
+        VolumeAttribute volumeAttribute);
+    VolumeBase(std::string arrayName, int arrayIdx, std::string volName, std::string inputUuid, uint64_t volSizeByte,
+        uint64_t _maxiops, uint64_t _miniops, uint64_t _maxbw, uint64_t _minbw, VolumeAttribute volumeAttribute);
     virtual ~VolumeBase(void);
     int Mount(void);
     int Unmount(void);
@@ -117,6 +142,27 @@ public:
     {
         return status;
     }
+    VolumeReplicationState
+    GetReplicationState(void)
+    {
+        return replicationState;
+    }
+    void        
+    SetReplicationState(VolumeReplicationState state)
+    {
+        replicationState = state;
+    }
+    VolumeReplicationRoleProperty
+    GetReplicateRoleProperty(void)
+    {
+        return replicationRole;
+    }
+    void        
+    SetReplicateRoleProperty(VolumeReplicationRoleProperty roleProperty)
+    {
+        replicationRole = roleProperty;
+    }
+
     bool
     IsValid(void)
     {
@@ -162,6 +208,8 @@ public:
 protected:
     VolumeAttribute attribute;
     VolumeStatus status;
+    VolumeReplicationState replicationState;
+    VolumeReplicationRoleProperty replicationRole;
     std::string name;
     std::string uuid;
     std::string array;

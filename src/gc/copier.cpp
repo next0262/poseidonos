@@ -32,40 +32,40 @@
 
 #include "src/gc/copier.h"
 
+#include <air/Air.h>
+
 #include <list>
 #include <memory>
 
-#include "Air.h"
-#include "src/allocator_service/allocator_service.h"
+#include "src/allocator/context_manager/gc_ctx/gc_ctx.h"
+#include "src/allocator/context_manager/segment_ctx/segment_ctx.h"
 #include "src/allocator/i_block_allocator.h"
 #include "src/allocator/i_context_manager.h"
+#include "src/allocator_service/allocator_service.h"
+#include "src/event_scheduler/event_scheduler.h"
 #include "src/gc/copier_read_completion.h"
 #include "src/gc/reverse_map_load_completion.h"
 #include "src/gc/stripe_copy_submission.h"
-#include "src/io/general_io/io_submit_handler.h"
 #include "src/include/backend_event.h"
+#include "src/io/general_io/io_submit_handler.h"
 #include "src/logger/logger.h"
-#include "src/event_scheduler/event_scheduler.h"
-#include "src/allocator/context_manager/segment_ctx/segment_ctx.h"
-#include "src/allocator/context_manager/gc_ctx/gc_ctx.h"
 
 namespace pos
 {
-
 Copier::Copier(SegmentId victimId, SegmentId targetId, GcStatus* gcStatus, IArrayInfo* array)
 : Copier(victimId, targetId, gcStatus, array,
-    array->GetSizeInfo(PartitionType::USER_DATA), new CopierMeta(array),
-    AllocatorServiceSingleton::Instance()->GetIBlockAllocator(array->GetName()),
-    AllocatorServiceSingleton::Instance()->GetIContextManager(array->GetName()),
-    nullptr, nullptr)
+      array->GetSizeInfo(PartitionType::USER_DATA), new CopierMeta(array),
+      AllocatorServiceSingleton::Instance()->GetIBlockAllocator(array->GetName()),
+      AllocatorServiceSingleton::Instance()->GetIContextManager(array->GetName()),
+      nullptr, nullptr)
 {
 }
 
 Copier::Copier(SegmentId victimId, SegmentId targetId, GcStatus* gcStatus, IArrayInfo* array,
-                const PartitionLogicalSize* udSize, CopierMeta* inputMeta,
-                IBlockAllocator* inputIBlockAllocator,
-                IContextManager* inputIContextManager,
-                CallbackSmartPtr inputStripeCopySubmissionPtr, CallbackSmartPtr inputReverseMapLoadCompletionPtr)
+    const PartitionLogicalSize* udSize, CopierMeta* inputMeta,
+    IBlockAllocator* inputIBlockAllocator,
+    IContextManager* inputIContextManager,
+    CallbackSmartPtr inputStripeCopySubmissionPtr, CallbackSmartPtr inputReverseMapLoadCompletionPtr)
 : currentStripeOffset(0),
   victimId(victimId),
   targetId(targetId),
@@ -179,11 +179,13 @@ Copier::_CompareThresholdState(void)
 
     GcMode gcMode = gcCtx->GetCurrentGcMode();
 
+    _CleanUpVictimSegments();
+
     if ((false == thresholdCheck) || (gcMode != MODE_NO_GC))
     {
-        airlog("LAT_GetVictimSegment", "AIR_BEGIN", 0, objAddr);
+        airlog("LAT_GetVictimSegment", "begin", 0, objAddr);
         victimId = iContextManager->AllocateGCVictimSegment();
-        airlog("LAT_GetVictimSegment", "AIR_END", 0, objAddr);
+        airlog("LAT_GetVictimSegment", "end", 0, objAddr);
 
         if (UNMAP_SEGMENT != victimId)
         {
@@ -191,7 +193,7 @@ Copier::_CompareThresholdState(void)
             _ChangeEventState(CopierStateType::COPIER_COPY_PREPARE_STATE);
 
             int numFreeSegments = segmentCtx->GetNumOfFreeSegment();
-            POS_TRACE_DEBUG((int)POS_EVENT_ID::GC_GET_VICTIM_SEGMENT,
+            POS_TRACE_DEBUG(EID(GC_GET_VICTIM_SEGMENT),
                 "trigger start, cnt:{}, victimId:{}",
                 numFreeSegments, victimId);
         }
@@ -235,8 +237,8 @@ Copier::_CopyPrepareState(void)
         meta->GetVictimStripe(victimIndex, index)->Load(baseStripe + index, callback);
     }
 
-    POS_TRACE_DEBUG((int)POS_EVENT_ID::GC_LOAD_REVERSE_MAP,
-                "load reverse map, victimSegmentId:{}", victimId);
+    POS_TRACE_DEBUG(EID(GC_LOAD_REVERSE_MAP),
+        "load reverse map, victimSegmentId:{}", victimId);
 
     _ChangeEventState(CopierStateType::COPIER_COPY_COMPLETE_STATE);
 }
@@ -250,26 +252,13 @@ Copier::_CopyCompleteState(void)
         return false;
     }
 
-    POS_TRACE_DEBUG((int)POS_EVENT_ID::GC_COPY_COMPLETE,
+    POS_TRACE_DEBUG(EID(GC_COPY_COMPLETE),
         "copy complete, id:{}", victimId);
 
     uint32_t invalidBlkCnt = userDataMaxBlks - meta->GetDoneCopyBlks();
 
     gcStatus->SetCopyInfo(true /*started*/, victimId,
         invalidBlkCnt /*invalid cnt*/, meta->GetDoneCopyBlks() /*copy cnt*/);
-
-    SegmentCtx* segmentCtx = iContextManager->GetSegmentCtx();
-    if (NULL != segmentCtx)
-    {
-        uint32_t validBlkCnt = segmentCtx->GetValidBlockCount(victimId);
-        if (0 == validBlkCnt)
-        {
-            // Change to free state
-            POS_TRACE_DEBUG((int)POS_EVENT_ID::GC_COPY_COMPLETE,
-                "Move to free state, id:{}", victimId);
-            segmentCtx->MoveToFreeState(victimId);
-        }
-    }
 
     _ChangeEventState(CopierStateType::COPIER_THRESHOLD_CHECK_STATE);
 
@@ -306,6 +295,25 @@ Copier::_IsAllVictimSegmentCopyDone(void)
     bool ret = meta->IsAllVictimSegmentCopyDone();
 
     return ret;
+}
+
+void
+Copier::_CleanUpVictimSegments(void)
+{
+    // Clean up previous victim lists
+    SegmentCtx* segmentCtx = iContextManager->GetSegmentCtx();
+    std::set<SegmentId> victimSegments = segmentCtx->GetVictimSegmentList();
+    for (auto victimSegId : victimSegments)
+    {
+        uint32_t validCount = segmentCtx->GetValidBlockCount(victimSegId);
+        if (0 == validCount && UNMAP_SEGMENT != victimSegId)
+        {
+            // Push to free list among the victim lists
+            POS_TRACE_INFO(EID(GC_RELEASE_VICTIM_SEGMENT),
+                "Move to free list among the victim lists, VictimSegid:{}, validCount:{}", victimSegId, validCount);
+            segmentCtx->MoveToFreeState(victimSegId);
+        }
+    }
 }
 
 } // namespace pos

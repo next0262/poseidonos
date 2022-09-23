@@ -77,10 +77,10 @@ const int MAX_VOLUME_EVENT = (MAX_VOLUME_COUNT > pos::BackendEvent_Count) ? MAX_
 const int MAX_EVENTS_PER_EVENT_WORKER = 50;
 const int MAX_IO_COUNT = 512 * 8;
 
-const uint8_t PRIORITY_HIGHEST = 3;
+const uint8_t PRIORITY_HIGH = 3;
 const uint8_t PRIORITY_MEDIUM = 2;
-const uint8_t PRIORITY_LOWEST = 1;
-const uint8_t PRIORITY_DEFAULT = PRIORITY_LOWEST;
+const uint8_t PRIORITY_LOW = 1;
+const uint8_t PRIORITY_DEFAULT = PRIORITY_LOW;
 const uint8_t PRIORITY_INVALID = 0;
 
 const uint32_t WT_LEVEL1 = 2;
@@ -88,7 +88,12 @@ const uint32_t WT_LEVEL2 = 70;
 const uint32_t WT_LEVEL3 =  6000;
 
 const int LEVEL_SUPPORT = 3;
-const int weightArr[] = {1, 2, 70, 6000};
+
+// Rebuild Impact is provided as "experimental" feature.
+// Please provide weight as below when you want to assign rebuild impact.
+// const int weightArr[] = {1, 2, 70, 6000};
+
+const int weightArr[] = {1, 2, 2, 2};
 const int FALLBACK_WEIGHT = weightArr[0];
 
 const int PRIO_WT_HIGHEST = 20;
@@ -215,7 +220,6 @@ enum QosInternalManagerType
     QosInternalManager_Start = 0,
     QosInternalManager_Monitor,
     QosInternalManager_Policy,
-    QosInternalManager_Processing,
     QosInternalManager_Correction,
     QosInternalManager_End,
     QosInternalManagerCount = QosInternalManager_End - QosInternalManager_Start,

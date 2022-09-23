@@ -32,6 +32,7 @@
 
 #include "src/bio/ubio.h"
 
+#include <air/Air.h>
 #include <stdlib.h>
 #include <unistd.h>
 
@@ -39,18 +40,18 @@
 #include <string>
 
 #include "mk/ibof_config.h"
-#include "src/include/i_array_device.h"
-#include "src/spdk_wrapper/event_framework_api.h"
-#include "src/include/pos_event_id.hpp"
-#include "src/include/memory.h"
-#include "src/include/branch_prediction.h"
-#include "src/include/meta_const.h"
-#include "src/include/core_const.h"
-#include "src/logger/logger.h"
 #include "src/event_scheduler/callback.h"
 #include "src/event_scheduler/event_scheduler.h"
 #include "src/event_scheduler/spdk_event_scheduler.h"
+#include "src/include/branch_prediction.h"
+#include "src/include/core_const.h"
+#include "src/include/i_array_device.h"
+#include "src/include/memory.h"
+#include "src/include/meta_const.h"
+#include "src/include/pos_event_id.hpp"
+#include "src/logger/logger.h"
 #include "src/qos/qos_manager.h"
+#include "src/spdk_wrapper/event_framework_api.h"
 
 namespace pos
 {
@@ -67,9 +68,11 @@ Ubio::Ubio(void* buffer, uint32_t unitCount, int arrayID)
   lba(0),
   uBlock(nullptr),
   arrayDev(nullptr),
-  arrayId(arrayID)
+  arrayId(arrayID),
+  originCore(INVALID_CORE)
 {
     SetAsyncMode();
+    airlog("Ubio_Constructor", "internal", GetEventType(), 1);
 }
 
 Ubio::Ubio(const Ubio& ubio)
@@ -82,17 +85,19 @@ Ubio::Ubio(const Ubio& ubio)
   lba(0),
   uBlock(nullptr),
   arrayDev(nullptr),
-  arrayId(ubio.arrayId)
+  arrayId(ubio.arrayId),
+  originCore(INVALID_CORE)
 {
     dir = ubio.dir;
     SetAsyncMode();
     ubioPrivate = ubio.ubioPrivate;
-
     eventIoType = ubio.eventIoType;
+    airlog("Ubio_Constructor", "internal", GetEventType(), 1);
 }
 
 Ubio::~Ubio(void)
 {
+    airlog("Ubio_Destructor", "internal", GetEventType(), 1);
 }
 
 bool
@@ -194,7 +199,7 @@ Ubio::SetPba(PhysicalBlkAddr& pba)
 {
     if (unlikely(pba.arrayDev == nullptr))
     {
-        POS_EVENT_ID eventId = POS_EVENT_ID::UBIO_INVALID_PBA;
+        POS_EVENT_ID eventId = EID(UBIO_INVALID_PBA);
         POS_TRACE_ERROR(eventId, "Invalid PBA for Ubio");
         return;
     }
@@ -206,7 +211,13 @@ Ubio::SetPba(PhysicalBlkAddr& pba)
 uint32_t
 Ubio::GetOriginCore(void)
 {
-    return INVALID_CORE;
+    return originCore;
+}
+
+void
+Ubio::SetOriginCore(uint32_t inputOriginCore)
+{
+    originCore = inputOriginCore;
 }
 
 void*
@@ -242,14 +253,12 @@ Ubio::MarkDone(void)
 {
     if (unlikely(false == sync))
     {
-        PosEventId::Print(POS_EVENT_ID::UBIO_SYNC_FLAG_NOT_SET,
-            EventLevel::WARNING);
+        POS_TRACE_WARN(EID(UBIO_SYNC_FLAG_NOT_SET), "");
         return;
     }
     if (unlikely(true == syncDone))
     {
-        PosEventId::Print(POS_EVENT_ID::UBIO_ALREADY_SYNC_DONE,
-            EventLevel::WARNING);
+        POS_TRACE_WARN(EID(UBIO_ALREADY_SYNC_DONE), "");
         return;
     }
 
@@ -261,8 +270,7 @@ Ubio::WaitDone(void)
 {
     if (unlikely(false == sync))
     {
-        PosEventId::Print(POS_EVENT_ID::UBIO_SYNC_FLAG_NOT_SET,
-            EventLevel::WARNING);
+        POS_TRACE_WARN(EID(UBIO_SYNC_FLAG_NOT_SET), "");
         return;
     }
 
@@ -310,7 +318,7 @@ const PhysicalBlkAddr
 Ubio::GetPba(void)
 {
     PhysicalBlkAddr pba = {.lba = this->lba,
-                           .arrayDev = this->arrayDev};
+        .arrayDev = this->arrayDev};
 
     return pba;
 }
@@ -339,7 +347,7 @@ Ubio::GetOriginUbio(void)
 {
     if (unlikely(false == CheckOriginUbioSet()))
     {
-        POS_EVENT_ID eventId = POS_EVENT_ID::UBIO_INVALID_ORIGIN_UBIO;
+        POS_EVENT_ID eventId = EID(UBIO_INVALID_ORIGIN_UBIO);
         POS_TRACE_ERROR(static_cast<int>(eventId),
             "Invalid original Ubio");
         return nullptr;
@@ -399,8 +407,7 @@ Ubio::NeedRecovery(void) // TODO: will be moved. AWIBOF-2751
     {
         return true;
     }
-    else if (devState == ArrayDeviceState::REBUILD
-        && dir == UbioDir::Read)
+    else if (devState == ArrayDeviceState::REBUILD && dir == UbioDir::Read)
     {
         return true;
     }
@@ -408,7 +415,7 @@ Ubio::NeedRecovery(void) // TODO: will be moved. AWIBOF-2751
     uBlock = arrayDev->GetUblock();
     if (uBlock == nullptr)
     {
-        POS_EVENT_ID eventId = POS_EVENT_ID::UBIO_INVALID_DEVICE;
+        POS_EVENT_ID eventId = EID(UBIO_INVALID_DEVICE);
         POS_TRACE_ERROR(static_cast<int>(eventId),
             "Invalid UblockDevice for Ubio");
         assert(0);

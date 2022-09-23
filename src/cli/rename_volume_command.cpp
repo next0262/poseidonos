@@ -64,53 +64,52 @@ RenameVolumeCommand::Execute(json& doc, string rid)
         string oldName = doc["param"]["name"].get<std::string>();
         string newName = doc["param"]["newname"].get<std::string>();
 
-        IVolumeEventManager* volMgr =
-            VolumeServiceSingleton::Instance()->GetVolumeManager(arrayName);
-
-        int ret = FAIL;
-
+        int ret = EID(RENAME_VOL_ARRAY_NAME_DOES_NOT_EXIST);
         ComponentsInfo* info = ArrayMgr()->GetInfo(arrayName);
         if (info == nullptr)
         {
+            POS_TRACE_WARN(ret, "array_name:{}", arrayName);
             return jFormat.MakeResponse("RENAMEVOLUME", rid, ret,
-                 "failed to rename volume " + oldName + "to " + newName, GetPosInfo());
+                "failed to rename volume from " + oldName + " to " + newName, GetPosInfo());
         }
 
-        IArrayInfo* array = info->arrayInfo;
-        ArrayStateType arrayState = array->GetState();
-        if (arrayState == ArrayStateEnum::BROKEN)
+        if (info->arrayInfo->GetState() < ArrayStateEnum::NORMAL)
         {
-            int eventId = EID(CLI_COMMAND_FAILURE_ARRAY_BROKEN);
-            POS_TRACE_WARN(eventId, "arrayName: {}, arrayState: {}",
-                arrayName, arrayState.ToString());
-
+            ret = EID(RENAME_VOL_CAN_ONLY_BE_WHILE_ONLINE);
+            POS_TRACE_WARN(ret, "array_name:{}, array_state:{}", arrayName, info->arrayInfo->GetState().ToString());
             return jFormat.MakeResponse("RENAMEVOLUME", rid, ret,
-                 "failed to rename volume " + oldName + "to " + newName, GetPosInfo());
+                "failed to rename volume from " + oldName + " to " + newName, GetPosInfo());
         }
+
+        IVolumeEventManager* volMgr =
+            VolumeServiceSingleton::Instance()->GetVolumeManager(arrayName);
+        ret = EID(RENAME_VOL_INTERNAL_ERROR);
         if (volMgr != nullptr)
         {
             ret = volMgr->Rename(oldName, newName);
-        }
-
-        if (ret == SUCCESS)
-        {
-            return jFormat.MakeResponse("RENAMEVOLUME", rid, ret,
-                oldName + " is renamed to " + newName,
-                GetPosInfo());
+            if (ret == SUCCESS)
+            {
+                return jFormat.MakeResponse("RENAMEVOLUME", rid, ret,
+                    oldName + " is renamed successfully to " + newName,
+                    GetPosInfo());
+            }
+            else
+            {
+                return jFormat.MakeResponse("RENAMEVOLUME", rid, ret,
+                    "failed to rename volume from " + oldName + " to " + newName, GetPosInfo());
+            }
         }
         else
         {
-            return jFormat.MakeResponse(
-                "RENAMEVOLUME", rid, ret,
-                "failed to rename " + oldName + " to " + newName +
-                    "(code:" + to_string(ret) + ")",
-                GetPosInfo());
+            POS_TRACE_WARN(ret, "array_name:{}, vol_name:{}, vol_new_name:{}", arrayName, oldName, newName);
+            return jFormat.MakeResponse("RENAMEVOLUME", rid, ret,
+                "failed to rename volume from " + oldName + " to " + newName, GetPosInfo());
         }
     }
     else
     {
         return jFormat.MakeResponse(
-            "RENAMEVOLUME", rid, (int)POS_EVENT_ID::INVALID_PARAM,
+            "RENAMEVOLUME", rid, EID(INVALID_PARAM),
             "volume name or newname is not entered", GetPosInfo());
     }
 }

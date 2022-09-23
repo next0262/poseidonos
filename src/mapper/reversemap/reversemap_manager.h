@@ -32,23 +32,27 @@
 
 #pragma once
 
+#include <map>
+#include <tuple>
+
 #include "src/array_models/interface/i_array_info.h"
+#include "src/mapper/address/mapper_address_info.h"
 #include "src/mapper/i_reversemap.h"
 #include "src/mapper/i_stripemap.h"
-#include "src/mapper/vsamap/vsamap_manager.h"
-#include "src/mapper/address/mapper_address_info.h"
+#include "src/mapper/i_vsamap.h"
 #include "src/mapper/reversemap/reverse_map.h"
 #include "src/meta_file_intf/meta_file_include.h"
 #include "src/volume/i_volume_info_manager.h"
 
 namespace pos
 {
+class TelemetryPublisher;
 
 class ReverseMapManager : public IReverseMap
 {
 public:
     ReverseMapManager(void) = default;
-    ReverseMapManager(VSAMapManager* ivsaMap, IStripeMap* istripeMap, IVolumeInfoManager* vol, MapperAddressInfo* addrInfo_);
+    ReverseMapManager(IVSAMap* ivsaMap, IStripeMap* istripeMap, IVolumeInfoManager* vol, MapperAddressInfo* addrInfo_, TelemetryPublisher* tp);
     virtual ~ReverseMapManager(void);
 
     virtual void Init(void);
@@ -81,10 +85,12 @@ private:
     ReverseMapPack* revMapPacks;
     MetaFileIntf* revMapWholefile;
 
-    VSAMapManager* iVSAMap;
+    IVSAMap* iVSAMap;
     IStripeMap* iStripeMap;
     IVolumeInfoManager* volumeManager;
     MapperAddressInfo* addrInfo;
+    TelemetryPublisher* telemetryPublisher;
+    bool rocksDbEnabled;
 };
 
 } // namespace pos

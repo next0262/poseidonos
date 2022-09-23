@@ -14,13 +14,13 @@ import SCAN_DEV_BASIC
 
 DATA = "unvme-ns-0,unvme-ns-1,unvme-ns-2"
 ARRAYNAME = "POSArray"
+ANY_DATA = "unvme-ns-0"
 
 
 def execute():
     SCAN_DEV_BASIC.execute()
     cli.mbr_reset()
     out = cli.create_array("uram0", DATA, "", ARRAYNAME, "RAID0")
-    print(out)
     return out
 
 

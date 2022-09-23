@@ -14,6 +14,7 @@
 #include "test/integration-tests/journal/utils/test_info.h"
 #include "test/unit-tests/telemetry/telemetry_client/telemetry_client_mock.h"
 #include "test/unit-tests/telemetry/telemetry_client/telemetry_publisher_mock.h"
+
 namespace pos
 {
 class JournalManagerTestFixture
@@ -24,14 +25,12 @@ public:
 
     void InitializeJournal(void);
     void InitializeJournal(JournalConfigurationSpy* config);
-
     void SimulateSPORWithoutRecovery(void);
     void SimulateSPORWithoutRecovery(JournalConfigurationSpy* config);
-
+    void SimulateRocksDBSPORWithoutRecovery(void);
     void SetTriggerCheckpoint(bool isCheckpointEnabled);
     void ExpectCheckpointTriggered(void);
     void WaitForAllCheckpointDone(void);
-
     JournalManagerSpy* GetJournal(void);
     int AddDummyLog(void);
 
@@ -44,10 +43,8 @@ protected:
     IVolumeInfoManager* volumeManager;
     MockTelemetryPublisher* telemetryPublisher;
     MockTelemetryClient* telemetryClient;
-
     LogWriteTestFixture* writeTester;
     ReplayTestFixture* replayTester;
-
     TestInfo* testInfo;
 
     const uint64_t INVALID_BUFFER_SIZE = UINT64_MAX;
@@ -55,9 +52,9 @@ protected:
     uint64_t logBufferSize;
     uint64_t logGroupSize;
     int numLogGroups;
+    const std::string rocksdbPath = "/etc/pos/POSRaid";
 
 private:
     void _GetLogBufferSizeInfo(void);
 };
-
 } // namespace pos

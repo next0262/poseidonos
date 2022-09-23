@@ -32,21 +32,23 @@
 
 #include "io_dispatcher.h"
 
-#include "src/spdk_wrapper/event_framework_api.h"
-#include "src/io_scheduler/dispatcher_policy.h"
-#include "src/io_scheduler/io_worker.h"
-#include "src/event_scheduler/io_completer.h"
-#include "src/include/i_array_device.h"
-#include "src/include/branch_prediction.h"
-#include "src/include/pos_event_id.hpp"
-#include "src/logger/logger.h"
-#include "src/device/base/ublock_device.h"
-#include "src/event_scheduler/spdk_event_scheduler.h"
-#include "src/event_scheduler/event_scheduler.h"
-#include "src/event_scheduler/event_factory.h"
-#include "src/device/device_detach_trigger.h"
 #include <unistd.h>
 
+#include "src/device/base/ublock_device.h"
+#include "src/device/device_detach_trigger.h"
+#include "src/event_scheduler/event_factory.h"
+#include "src/event_scheduler/event_scheduler.h"
+#include "src/event_scheduler/io_completer.h"
+#include "src/event_scheduler/spdk_event_scheduler.h"
+#include "src/include/branch_prediction.h"
+#include "src/include/i_array_device.h"
+#include "src/include/pos_event_id.hpp"
+#include "src/io_scheduler/dispatcher_policy.h"
+#include "src/io_scheduler/io_dispatcher_submission.h"
+#include "src/io_scheduler/io_worker.h"
+#include "src/logger/logger.h"
+#include "src/spdk_wrapper/accel_engine_api.h"
+#include "src/spdk_wrapper/event_framework_api.h"
 namespace pos
 {
 IODispatcher::DispatcherAction IODispatcher::frontendOperation;
@@ -216,12 +218,18 @@ int
 IODispatcher::Submit(UbioSmartPtr ubio, bool sync, bool ioRecoveryNeeded)
 {
     bool isReactor = eventFrameworkApi->IsReactorNow();
-
+    uint32_t currentCore = EventFrameworkApiSingleton::Instance()->GetCurrentReactor();
+    bool isEventReactor = false;
+    if (isReactor)
+    {
+        isEventReactor = AffinityManagerSingleton::Instance()->IsEventReactor(currentCore);
+    }
     // sync io for reactor is not allowed. (reactor should not be stuck in any point.)
-    if (unlikely(isReactor && sync))
+    int ret = 0;
+    if (unlikely(isReactor && (!isEventReactor) && sync))
     {
         POS_EVENT_ID eventId =
-            POS_EVENT_ID::IODISPATCHER_INVALID_PARM;
+            EID(IODISPATCHER_INVALID_PARM);
         POS_TRACE_ERROR(static_cast<int>(eventId),
             "Invalid Param in submit IO");
         IoCompleter ioCompleter(ubio);
@@ -259,25 +267,14 @@ IODispatcher::Submit(UbioSmartPtr ubio, bool sync, bool ioRecoveryNeeded)
         ublock = ubio->GetUBlock();
     }
 
-    if (isReactor)
-    {
-        return ublock->SubmitAsyncIO(ubio);
-    }
-    else
-    {
-        IOWorker* ioWorker = ublock->GetDedicatedIOWorker();
-        if (likely(nullptr != ioWorker))
-        {
-            dispPolicy->Submit(ioWorker, ubio);
-        }
-    }
+    ret = IODispatcherSubmissionSingleton::Instance()->SubmitIO(ublock, ubio, dispPolicy);
 
     if (unlikely(sync))
     {
         ubio->WaitDone();
     }
 
-    return 0;
+    return ret;
 }
 
 void
@@ -344,7 +341,7 @@ IODispatcher::_CallForFrontend(UblockSharedPtr dev)
     }
     if (unlikely(false == succeeded))
     {
-        POS_EVENT_ID eventId = POS_EVENT_ID::DEVICE_COMPLETION_FAILED;
+        POS_EVENT_ID eventId = EID(DEVICE_COMPLETION_FAILED);
         POS_TRACE_ERROR(static_cast<int>(eventId),
             "Error: occurred while getting IO completion events from device: {}",
             dev->GetName());
@@ -408,7 +405,7 @@ IODispatcher::_ProcessFrontend(void* ublockDevice)
         if (unlikely(false == success))
         {
             POS_EVENT_ID eventId =
-                POS_EVENT_ID::DEVICE_COMPLETION_FAILED;
+                EID(DEVICE_COMPLETION_FAILED);
             POS_TRACE_ERROR(static_cast<int>(eventId),
                 "Error: occurred while getting IO completion events from device: {}",
                 dev->GetName());

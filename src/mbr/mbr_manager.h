@@ -69,6 +69,7 @@ public:
     virtual int SaveMbr(void);
     int LoadMbr(void);
     int ResetMbr(void);
+    void InitDisk(UblockSharedPtr dev);
     int GetAbrList(std::vector<ArrayBootRecord>& abrList);
     virtual struct masterBootRecord& GetMbr(void);
     virtual int GetMbrVersionInMemory(void);
@@ -95,6 +96,7 @@ private:
     string _GetSystemUuid(void);
     bool _AllocMem(void);
     int _LoadIndexMap(void);
+    string Serialize(void);
 
     const int MBR_CHUNKS = 1;
     const int MBR_BLOCKS = MBR_CHUNKS * BLOCKS_IN_CHUNK;

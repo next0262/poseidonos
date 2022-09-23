@@ -32,7 +32,6 @@
 
 #include "mpio.h"
 
-#include "Air.h"
 #include "meta_storage_specific.h"
 #include "metafs_common.h"
 #include "metafs_mem_lib.h"
@@ -51,7 +50,7 @@ Mpio::Mpio(void* mdPageBuf, const bool directAccessEnabled)
   errorStopState(false),
   forceSyncIO(false),
   cacheState(MpioCacheState::Init),
-  priority(RequestPriority::Normal),
+  fileType(MetaFileType::General),
   UNIQUE_ID(idAllocate_++),
   DIRECT_ACCESS_ENABLED(directAccessEnabled)
 {
@@ -87,6 +86,7 @@ Mpio::Setup(MpioIoInfo& mpioIoInfo, bool partialIO, bool forceSyncIO, MetaStorag
     this->partialIO = partialIO;
     this->forceSyncIO = forceSyncIO;
     this->mssIntf = metaStorage;
+    fileType = mpioIoInfo.fileType;
     aioModeEnabled = metaStorage->IsAIOSupport();
 }
 
@@ -104,15 +104,9 @@ Mpio::SetPartialDoneNotifier(PartialMpioDoneCb& partialMpioDoneNotifier)
 }
 
 bool
-Mpio::IsPartialIO(void)
+Mpio::IsPartialIO(void) const
 {
     return partialIO;
-}
-
-MpioCacheState
-Mpio::GetCacheState(void)
-{
-    return cacheState;
 }
 
 bool
@@ -185,7 +179,7 @@ Mpio::DoE2ECheck(const MpAioState expNextState)
     {
         if (!_CheckDataIntegrity())
         {
-            POS_TRACE_ERROR((int)POS_EVENT_ID::MFS_INVALID_INFORMATION,
+            POS_TRACE_ERROR(EID(MFS_INVALID_INFORMATION),
                 "[Mpio][DoE2ECheck ] E2E Check fail!, arrayId={}, mediaType={}, lpn={}",
                 io.arrayId, (int)io.targetMediaType, io.metaLpn);
 
@@ -197,7 +191,7 @@ Mpio::DoE2ECheck(const MpAioState expNextState)
     {
         if (!DIRECT_ACCESS_ENABLED || MetaStorageType::NVRAM != io.targetMediaType)
         {
-            MFS_TRACE_DEBUG((int)POS_EVENT_ID::MFS_DEBUG_MESSAGE,
+            MFS_TRACE_DEBUG(EID(MFS_DEBUG_MESSAGE),
                 "[Mpio][DoE2ECheck ] Read data will be cleared due to invalid data, arrayId={}, mediaType={}, lpn={}, oldData={}",
                 io.arrayId, (int)io.targetMediaType, io.metaLpn, *(uint64_t*)GetMDPageDataBuf());
 
@@ -222,7 +216,7 @@ Mpio::_ConvertToMssOpcode(const MpAioState mpioState)
             return MssOpcode::Write;
 
         default:
-            POS_TRACE_ERROR((int)POS_EVENT_ID::MFS_ERROR_MESSAGE,
+            POS_TRACE_ERROR(EID(MFS_ERROR_MESSAGE),
                 "Operation {} is not supported.", (int)mpioState);
             assert(false);
     }
@@ -236,7 +230,7 @@ Mpio::DoIO(const MpAioState expNextState)
     void* buf = GetMDPageDataBuf();
     MssOpcode opcode = _ConvertToMssOpcode(GetStateInExecution());
 
-    if (io.targetMediaType != MetaStorageType::SSD)
+    if (IsCacheableVolumeType())
     {
         if (opcode == MssOpcode::Read)
             PrintLog("[io  -   read]", io.arrayId, io.metaLpn);
@@ -246,25 +240,23 @@ Mpio::DoIO(const MpAioState expNextState)
 
     if (aioModeEnabled && (!forceSyncIO))
     {
-        if (cacheState != MpioCacheState::Init)
+        FileSizeType startOffset = 0;
+        if (!IsCached())
         {
-            mssAioData.Init(io.arrayId, io.targetMediaType, io.metaLpn, io.pageCnt, buf, io.mpioId, io.tagId, 0);
+            startOffset = io.startByteOffset;
         }
-        else
-        {
-            mssAioData.Init(io.arrayId, io.targetMediaType, io.metaLpn, io.pageCnt, buf, io.mpioId, io.tagId, io.startByteOffset);
-        }
+        mssAioData.Init(io.arrayId, io.targetMediaType, io.metaLpn, io.pageCnt, buf, io.mpioId, io.tagId, startOffset);
         mssAioCbCxt.Init(&mssAioData, mpioDoneCallback);
 
         SetNextState(expNextState);
 
         ret = mssIntf->DoPageIOAsync(opcode, &mssAioCbCxt);
 
-        if (ret != POS_EVENT_ID::SUCCESS)
+        if (ret != EID(SUCCESS))
         {
             SetNextState(MpAioState::Error);
 
-            if (ret == POS_EVENT_ID::MFS_IO_FAILED_DUE_TO_STOP_STATE)
+            if (ret == EID(MFS_IO_FAILED_DUE_TO_STOP_STATE))
             {
                 errorStopState = true;
                 mssAioData.SetErrorStopState(true);
@@ -276,7 +268,7 @@ Mpio::DoIO(const MpAioState expNextState)
     else
     {
         ret = mssIntf->DoPageIO(opcode, io.targetMediaType, io.metaLpn, buf, io.pageCnt, io.mpioId, io.tagId);
-        if (ret == POS_EVENT_ID::SUCCESS)
+        if (ret == EID(SUCCESS))
         {
             SetNextState(expNextState);
         }
@@ -284,7 +276,7 @@ Mpio::DoIO(const MpAioState expNextState)
         {
             SetNextState(MpAioState::Error);
 
-            if (ret == POS_EVENT_ID::MFS_IO_FAILED_DUE_TO_STOP_STATE)
+            if (ret == EID(MFS_IO_FAILED_DUE_TO_STOP_STATE))
             {
                 errorStopState = true;
             }

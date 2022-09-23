@@ -14,6 +14,13 @@ Digit
   | "7" | "8" | "9"
   ;
 
+Hex
+  = "0" | "1" | "2" | "3" | "4" | "5" | "6"
+  | "7" | "8" | "9" | "A" | "B" | "C" | "D"
+  | "E" | "F" | "a" | "b" | "c" | "d" | "e"
+  | "f"
+  ;
+
 Number = Digit , { Digit } ;
 
 Symbol
@@ -24,6 +31,11 @@ Symbol
 Identifier = Letter , { Letter | Digit | "-" | "_" } ;
 
 BooleanValue = "true" | "false" ;
+
+Uuid = Hex , Hex , Hex , Hex , Hex , Hex , Hex , Hex ,
+  "-" , Hex , Hex , Hex , Hex , "-" , Hex , Hex , Hex ,
+  Hex , "-" , Hex , Hex , Hex , Hex , "-" , Hex , Hex ,
+  Hex , Hex , Hex , Hex , Hex , Hex , Hex , Hex , Hex , Hex ;
 
 ArrayName = Identifier ;
 
@@ -56,12 +68,8 @@ BufCacheSize = Number ;
 NumSharedBuffers = Number ;
 
 RaidType = 
-  [ "RAID5"
-  | "raid5"
-  | "RAID0"
-  | "raid0"
-  | "RAID10"
-  | "raid10"
+  [ "RAID5"  | "raid5"  | "RAID0" | "raid0"
+  | "RAID10" | "raid10" | "RAID6" | "raid6"
   ] ;
 
 SubsystemNQN = Letter , { Letter | Digit | "-" | "_" } ;
@@ -76,23 +84,49 @@ IOPS = Number ;
 
 Bandwidth = Number , "MB/s" ;
 
+IpFlag = "ip" ;
+
+PortFlag = "port" ;
+
+DebugFlag = "debug" ;
+
+JsonReqFlag = "json-req" ;
+
+JsonResFlag = "json-res" ;
+
+UnitFlag = "unit" ;
+
+FieldSeparatorFlag = "fs" ;
+
+GlobalFlag
+  = IpFlag             | PortFlag
+  | DebugFlag          | JsonReqFlag
+  | JsonResFlag        | UnitFlag
+  | FieldSeparatorFlag
+  ;
+
+GlobalFlagList = GlobalFlag , { GlobalFlag | GlobalFlag } ;
+
 ApplicationName = "poseidonos-cli" ;
 
-Cmd = ApplicationName ,
-  ( ArrayCmd  | VolumeCmd    | DeviceCmd
-  | SystemCmd | LoggerCmd    | SubsystemCmd
-  | QosCmd    | TelemetryCmd | DevelCmd
+Cmd = ApplicationName , GlobalFlagList ,
+  ( ArrayCmd   | VolumeCmd    | DeviceCmd
+  | SystemCmd  | LoggerCmd    | SubsystemCmd
+  | QosCmd     | TelemetryCmd | DevelCmd
+  | ClusterCmd
   ) ;
 
 ArrayCmd = "array" ,
-  ( MountArrayCmd  | UnmountArrayCmd
-  | ListArrayCmd   | AddSpareCmd
-  | RemoveSpareCmd | DeleteArrayCmd
-  | CreateArrayCmd | AutoCreateArrayCmd
+  ( MountArrayCmd         | UnmountArrayCmd
+  | ListArrayCmd          | AddSpareCmd
+  | RemoveSpareCmd        | DeleteArrayCmd
+  | CreateArrayCmd        | AutoCreateArrayCmd
+  | ReplaceArrayDeviceCmd | RebuildArrayCmd
   ) ;
 
 MountArrayCmd = "mount" , ( "--array-name" | "-a" ) ,
-  ArrayName [ ("--enable-write-through" | "-w" ) ];
+  ArrayName , [ ( "--enable-write-through" | "-w" ) ] ,
+  [ ( "--traddr" | "-i" ) , TargetAddress ] ;
 
 UnmountArrayCmd = "unmount" , ( "--array-name" | "-a" ) ,
   ArrayName , [ "--force" ] ;
@@ -106,6 +140,9 @@ AddSpareCmd = "addspare" , ( "--spare" | "-s" ) ,
 RemoveSpareCmd = "rmspare" , ( "--spare" | "-s" ) ,
   DeviceName , ( "--array-name" | "-a" ) , ArrayName ,
   [ "--force" ] ;
+
+ReplaceArrayDeviceCmd = "replace" , ( "--data-device" | "-d" ) ,
+  DeviceName , ( "--array-name" | "-a" ) , ArrayName ;
 
 DeleteArrayCmd = "delete" , ( "--array-name" | "-a" ) ,
   ArrayName , [ "--force" ] ;
@@ -121,23 +158,27 @@ AutoCreateArrayCmd = "autocreate" , ( "--array-name" | "-a" ) ,
   ( "--num-data-devs" | "-d" ) , Number , [ ( "--num-spare" | "-s" ) , Number ] ,
   [ "--raid" , RaidType ] ;
 
+RebuildArrayCmd = "rebuild" , ( "--array-name" | "-a" ) ,
+  ArrayName ;
+
 VolumeCmd = "volume" ,
-  ( VolumeCreateCmd  | VolumeDeleteCmd
-  | VolumeMountCmd   | VolumeMountWithSubsystemCmd
-  | VolumeUnmountCmd | VolumeListCmd
-  | VolumeRenameCmd
+  ( CreateVolumeCmd  | DeleteVolumeCmd
+  | MountVolumeCmd   | MountVolumeWithSubsystemCmd
+  | UnmountVolumeCmd | ListVolumeCmd
+  | RenameVolumeCmd  | SetVolumePropertyCmd
   ) ;
 
-VolumeCreateCmd = "create" , ( "--volume-name" | "-v" ) ,
+CreateVolumeCmd = "create" , ( "--volume-name" | "-v" ) ,
   VolumeName , ( "--array-name" | "-a" ) , ArrayName ,
   "--size" , VolumeSize , [ "--maxiops" , IOPS ] ,
-  [ "--maxbw" , Bandwidth ] ;
+  [ "--maxbw" , Bandwidth ] , [ "--wal-volume" ] ,
+  [ "--uuid" , Uuid ] ;
 
-VolumeDeleteCmd = "delete" , ( "--volume-name" | "-v" ) ,
+DeleteVolumeCmd = "delete" , ( "--volume-name" | "-v" ) ,
   VolumeName , ( "--array-name" | "-a" ) , ArrayName ,
   [ "--force" ] ;
 
-VolumeMountCmd = "mount" , ( "--volume-name" | "-v" ) ,
+MountVolumeCmd = "mount" , ( "--volume-name" | "-v" ) ,
   VolumeName , ( "--array-name" | "-a" ) , ArrayName ,
   [ "--subnqn" , TargetNVMSubsystemNVMeQualifiedName ] ,
   [ ( "--trtype" | "-t" ) , TransportType ] ,
@@ -145,22 +186,27 @@ VolumeMountCmd = "mount" , ( "--volume-name" | "-v" ) ,
   [ ( "--trsvcid" | "-p" ) , TransportServiceId ] ,
   [ "--force" ] ;
 
-VolumeMountWithSubsystemCmd = "mount" , ( "--volume-name" | "-v" ) ,
+MountVolumeWithSubsystemCmd = "mount" , ( "--volume-name" | "-v" ) ,
   VolumeName , ( "--subnqn" | "-q" ) , SubsystemNQN ,
   ( "--array-name" | "-a" ) , ArrayName , ( "--trtype" | "-t" ) ,
   TransportType , ( "--traddr" | "-i" ) , TargetAddress ,
   ( "--trsvcid" | "-p" ) , TransportServiceId ;
 
-VolumeUnmountCmd = "unmount" , ( "--volume-name" | "-v" ) ,
+UnmountVolumeCmd = "unmount" , ( "--volume-name" | "-v" ) ,
   VolumeName , ( "--array-name" | "-a" ) , ArrayName ,
   [ "--force" ] ;
 
-VolumeListCmd = "list" , ( "--array-name" | "-a" ) ,
+ListVolumeCmd = "list" , ( "--array-name" | "-a" ) ,
   ArrayName , [ ( "--volume-name" | "-v" ) , VolumeName ] ;
 
-VolumeRenameCmd = "rename" , ( "--volume-name" | "-v" ) ,
+RenameVolumeCmd = "rename" , ( "--volume-name" | "-v" ) ,
   VolumeName , ( "--new-volume-name" | "-n" ) ,
   VolumeName , ( "--array-name" | "-a" ) , ArrayName ;
+
+SetVolumePropertyCmd = "set-property" , ( "--volume-name" | "-v" ) ,
+  VolumeName , ( "--array-name" | "-a" ) , ArrayName ,
+  ( "--new-volume-name" | "-n" ) , VolumeName ,
+  [ ( "--primary-volume" ) ] , [ ( "--secondary-volume" ) ] ;
 
 DeviceCmd = "device" ,
   ( CreateDeviceCmd
@@ -275,11 +321,23 @@ CreateTransportCmd = "create-transport" ,
   ( "--trtype" | "-t" ) , TransportType , [ ( "--buf-cache-size" | "-c" ) ,
   BufCacheSize ] , [ "--num-shared-buf" , NumSharedBuffers ] ;
 
-TelemetryCmd = "telemetry" , ( TelemetryStartCmd | TelemetryStopCmd ) ;
+TelemetryCmd = "telemetry" ,
+  ( TelemetryStartCmd
+  | TelemetryStopCmd
+  | TelemetrySetPropertyCmd
+  | TelemetryGetPropertyCmd
+  ) ;
 
 TelemetryStartCmd = TelemetryCmd , ( "start" ) ;
 
 TelemetryStopCmd = TelemetryCmd , ( "stop" ) ;
+
+TelemetrySetPropertyCmd = TelemetryCmd ,
+  ( "set-property" ) , [ "--publication-list-path" ] ,
+  Identifier ;
+
+TelemetryGetPropertyCmd = TelemetryCmd ,
+  ( "get-property" ) ;
 
 DevelCmd = "devel" ,
   ( ResetMbrCmd
@@ -301,3 +359,18 @@ UpdateEventWrrCmd = "update-event-wrr" , "--name" ,
   ) , "--weight" , ( "1" | "2" | "3" ) ;
 
 ResetEventWrrCmd = "reset-event-wrr" ;
+
+ClusterCmd = "cluster" ,
+  ( ListNodeCmd
+  | ListHaVolumeCmd
+  | ListHaReplicationCmd
+  | StartHaReplicationCmd
+  ) ;
+
+ListNodeCmd = "ln" ;
+
+ListHaVolumeCmd = "lv" ;
+
+ListHaReplicationCmd = "lr" ;
+
+StartHaReplicationCmd = "start-rep" ;

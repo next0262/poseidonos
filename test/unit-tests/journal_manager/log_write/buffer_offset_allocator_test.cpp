@@ -50,7 +50,7 @@ AllocateBuffer(BufferOffsetAllocator* allocator, uint64_t totalSizeToAllocate)
                 MapList dirty; // garbage data
                 allocator->LogFilled(allocator->GetLogGroupId(allocatedOffset), dirty);
             }
-            else if (allocationResult == (int)POS_EVENT_ID::JOURNAL_NO_LOG_BUFFER_AVAILABLE)
+            else if (allocationResult == EID(JOURNAL_NO_LOG_BUFFER_AVAILABLE))
             {
                 break;
             }
@@ -169,10 +169,11 @@ TEST(BufferOffsetAllocator, LogWriteCanceled_testWithAllocatedBuffer)
 
     // When, Then
     int targetLogGroup = 1;
+    struct LogGroupInfo expectLogGroupInfo = {targetLogGroup, 0};
 
     EXPECT_CALL((*(MockLogGroupBufferStatus*)statusList[targetLogGroup]), LogFilled);
     EXPECT_CALL((*(MockLogGroupBufferStatus*)statusList[targetLogGroup]), TryToSetFull).WillOnce(Return(true));
-    EXPECT_CALL(releaser, AddToFullLogGroup(targetLogGroup));
+    EXPECT_CALL(releaser, AddToFullLogGroup(expectLogGroupInfo));
     allocator.LogWriteCanceled(targetLogGroup);
 
     DeleteMockLogGroupBufferStatus(allocator, statusList);

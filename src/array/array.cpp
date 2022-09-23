@@ -33,6 +33,7 @@
 #include "array.h"
 
 #include <string>
+#include <sstream>
 
 #include "src/array/array_name_policy.h"
 #include "src/array/interface/i_abr_control.h"
@@ -46,6 +47,7 @@
 #include "src/logger/logger.h"
 #include "src/master_context/unique_id_generator.h"
 #include "src/io_scheduler/io_dispatcher.h"
+#include "src/master_context/config_manager.h"
 
 namespace pos
 {
@@ -77,6 +79,7 @@ Array::Array(string name, IArrayRebuilder* rbdr, IAbrControl* abr,
 
 Array::~Array(void)
 {
+    delete publisher;
     delete svc;
     delete ptnMgr;
     delete state;
@@ -103,7 +106,7 @@ Array::Load(void)
     }
     else
     {
-        POS_TRACE_INFO(EID(LOAD_ARRAY_DEBUG_MSG), "Array({}) loaded successfully", name_);
+        POS_TRACE_TRACE(EID(POS_TRACE_ARRAY_LOADED), "{}", Serialize());
     }
     return ret;
 }
@@ -139,8 +142,8 @@ Array::_LoadImpl(void)
         return ret;
     }
 
+    publisher = new ArrayMetricsPublisher(this, state);
     RaidState rs = ptnMgr->GetRaidState();
-    state->EnableStatePublisher(uniqueId);
     state->SetLoad(rs);
     return ret;
 }
@@ -157,8 +160,7 @@ Array::Create(DeviceSet<string> nameSet, string metaFt, string dataFt)
         metaRaidType == RaidTypeEnum::NOT_SUPPORTED)
     {
         int ret = EID(CREATE_ARRAY_NOT_SUPPORTED_RAIDTYPE);
-        POS_TRACE_WARN(ret, "metaFt: {}, dataFt: {}",
-            metaRaidType.ToString(), dataRaidType.ToString());
+        POS_TRACE_WARN(ret, "metaFt: {}, dataFt: {}", metaFt, dataFt);
         return ret;
     }
     bool canAddSpare = dataRaidType != RaidTypeEnum::NONE &&
@@ -189,8 +191,6 @@ Array::Create(DeviceSet<string> nameSet, string metaFt, string dataFt)
     }
 
     uniqueId = uIdGen.GenerateUniqueId();
-    state->EnableStatePublisher(uniqueId);
-
     meta.arrayName = name_;
     meta.devs = devMgr_->ExportToMeta();
     meta.metaRaidType = metaFt;
@@ -219,18 +219,18 @@ Array::Create(DeviceSet<string> nameSet, string metaFt, string dataFt)
         abrControl->DeleteAbr(name_);
         goto error;
     }
-
     ptnMgr->FormatPartition(PartitionType::META_SSD, index_, IODispatcherSingleton::Instance());
 
+    publisher = new ArrayMetricsPublisher(this, state);
     state->SetCreate();
     pthread_rwlock_unlock(&stateLock);
-    POS_TRACE_INFO(EID(CREATE_ARRAY_DEBUG_MSG), "Array({}) is created successfully", name_);
+    POS_TRACE_TRACE(EID(POS_TRACE_ARRAY_CREATED), "{}", Serialize());
     return 0;
 
 error:
     devMgr_->Clear();
     pthread_rwlock_unlock(&stateLock);
-    POS_TRACE_ERROR(ret, "Unable to create array({})", name_);
+    POS_TRACE_TRACE(ret, "Unable to create array({})", name_);
     return ret;
 }
 
@@ -273,7 +273,7 @@ Array::Dispose(void)
     _UnregisterService();
     state->SetUnmount();
     isWTEnabled = false;
-    POS_TRACE_INFO(EID(UNMOUNT_ARRAY_DEBUG_MSG), "Array({}) is unmounted successfully", name_);
+    POS_TRACE_TRACE(EID(POS_TRACE_ARRAY_UNMOUNTED), "array_name:{}", name_);
     // pthread_rwlock_unlock(&stateLock);
 }
 
@@ -284,7 +284,7 @@ Array::Shutdown(void)
     _UnregisterService();
     state->SetShutdown();
     isWTEnabled = false;
-    POS_TRACE_INFO(EID(UNMOUNT_BROKEN_ARRAY_DEBUG_MSG), "Broken array({}) shuts down successfully", name_);
+    POS_TRACE_TRACE(EID(POS_TRACE_ARRAY_SHUTDOWN), "array_name:{}", name_);
 }
 
 void
@@ -331,7 +331,7 @@ Array::Delete(void)
     state->SetDelete();
 
     pthread_rwlock_unlock(&stateLock);
-    POS_TRACE_INFO(EID(DELETE_ARRAY_DEBUG_MSG), "Array({}) is deleted successfully", name_);
+    POS_TRACE_TRACE(EID(POS_TRACE_ARRAY_DELETED), "array_name:{}", name_);
     return 0;
 
 error:
@@ -346,8 +346,7 @@ Array::AddSpare(string devName)
     pthread_rwlock_rdlock(&stateLock);
     string raidType = GetDataRaidType();
     int ret = 0;
-    bool needSpare = RaidType(raidType) != RaidTypeEnum::NONE && RaidType(raidType) != RaidTypeEnum::RAID0;
-    if (needSpare == false)
+    if (_CanAddSpare() == false)
     {
         ret = EID(ADD_SPARE_RAID_DOES_NOT_SUPPORT_SPARE_DEV);
         POS_TRACE_WARN(ret, "arrayName:{}, RaidType:{}", name_, raidType);
@@ -367,9 +366,9 @@ Array::AddSpare(string devName)
     if (dev == nullptr)
     {
         pthread_rwlock_unlock(&stateLock);
-        int eid = EID(ADD_SPARE_SSD_NAME_NOT_FOUND);
-        POS_TRACE_WARN(eid, "devName: {}", devName);
-        return eid;
+        ret = EID(ADD_SPARE_SSD_NAME_NOT_FOUND);
+        POS_TRACE_WARN(ret, "devName: {}", devName);
+        return ret;
     }
 
     string spareSN = dev->GetSN();
@@ -377,8 +376,8 @@ Array::AddSpare(string devName)
     if (involvedArray != "")
     {
         pthread_rwlock_unlock(&stateLock);
-        ret = EID(MBR_DEVICE_ALREADY_IN_ARRAY);
-        POS_TRACE_ERROR(ret, "Unable to add spare device to array({}), it's already in other array({})", name_, involvedArray);
+        ret = EID(ADD_SPARE_DEVICE_ALREADY_OCCUPIED);
+        POS_TRACE_WARN(ret, "dev_name:{}, occupier:{}", devName, involvedArray);
         return ret;
     }
 
@@ -386,7 +385,7 @@ Array::AddSpare(string devName)
     if (0 != ret)
     {
         pthread_rwlock_unlock(&stateLock);
-        POS_TRACE_ERROR(ret, "Unable to add spare device to array({})", name_);
+        POS_TRACE_WARN(ret, "Unable to add spare device to array({})", name_);
         return ret;
     }
     ret = _Flush();
@@ -397,13 +396,16 @@ Array::AddSpare(string devName)
         return ret;
     }
 
-    if (state->IsRebuildable())
+    vector<IArrayDevice*> targets = devMgr_->GetFaulty();
+    if (targets.size() > 0 && state->IsRebuildable())
     {
-        EventSmartPtr event(new RebuildHandler(this, nullptr));
-        eventScheduler->EnqueueEvent(event);
+        POS_TRACE_INFO(EID(INVOKE_REBUILD_DUE_TO_SPARE_ADDED), "array_name:{}, targetCnt:{}",
+            name_, targets.size());
+        bool isResume = false;
+        InvokeRebuild(targets, isResume);
     }
     pthread_rwlock_unlock(&stateLock);
-    POS_TRACE_INFO(EID(ADD_SPARE_DEBUG_MSG), "Spare device was successfully added to array({})", name_);
+    POS_TRACE_INFO(EID(ADD_SPARE_DEBUG_MSG), "Spare device {} was successfully added to array({})", devName, name_);
 
     return 0;
 }
@@ -431,7 +433,7 @@ Array::RemoveSpare(string devName)
 
     pthread_rwlock_unlock(&stateLock);
 
-    POS_TRACE_INFO(EID(REMOVE_SPARE_DEBUG_MSG),
+    POS_TRACE_INFO(EID(REMOVE_DEV_DEBUG_MSG),
         "The spare device {} removed from array({})", devName, name_);
     return 0;
 
@@ -439,6 +441,129 @@ error:
     pthread_rwlock_unlock(&stateLock);
     POS_TRACE_ERROR(ret, "Unable to remove spare device {} from array({})", devName, name_);
     return ret;
+}
+
+int
+Array::ReplaceDevice(string devName)
+{
+    pthread_rwlock_wrlock(&stateLock);
+    ArrayDeviceType devType = ArrayDeviceType::NONE;
+    ArrayDevice* target = nullptr;
+    tie(target, devType) = devMgr_->GetDevByName(devName);
+    POS_TRACE_INFO(EID(REPLACE_DEV_DEBUG_MSG), "trying to replace device from array, dev_name:{}, dev_type:{} array_name:{}", devName, devType, name_);
+    int ret = 0;
+    if (devType == ArrayDeviceType::DATA && target != nullptr)
+    {
+        ret = state->CanReplaceData();
+        if (ret == 0)
+        {
+            if (target->GetState() == ArrayDeviceState::NORMAL)
+            {
+                if (_CanAddSpare() == false)
+                {
+                    ret = EID(REPLACE_DEV_UNSUPPORTED_RAID_TYPE);
+                    POS_TRACE_WARN(ret, "meta_raid:{}, data_raid:{}", GetMetaRaidType(), GetDataRaidType());
+                }
+                else
+                {
+                    vector<ArrayDevice*> spares = devMgr_->GetAvailableSpareDevices();
+                    if (spares.size() == 0)
+                    {
+                        ret = EID(REPLACE_DEV_NO_AVAILABLE_SPARE);
+                        POS_TRACE_WARN(ret, "");
+                    }
+                    else
+                    {
+                        target->SetState(ArrayDeviceState::REBUILD);
+                        RaidState rs = ptnMgr->GetRaidState();
+                        state->RaidStateUpdated(rs);
+                        if (state->SetRebuild() == false)
+                        {
+                            // a rebuild state must be obtained.
+                            assert(false);
+                        }
+                        ArrayDevice* swapOut = nullptr;
+                        ret = devMgr_->ReplaceWithSpare(target, swapOut);
+                        if (ret != 0)
+                        {
+                            // rollback tasks performed.
+                            state->SetRebuildDone(false);
+                            target->SetState(ArrayDeviceState::NORMAL);
+                            RaidState rs = ptnMgr->GetRaidState();
+                            state->RaidStateUpdated(rs);
+                        }
+                        else
+                        {
+                            _Flush();
+                            POS_TRACE_TRACE(EID(REPLACE_DEV_DEBUG_MSG),
+                                "device {} is replaced to {} successfully, array:{}", devName, target->GetName(), name_);
+                            DoRebuildAsync(vector<IArrayDevice*>{target}, vector<IArrayDevice*>{swapOut}, RebuildTypeEnum::QUICK);
+                        }
+                    }
+                }
+            }
+            else
+            {
+                ret = EID(REPLACE_DEV_ONLY_NORMAL_DEV_CAN_BE_REMOVED);
+                POS_TRACE_WARN(ret, "dev_status:{} (0-NORMAL, 1-FAULT, 2-REBUILD)", target->GetState());
+            }
+        }
+    }
+    else
+    {
+        ret = EID(REPLACE_DEV_SSD_NAME_NOT_FOUND);
+        POS_TRACE_WARN(ret, "devName:{}", devName);
+    }
+    pthread_rwlock_unlock(&stateLock);
+    return ret;
+}
+
+int
+Array::Rebuild(void)
+{
+    pthread_rwlock_rdlock(&stateLock);
+    int eid = 0;
+
+    if (devMgr_->GetSpareDevices().size() == 0)
+    {
+        eid = EID(REBUILD_ARRAY_SPARE_DOES_NOT_EXIST);
+        pthread_rwlock_unlock(&stateLock);
+        return eid;
+    }
+    if (_CanAddSpare() == false)
+    {
+        eid = EID(REBUILD_ARRAY_RAID_NOT_SUPPORTED);
+        pthread_rwlock_unlock(&stateLock);
+        return eid;
+    }
+    if (rebuilder->IsRebuilding(name_) == true)
+    {
+        eid = EID(REBUILD_ARRAY_ALREADY_IN_PROGRESS);
+        pthread_rwlock_unlock(&stateLock);
+        return eid;
+    }
+    if (state->IsMountable() == true)
+    {
+        eid = EID(REBUILD_ARRAY_OFFLINED);
+        pthread_rwlock_unlock(&stateLock);
+        return eid;
+    }
+    if (state->IsRebuildable() == false) 
+    {
+        eid = EID(REBUILD_ARRAY_IS_NORMAL);
+        pthread_rwlock_unlock(&stateLock);
+        return eid;
+    }
+
+    vector<IArrayDevice*> targets = devMgr_->GetFaulty();
+    assert (targets.size() != 0);
+    bool isResume = false;
+    bool forceRebuild = true;
+    POS_TRACE_INFO(EID(INVOKE_REBUILD_DUE_TO_USER_REQUEST), "array_name:{}, targetCnt:{}",
+        name_, targets.size());
+    InvokeRebuild(targets, isResume, forceRebuild);
+    pthread_rwlock_unlock(&stateLock);
+    return 0;
 }
 
 const PartitionLogicalSize*
@@ -564,28 +689,34 @@ Array::_DeletePartitions(void)
     ptnMgr->DeletePartitions();
 }
 
-bool
+int
 Array::IsRecoverable(IArrayDevice* target, UBlockDevice* uBlock)
 {
-    pthread_rwlock_wrlock(&stateLock);
+    if (pthread_rwlock_trywrlock(&stateLock) != 0)
+    {
+        return static_cast<int>(IoRecoveryRetType::RETRY);
+    }
     if (state->IsBroken() || !state->IsMounted())
     {
         pthread_rwlock_unlock(&stateLock);
-        return false;
+        return static_cast<int>(IoRecoveryRetType::FAIL);
     }
 
     if (uBlock == nullptr                       // Translate / Covnert fail
         || target->GetUblock().get() != uBlock) // Detached device after address translation
     {
         pthread_rwlock_unlock(&stateLock);
-        return true;
+        return static_cast<int>(IoRecoveryRetType::SUCCESS);
     }
 
     _DetachData(static_cast<ArrayDevice*>(target));
     bool ret = state->IsRecoverable();
     pthread_rwlock_unlock(&stateLock);
-
-    return ret;
+    if (ret == true)
+    {
+        return static_cast<int>(IoRecoveryRetType::SUCCESS);
+    }
+    return static_cast<int>(IoRecoveryRetType::FAIL);
 }
 
 IArrayDevice*
@@ -593,7 +724,7 @@ Array::FindDevice(string devSn)
 {
     ArrayDeviceType devType = ArrayDeviceType::NONE;
     ArrayDevice* dev = nullptr;
-    tie(dev, devType) = devMgr_->GetDev(devSn);
+    tie(dev, devType) = devMgr_->GetDevBySn(devSn);
     return dev;
 }
 
@@ -659,12 +790,41 @@ void
 Array::SetPreferences(bool isWT)
 {
     isWTEnabled = isWT;
+    if (isWTEnabled == true)
+    {
+        POS_TRACE_INFO(EID(MOUNT_ARRAY_DEBUG_MSG), "WT of Array {} is enabled",
+            name_);
+    }
+    else
+    {
+        POS_TRACE_INFO(EID(MOUNT_ARRAY_DEBUG_MSG), "WT of Array {} is disabled",
+            name_);
+    }
 }
 
 void
 Array::MountDone(void)
 {
-    _CheckRebuildNecessity();
+    POS_TRACE_TRACE(EID(POS_TRACE_ARRAY_MOUNTED), "{}", Serialize());
+    vector<IArrayDevice*> suspendedTargets = devMgr_->GetRebuilding();
+    if (suspendedTargets.size() > 0 && state->IsRebuildable())
+    {
+        POS_TRACE_INFO(EID(INVOKE_RESUME_REBUILD), "array_name:{}, targetCnt:{}",
+            name_, suspendedTargets.size());
+        bool isResume = true;
+        InvokeRebuild(suspendedTargets, isResume);
+    }
+    else
+    {
+        vector<IArrayDevice*> targets = devMgr_->GetFaulty();
+        if (targets.size() > 0 && state->IsRebuildable())
+        {
+            POS_TRACE_INFO(EID(INVOKE_REBUILD_DUE_TO_ARRAY_MOUNTED), "array_name:{}, targetCnt:{}",
+                name_, targets.size());
+            bool isResume = false;
+            InvokeRebuild(targets, isResume);
+        }
+    }
     int ret = _Flush();
     assert(ret == 0);
 }
@@ -675,30 +835,120 @@ Array::CheckUnmountable(void)
     return state->IsUnmountable();
 }
 
-void
-Array::_CheckRebuildNecessity(void)
+string
+Array::Serialize(void)
 {
-    ArrayDevice* rebuildDevice = devMgr_->GetRebuilding();
-    if (rebuildDevice != nullptr)
+    vector<string> arrayinfo;
+    arrayinfo.push_back("name:" + name_);
+    arrayinfo.push_back("index:" + to_string(index_));
+    arrayinfo.push_back("uuid:" + to_string(uniqueId));
+    arrayinfo.push_back("raidtype_meta:" + GetMetaRaidType());
+    arrayinfo.push_back("raidtype_data:" + GetDataRaidType());
+    arrayinfo.push_back("date_created:" + GetCreateDatetime());
+    StateContext* stateCtx = GetStateCtx();
+    if (stateCtx != nullptr)
     {
-        string devName = "no device";
-        if (rebuildDevice->GetUblock() != nullptr)
+        arrayinfo.push_back("state:" + stateCtx->ToStateType().ToString());
+        arrayinfo.push_back("situation:" + stateCtx->GetSituation().ToString());
+    }
+    string wt = IsWriteThroughEnabled() == true ? "true" : "false";
+    arrayinfo.push_back("wt_enabled:" + wt);
+    DeviceSet<string> nameSet = GetDevNames();
+    {
+        string devs = "buffer_devs:";
+        int cnt = 0;
+        for (string name : nameSet.nvm)
         {
-            devName = rebuildDevice->GetUblock()->GetSN();
-            POS_TRACE_DEBUG(EID(REBUILD_ARRAY_DEBUG_MSG), "Resume Rebuild with rebuildDevice {}", devName);
-            EventSmartPtr event(new RebuildHandler(this, rebuildDevice));
-            eventScheduler->EnqueueEvent(event);
+            if (cnt != 0)
+            {
+                devs += ",";
+            }
+            devs += name;
+            cnt++;
         }
-        else
+        arrayinfo.push_back(devs);
+    }
+    {
+        string devs = "data_devs:";
+        int cnt = 0;
+        for (string name : nameSet.data)
         {
-            POS_TRACE_ERROR(EID(REBUILD_ARRAY_DEBUG_MSG), "Resume Rebuild without rebuildDevice");
+            if (cnt != 0)
+            {
+                devs += ",";
+            }
+            devs += name;
+            cnt++;
+        }
+        arrayinfo.push_back(devs);
+    }
+    {
+        string devs = "spare_devs:";
+        int cnt = 0;
+        for (string name : nameSet.spares)
+        {
+            if (cnt != 0)
+            {
+                devs += ",";
+            }
+            devs += name;
+            cnt++;
+        }
+        arrayinfo.push_back(devs);
+    }
+    {
+        const PartitionLogicalSize* lSize = GetSizeInfo(PartitionType::JOURNAL_SSD);
+        if (lSize != nullptr)
+        {
+            arrayinfo.push_back("part_journal_ssd_segments:" + to_string(lSize->totalSegments));
+        }
+        const PartitionPhysicalSize* pSize = ptnMgr->GetPhysicalSize(PartitionType::JOURNAL_SSD);
+        if (pSize != nullptr)
+        {
+            arrayinfo.push_back("part_journal_ssd_start_lba:" + to_string(pSize->startLba));
+            arrayinfo.push_back("part_journal_ssd_last_lba:" + to_string(pSize->lastLba));
         }
     }
-    else
     {
-        EventSmartPtr event(new RebuildHandler(this, nullptr));
-        eventScheduler->EnqueueEvent(event);
+        const PartitionLogicalSize* lSize = GetSizeInfo(PartitionType::META_SSD);
+        if (lSize != nullptr)
+        {
+            arrayinfo.push_back("part_meta_ssd_segments:" + to_string(lSize->totalSegments));
+        }
+        const PartitionPhysicalSize* pSize = ptnMgr->GetPhysicalSize(PartitionType::META_SSD);
+        if (pSize != nullptr)
+        {
+            arrayinfo.push_back("part_meta_ssd_start_lba:" + to_string(pSize->startLba));
+            arrayinfo.push_back("part_meta_ssd_last_lba:" + to_string(pSize->lastLba));
+        }
     }
+    {
+        const PartitionLogicalSize* lSize = GetSizeInfo(PartitionType::USER_DATA);
+        if (lSize != nullptr)
+        {
+            arrayinfo.push_back("part_user_data_segments:" + to_string(lSize->totalSegments));
+        }
+        const PartitionPhysicalSize* pSize = ptnMgr->GetPhysicalSize(PartitionType::USER_DATA);
+        if (pSize != nullptr)
+        {
+            arrayinfo.push_back("part_user_data_start_lba:" + to_string(pSize->startLba));
+            arrayinfo.push_back("part_user_data_last_lba:" + to_string(pSize->lastLba));
+        }
+    }
+
+    stringstream ss;
+    for (string str : arrayinfo)
+    {
+        ss << str << ", ";
+    }
+    return ss.str();
+}
+
+bool
+Array::_CanAddSpare(void)
+{
+    RaidType raidType = RaidType(GetDataRaidType());
+    return raidType != RaidTypeEnum::NONE && raidType != RaidTypeEnum::RAID0;
 }
 
 void
@@ -717,7 +967,6 @@ Array::_DetachSpare(ArrayDevice* target)
     }
 
     sysDevMgr->RemoveDevice(uBlock);
-    delete (target);
     if (state->IsMounted())
     {
         ret = _Flush();
@@ -740,10 +989,13 @@ Array::_DetachData(ArrayDevice* target)
         return;
     }
 
-    bool needStopRebuild = target->GetState() == ArrayDeviceState::REBUILD;
+    bool needStopRebuild = target->GetState() == ArrayDeviceState::REBUILD && state->IsRebuilding() == true;
     target->SetState(ArrayDeviceState::FAULT);
     RaidState rs = ptnMgr->GetRaidState();
-    state->RaidStateUpdated(rs);
+    if (rs == RaidState::FAILURE || state->IsRebuilding() == false)
+    {
+        state->RaidStateUpdated(rs);
+    }
     sysDevMgr->RemoveDevice(target->GetUblock());
     target->SetUblock(nullptr);
 
@@ -758,31 +1010,44 @@ Array::_DetachData(ArrayDevice* target)
 
     if (needStopRebuild)
     {
-        POS_TRACE_INFO(EID(ARRAY_EVENT_DATA_SSD_DETACHED),
+        POS_TRACE_WARN(EID(ARRAY_EVENT_DATA_SSD_DETACHED),
             "Stop the rebuild due to detachment of the rebuild target device or Array broken");
         rebuilder->StopRebuild(name_);
     }
     else if (state->IsRebuildable())
     {
-        EventSmartPtr event(new RebuildHandler(this, target));
-        eventScheduler->EnqueueEvent(event);
+        vector<IArrayDevice*> targets {target};
+        POS_TRACE_INFO(EID(INVOKE_REBUILD_DUE_TO_DEVICE_DETACHED), "array_name:{}, targetCnt:{}",
+            name_, targets.size());
+        bool isResume = false;
+        InvokeRebuild(targets, isResume);
     }
 }
 
 void
-Array::_RebuildDone(RebuildResult result)
+Array::_RebuildDone(vector<IArrayDevice*> dsts, vector<IArrayDevice*> srcs, RebuildResult result)
 {
-    POS_TRACE_DEBUG(EID(REBUILD_ARRAY_DEBUG_MSG),
-        "Array({}) rebuild done. result:{} (2-PASS, 3-CANCELLED, 4-FAIL)", name_, result.result);
+    POS_TRACE_INFO(EID(REBUILD_DONE),
+        "array_name:{}, result:{}", name_, REBUILD_STATE_STR[(int)result.result]);
     rebuilder->RebuildDone(result);
     pthread_rwlock_wrlock(&stateLock);
-    if (result.target->GetState() == ArrayDeviceState::REBUILD &&
-        result.result == RebuildState::PASS)
+    for (IArrayDevice* src : srcs)
     {
-        result.target->SetState(ArrayDeviceState::NORMAL);
+        // in case of the quick rebuild completed
+        UblockSharedPtr ublock = src->GetUblock();
+        if (ublock != nullptr)
+        {
+            ublock->SetClass(DeviceClass::SYSTEM);
+            src->SetUblock(nullptr);
+        }
+        delete src;
     }
     if (result.result == RebuildState::PASS)
     {
+        for (IArrayDevice* dst : dsts)
+        {
+            dst->SetState(ArrayDeviceState::NORMAL);
+        }
         int ret = _Flush();
         if (0 != ret)
         {
@@ -791,121 +1056,154 @@ Array::_RebuildDone(RebuildResult result)
     }
     RaidState rs = ptnMgr->GetRaidState();
     state->RaidStateUpdated(rs);
-    if (state->IsRebuildable())
+
+    vector<IArrayDevice*> targets = devMgr_->GetFaulty();
+    if (targets.size() > 0 && state->IsRebuildable())
     {
-        EventSmartPtr event(new RebuildHandler(this, nullptr));
-        eventScheduler->EnqueueEvent(event);
+        POS_TRACE_INFO(EID(INVOKE_REBUILD_AFTER_REBUILD_DONE), "array_name:{}, targetCnt:{}",
+            name_, targets.size());
+        bool isResume = false;
+        InvokeRebuild(targets, isResume);
     }
     pthread_rwlock_unlock(&stateLock);
 }
 
-bool
-Array::TriggerRebuild(ArrayDevice* target)
+void
+Array::InvokeRebuild(vector<IArrayDevice*> targets, bool isResume, bool force)
 {
-    POS_TRACE_DEBUG(EID(REBUILD_ARRAY_DEBUG_MSG), "Trigger Rebuild Start");
+    if (force == false)
+    {
+        bool isAutoRebuild = true;
+        ConfigManagerSingleton::Instance()->GetValue("rebuild", "auto_start",
+            &isAutoRebuild, ConfigType::CONFIG_TYPE_BOOL);
+        if (isAutoRebuild == false)
+        {
+            POS_TRACE_WARN(EID(RECOMMEND_PERFORM_REBUILD), "array_name:{}", name_);
+            return;
+        }
+    }
+    EventSmartPtr event(new RebuildHandler(this, targets, isResume));
+    eventScheduler->EnqueueEvent(event);
+}
+
+bool
+Array::TriggerRebuild(vector<IArrayDevice*> targets)
+{
+    POS_TRACE_DEBUG(EID(TRIGGER_REBUILD_DEBUG), "Trigger rebuild invoked, targetCnt:{}", targets.size());
     bool retry = false;
 
     pthread_rwlock_wrlock(&stateLock);
-    if (target == nullptr)
+    
+    for (auto target : targets)
     {
-        target = devMgr_->GetFaulty();
-        if (target == nullptr)
+        if (target->GetState() != ArrayDeviceState::FAULT || target->GetUblock() != nullptr)
         {
+            POS_TRACE_DEBUG(EID(TRIGGER_REBUILD_DEBUG),
+                "Rebuild target device is not removed yet");
             pthread_rwlock_unlock(&stateLock);
+            retry = true;
             return retry;
         }
-    }
-    if (target->GetState() != ArrayDeviceState::FAULT || target->GetUblock() != nullptr)
-    {
-        POS_TRACE_DEBUG(POS_EVENT_ID::REBUILD_DEBUG_MSG,
-            "Rebuild target device is not removed yet");
-        pthread_rwlock_unlock(&stateLock);
-        retry = true;
-        return retry;
     }
 
     if (state->SetRebuild() == false)
     {
-        POS_TRACE_WARN(POS_EVENT_ID::REBUILD_TRIGGER_FAIL,
+        POS_TRACE_WARN(EID(TRIGGER_REBUILD_DEBUG),
             "Failed to trigger rebuild. Current array state is not rebuildable");
         pthread_rwlock_unlock(&stateLock);
         return retry;
     }
-    // Degraded
-    // System State Invoke Rebuilding
-    int ret = devMgr_->ReplaceWithSpare(target);
-    if (ret != 0)
+
+    for (auto it = targets.begin(); it != targets.end(); )
+    {
+        ArrayDevice* src = nullptr;
+        int ret = devMgr_->ReplaceWithSpare(dynamic_cast<ArrayDevice*>(*it), src);
+        if (ret == 0)
+        {
+            delete src;
+            (*it)->SetState(ArrayDeviceState::REBUILD);
+            ++it;
+        }
+        else
+        {
+            targets.erase(it);
+        }
+    }
+
+    if (targets.size() == 0)
     {
         state->SetRebuildDone(false);
         state->SetDegraded();
-        POS_TRACE_WARN(POS_EVENT_ID::REBUILD_TRIGGER_FAIL,
+        POS_TRACE_WARN(EID(TRIGGER_REBUILD_DEBUG),
             "Failed to trigger rebuild. spare device is not available");
         pthread_rwlock_unlock(&stateLock);
         return retry;
     }
 
-    target->SetState(ArrayDeviceState::REBUILD);
-    ret = _Flush();
-    if (0 != ret)
+    _Flush();
+    pthread_rwlock_unlock(&stateLock);
+
+    DoRebuildAsync(targets, vector<IArrayDevice*>(), RebuildTypeEnum::BASIC);
+    return retry;
+}
+
+bool
+Array::ResumeRebuild(vector<IArrayDevice*> targets)
+{
+    POS_TRACE_DEBUG(EID(TRIGGER_REBUILD_DEBUG), "Resume rebuild invoked, targetCnt:{}", targets.size());
+    pthread_rwlock_wrlock(&stateLock);
+    bool retry = false;
+    if (state->SetRebuild() == false)
     {
-        POS_TRACE_WARN(POS_EVENT_ID::REBUILD_TRIGGER_FAIL,
-            "Failed to trigger rebuild. Flush failed.");
+        POS_TRACE_WARN(EID(TRIGGER_REBUILD_DEBUG),
+            "Failed to resume rebuild. Array({})'s state is not rebuildable", name_);
         pthread_rwlock_unlock(&stateLock);
         return retry;
     }
     pthread_rwlock_unlock(&stateLock);
 
-    POS_TRACE_DEBUG(EID(REBUILD_ARRAY_DEBUG_MSG), "Preparing Rebuild");
-    IArrayRebuilder* arrRebuilder = rebuilder;
-    string arrName = name_;
-    uint32_t arrId = index_;
-    RebuildComplete cb = std::bind(&Array::_RebuildDone, this, placeholders::_1);
-    list<RebuildTarget*> tasks = svc->GetRebuildTargets();
-    bool isWT = isWTEnabled;
-    thread t([arrRebuilder, arrName, arrId, target, cb, tasks, isWT]()
-    {
-        list<RebuildTarget*> targets = tasks;
-        arrRebuilder->Rebuild(arrName, arrId, target, cb, targets, isWT);
-    });
-
-    t.detach();
-    POS_TRACE_DEBUG(EID(REBUILD_ARRAY_DEBUG_MSG), "Trigger Rebuild End");
+    DoRebuildAsync(targets, vector<IArrayDevice*>(), RebuildTypeEnum::BASIC);
     return retry;
 }
 
-bool
-Array::ResumeRebuild(ArrayDevice* target)
+void
+Array::DoRebuildAsync(vector<IArrayDevice*> dst, vector<IArrayDevice*> src, RebuildTypeEnum rt)
 {
-    POS_TRACE_DEBUG(EID(REBUILD_ARRAY_DEBUG_MSG), "Resume Rebuild Start");
-
-    pthread_rwlock_wrlock(&stateLock);
-    assert(target != nullptr);
-
-    if (state->SetRebuild() == false)
-    {
-        POS_TRACE_WARN(POS_EVENT_ID::REBUILD_TRIGGER_FAIL,
-            "Failed to resume rebuild. Array({})'s state is not rebuildable", name_);
-        pthread_rwlock_unlock(&stateLock);
-        return false;
-    }
-
-    pthread_rwlock_unlock(&stateLock);
-
-    POS_TRACE_DEBUG(POS_EVENT_ID::REBUILD_ARRAY_DEBUG_MSG, "Preparing Rebuild");
     IArrayRebuilder* arrRebuilder = rebuilder;
     string arrName = name_;
     uint32_t arrId = index_;
-    RebuildComplete cb = std::bind(&Array::_RebuildDone, this, placeholders::_1);
+    RebuildComplete cb = bind(&Array::_RebuildDone, this, dst, src, placeholders::_1);
     list<RebuildTarget*> tasks = svc->GetRebuildTargets();
-    thread t([arrRebuilder, arrName, arrId, target, cb, tasks]()
-    {
-        list<RebuildTarget*> targets = tasks;
-        arrRebuilder->Rebuild(arrName, arrId, target, cb, targets);
-    });
 
-    t.detach();
-    POS_TRACE_DEBUG(EID(REBUILD_ARRAY_DEBUG_MSG), "Resume Rebuild End");
-    return true;
+    if (rt == RebuildTypeEnum::BASIC)
+    {
+        POS_TRACE_INFO(EID(REBUILD_REQUEST), "type:BASIC, dstCnt:{}, srcCnt:{}", dst.size(), src.size());
+        thread t([arrRebuilder, arrName, arrId, dst, cb, tasks]()
+        {
+            list<RebuildTarget*> targets = tasks;
+            arrRebuilder->Rebuild(arrName, arrId, dst, cb, targets);
+        });
+        t.detach();
+    }
+    else
+    {
+        POS_TRACE_INFO(EID(REBUILD_REQUEST), "type:QUICK, dstCnt:{}, srcCnt:{}", dst.size(), src.size());
+        vector<pair<IArrayDevice*, IArrayDevice*>> quickPair;
+        assert(dst.size() == src.size());
+        uint32_t idx = 0;
+        for (IArrayDevice* dev : dst)
+        {
+            quickPair.emplace_back(make_pair(src.at(idx), dev));
+            idx++;
+        }
+
+        thread t([arrRebuilder, arrName, arrId, quickPair, cb, tasks]()
+        {
+            list<RebuildTarget*> targets = tasks;
+            arrRebuilder->QuickRebuild(arrName, arrId, quickPair, cb, targets);
+        });
+        t.detach();
+    }
 }
 
 int
@@ -944,4 +1242,17 @@ Array::_UnregisterService(void)
         ArrayService::Instance()->Setter()->ExcludeDevicesFromLocker(devMgr_->GetDataDevices());
     }
 }
+
+void
+Array::SetTargetAddress(string targetAddress)
+{
+    this->targetAddress = targetAddress;
+}
+
+string
+Array::GetTargetAddress()
+{
+    return targetAddress;
+}
+
 } // namespace pos

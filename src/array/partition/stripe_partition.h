@@ -36,6 +36,7 @@
 #include <memory>
 #include <string>
 #include <vector>
+#include <utility>
 
 #include "partition.h"
 #include "src/array/rebuild/rebuild_target.h"
@@ -66,9 +67,15 @@ public:
     bool IsByteAccessSupported(void) override;
     RaidState GetRaidState(void) override;
     int GetRecoverMethod(UbioSmartPtr ubio, RecoverMethod& out) override;
-    unique_ptr<RebuildContext> GetRebuildCtx(ArrayDevice* fault) override;
+    unique_ptr<RebuildContext> GetRebuildCtx(const vector<IArrayDevice*>& fault) override;
+    unique_ptr<RebuildContext> GetQuickRebuildCtx(const QuickRebuildPair& rebuildPair) override;
     Method* GetMethod(void) { return method; }
     RaidTypeEnum GetRaidType(void) override { return raidType; }
+
+protected:
+    virtual void _SetRebuildPair(const vector<IArrayDevice*>& fault, RebuildPairs& rp);
+    virtual void _SetQuickRebuildPair(const QuickRebuildPair& quickRebuildPair, RebuildPairs& rp,
+        RebuildPairs& backupRp);
 
 private:
     list<FtEntry> _L2FTranslate(const LogicalEntry& le);
@@ -82,9 +89,10 @@ private:
     int _SetPhysicalAddress(uint64_t startLba, uint32_t segCnt);
     void _SetLogicalAddress(void);
     int _SetMethod(uint64_t totalNvmBlks);
-    list<PhysicalBlkAddr> _GetRebuildGroup(FtBlkAddr fba);
+    list<PhysicalBlkAddr> _GetRebuildGroup(FtBlkAddr fba, const vector<uint32_t>& abnormals);
     RaidTypeEnum raidType;
     Method* method = nullptr;
+    vector<uint32_t> _GetAbnormalDeviceIndex(void);
 };
 
 } // namespace pos

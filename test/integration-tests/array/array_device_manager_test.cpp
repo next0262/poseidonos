@@ -123,7 +123,7 @@ TEST(ArrayDeviceManager, ImportByName_testIfNVMDeviceHasNoUblock)
     int actual = arrDevMgr.ImportByName(nameSet);
 
     // Then
-    int expected = (int)POS_EVENT_ID::ARRAY_NVM_NOT_FOUND;
+    int expected = EID(ARRAY_NVM_NOT_FOUND);
     ASSERT_EQ(expected, actual);
     arrDevMgr.Clear(); // to avoid the leakage of mocks
 }
@@ -155,7 +155,7 @@ TEST(ArrayDeviceManager, ImportByName_testIfNVMDeviceIsActuallySSDDevice)
     int actual = arrDevMgr.ImportByName(nameSet);
 
     // Then
-    int expected = (int)POS_EVENT_ID::ARRAY_NVM_NOT_FOUND;
+    int expected = EID(ARRAY_NVM_NOT_FOUND);
     ASSERT_EQ(expected, actual);
     arrDevMgr.Clear(); // to avoid the leakage of mocks
 }
@@ -190,7 +190,7 @@ TEST(ArrayDeviceManager, ImportByName_testIfDataDeviceHasNoUblock)
     int actual = arrDevMgr.ImportByName(nameSet);
 
     // Then
-    int expected = (int)POS_EVENT_ID::ARRAY_SSD_NOT_FOUND;
+    int expected = EID(ARRAY_SSD_NOT_FOUND);
     ASSERT_EQ(expected, actual);
     arrDevMgr.Clear(); // to avoid the leakage of mocks
 }
@@ -225,7 +225,7 @@ TEST(ArrayDeviceManager, ImportByName_testIfDataDeviceIsActuallyNVMDevice)
     int actual = arrDevMgr.ImportByName(nameSet);
 
     // Then
-    int expected = (int)POS_EVENT_ID::ARRAY_SSD_NOT_FOUND;
+    int expected = EID(ARRAY_SSD_NOT_FOUND);
     ASSERT_EQ(expected, actual);
     arrDevMgr.Clear(); // to avoid the leakage of mocks
 }
@@ -266,7 +266,7 @@ TEST(ArrayDeviceManager, ImportByName_testIfSpareDeviceHasNoUblock)
     int actual = arrDevMgr.ImportByName(nameSet);
 
     // Then
-    int expected = (int)POS_EVENT_ID::ARRAY_SSD_NOT_FOUND;
+    int expected = EID(ARRAY_SSD_NOT_FOUND);
     ASSERT_EQ(expected, actual);
     arrDevMgr.Clear(); // to avoid the leakage of mocks
 }
@@ -307,7 +307,7 @@ TEST(ArrayDeviceManager, ImportByName_testIfSpareDeviceIsActuallyNVMDevice)
     int actual = arrDevMgr.ImportByName(nameSet);
 
     // Then
-    int expected = (int)POS_EVENT_ID::ARRAY_SSD_NOT_FOUND;
+    int expected = EID(ARRAY_SSD_NOT_FOUND);
     ASSERT_EQ(expected, actual);
     arrDevMgr.Clear(); // to avoid the leakage of mocks
 }
@@ -348,7 +348,7 @@ TEST(ArrayDeviceManager, ImportByName_testIfNVMDeviceIsTooSmall)
     int actual = arrDevMgr.ImportByName(nameSet);
 
     // Then
-    int expected = (int)POS_EVENT_ID::UNABLE_TO_SET_NVM_CAPACITY_IS_LT_MIN;
+    int expected = EID(UNABLE_TO_SET_NVM_CAPACITY_IS_LT_MIN);
     ASSERT_EQ(expected, actual);
     arrDevMgr.Clear(); // to avoid the leakage of mocks
 }
@@ -777,7 +777,7 @@ TEST(ArrayDeviceManager, RemoveSpare_testIfSpareDeviceRemovalFails)
     int actual = arrDevMgr.RemoveSpare("spare-that-doesn't-exist");
 
     // Then
-    ASSERT_EQ(EID(REMOVE_SPARE_SSD_NAME_NOT_FOUND), actual);
+    ASSERT_EQ(EID(REMOVE_DEV_SSD_NAME_NOT_FOUND), actual);
 }
 
 TEST(ArrayDeviceManager, RemoveSpare_testIfSpareDeviceRemovalIsSuccessful)
@@ -819,9 +819,11 @@ TEST(ArrayDeviceManager, RemoveSpare_testWithPassingArrayDevice)
     arrDevMgr.SetArrayDeviceList(mockArrayDeviceList);
 
     EXPECT_CALL(*mockArrayDeviceList, RemoveSpare).WillOnce(Return(0));
+    EXPECT_CALL(*mockArrayDeviceList, GetDevs).WillOnce(ReturnRef(deviceSet));
+    EXPECT_CALL(mockSysDevMgr, GetDev).WillOnce(Return(spare1));
 
     // When
-    int actual = arrDevMgr.RemoveSpare(&spare1Dev);
+    int actual = arrDevMgr.RemoveSpare("spare1");
 
     // Then
     ASSERT_EQ(0, actual);
@@ -839,7 +841,8 @@ TEST(ArrayDeviceManager, ReplaceWithSpare_testIfArrayDeviceListIsQueriedAgainst)
     EXPECT_CALL(*mockArrayDeviceList, SpareToData).WillOnce(Return(REPLACE_SUCCESS));
 
     // When
-    int actual = arrDevMgr.ReplaceWithSpare(nullptr);
+    ArrayDevice* out;
+    int actual = arrDevMgr.ReplaceWithSpare(nullptr, out);
 
     // Then
     ASSERT_EQ(REPLACE_SUCCESS, actual);
@@ -971,10 +974,8 @@ TEST(ArrayDeviceManager, GetDev_testIfGetDevDATAIsHandledWithDeviceSerialNumber)
     ArrayDevice* arrDev;
     ArrayDeviceType arrDevType;
 
-    EXPECT_CALL(*mockSysDevMgr, GetDev).WillOnce(Return(dataUBlockDev));
-
     // When
-    std::tie(arrDev, arrDevType) = arrDevMgr.GetDev("mock-data-sn");
+    std::tie(arrDev, arrDevType) = arrDevMgr.GetDev(dataUBlockDev);
 
     // Then
     ASSERT_EQ(&dataDev, arrDev);
@@ -1000,14 +1001,14 @@ TEST(ArrayDeviceManager, GetFaulty_testIfFaultyArrayDeviceIsReturned)
     EXPECT_CALL(*mockArrayDeviceList, GetDevs).WillOnce(ReturnRef(deviceSet));
 
     // When
-    ArrayDevice* actual = arrDevMgr.GetFaulty();
+    vector<IArrayDevice*> actual = arrDevMgr.GetFaulty();
 
     // Then
-    ASSERT_TRUE(actual != nullptr);
-    ASSERT_EQ(&dataFaulty, actual);
+    ASSERT_TRUE(actual.size() > 0);
+    ASSERT_EQ(&dataFaulty, actual.front());
 }
 
-TEST(ArrayDeviceManager, GetFaulty_testIfNullptrIsReturnedWhenThereIsNoFaultyDevice)
+TEST(ArrayDeviceManager, GetFaulty_testIfEmptyListIsReturnedWhenThereIsNoFaultyDevice)
 {
     // Given
     ArrayDeviceManager arrDevMgr(nullptr, "mockArrayName");
@@ -1025,10 +1026,10 @@ TEST(ArrayDeviceManager, GetFaulty_testIfNullptrIsReturnedWhenThereIsNoFaultyDev
     EXPECT_CALL(*mockArrayDeviceList, GetDevs).WillOnce(ReturnRef(deviceSet));
 
     // When
-    ArrayDevice* actual = arrDevMgr.GetFaulty();
+    vector<IArrayDevice*> actual = arrDevMgr.GetFaulty();
 
     // Then
-    ASSERT_EQ(nullptr, actual);
+    ASSERT_EQ(0, actual.size());
 }
 
 TEST(ArrayDeviceManager, GetRebuilding_testIfRebuildDeviceIsReturned)
@@ -1048,10 +1049,10 @@ TEST(ArrayDeviceManager, GetRebuilding_testIfRebuildDeviceIsReturned)
 
     EXPECT_CALL(*mockArrayDeviceList, GetDevs).WillOnce(ReturnRef(deviceSet));
     // When
-    ArrayDevice* actual = arrDevMgr.GetRebuilding();
+    vector<IArrayDevice*> actual = arrDevMgr.GetRebuilding();
 
     // Then
-    ASSERT_EQ(&rebuildDev, actual);
+    ASSERT_EQ(&rebuildDev, actual.front());
 }
 
 TEST(ArrayDeviceManager, GetRebuilding_testIfRebuildDeviceIsNotRebuildState)
@@ -1072,10 +1073,10 @@ TEST(ArrayDeviceManager, GetRebuilding_testIfRebuildDeviceIsNotRebuildState)
 
     EXPECT_CALL(*mockArrayDeviceList, GetDevs).WillOnce(ReturnRef(deviceSet));
     // When
-    ArrayDevice* actual = arrDevMgr.GetRebuilding();
+    vector<IArrayDevice*> actual = arrDevMgr.GetRebuilding();
 
     // Then
-    ASSERT_EQ(nullptr, actual);
+    ASSERT_EQ(0, actual.size());
 }
 
 } // namespace pos

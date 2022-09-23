@@ -47,9 +47,9 @@ namespace pos
 DummyHaServer::DummyHaServer(void)
 {
     // new grpc server setting
-    string address("0.0.0.0:50051");
+    string address(GRPC_HA_PUB_SERVER_SOCKET_ADDRESS);
 
-    new std::thread(&DummyHaServer::RunServer, this, address);
+    // new std::thread(&DummyHaServer::RunServer, this, address);
 }
 
 DummyHaServer::~DummyHaServer(void)
@@ -89,8 +89,8 @@ DummyHaServer::PushHostWrite(
     ::grpc::ServerContext* context, const ::replicator_rpc::PushHostWriteRequest* request,
     ::replicator_rpc::PushHostWriteResponse* response)
 {
-    //
-    response->set_lsn(10);
+    // dummy respoane lsn = rba
+    response->set_lsn(request->rba());
     return ::grpc::Status::OK;
 }
 

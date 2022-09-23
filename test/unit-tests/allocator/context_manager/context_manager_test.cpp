@@ -4,24 +4,27 @@
 
 #include <mutex>
 
-#include "test/unit-tests/allocator/address/allocator_address_info_mock.h"
 #include "test/unit-tests/allocator/context_manager/allocator_ctx/allocator_ctx_mock.h"
 #include "test/unit-tests/allocator/context_manager/block_allocation_status_mock.h"
 #include "test/unit-tests/allocator/context_manager/context_io_manager_mock.h"
 #include "test/unit-tests/allocator/context_manager/context_manager_mock.h"
 #include "test/unit-tests/allocator/context_manager/context_replayer_mock.h"
-#include "test/unit-tests/allocator/context_manager/gc_ctx/gc_ctx_mock.h"
 #include "test/unit-tests/allocator/context_manager/i_allocator_file_io_client_mock.h"
-#include "test/unit-tests/allocator/context_manager/rebuild_ctx/rebuild_ctx_mock.h"
 #include "test/unit-tests/allocator/context_manager/segment_ctx/segment_ctx_mock.h"
 #include "test/unit-tests/journal_manager/checkpoint/checkpoint_meta_flush_completed_mock.h"
-#include "test/unit-tests/telemetry/telemetry_client/telemetry_publisher_mock.h"
+#include "test/unit-tests/journal_manager/config/journal_configuration_mock.h"
+#include "test/unit-tests/journal_manager/log_buffer/versioned_segment_info_mock.h"
+#include "src/journal_manager/journal_manager.h"
+#include "src/journal_manager/log_buffer/i_versioned_segment_context.h"
+#include "test/unit-tests/journal_manager/status/journal_status_provider_mock.h"
+#include "test/unit-tests/journal_manager/log_buffer/versioned_segment_ctx_mock.h"
 
 using ::testing::_;
 using ::testing::AtLeast;
 using testing::NiceMock;
 using ::testing::Return;
 using ::testing::ReturnRef;
+
 namespace pos
 {
 TEST(ContextManager, ContextManager_)
@@ -39,7 +42,8 @@ TEST(ContextManager, Init_TestCaseFormatFormat)
     NiceMock<MockBlockAllocationStatus>* blockAllocStatus = new NiceMock<MockBlockAllocationStatus>;
     NiceMock<MockContextIoManager>* ioManager = new NiceMock<MockContextIoManager>;
     NiceMock<MockTelemetryPublisher> tc;
-    ContextManager ctxManager(&tc, allocCtx, segCtx, reCtx, gcCtx, blockAllocStatus, ioManager, nullptr, &addrInfo, 0);
+    ContextManager ctxManager(&tc, allocCtx, segCtx, reCtx, nullptr, gcCtx, blockAllocStatus,
+        ioManager, nullptr, &addrInfo, 0);
 
     EXPECT_CALL(*allocCtx, Init);
     EXPECT_CALL(*segCtx, Init);
@@ -61,7 +65,7 @@ TEST(ContextManager, Close_TestAllClosed)
     NiceMock<MockBlockAllocationStatus>* blockAllocStatus = new NiceMock<MockBlockAllocationStatus>();
     NiceMock<MockContextIoManager>* ioManager = new NiceMock<MockContextIoManager>;
     NiceMock<MockTelemetryPublisher> tc;
-    ContextManager ctxManager(&tc, allocCtx, segCtx, reCtx, gcCtx, blockAllocStatus, ioManager, nullptr, &addrInfo, 0);
+    ContextManager ctxManager(&tc, allocCtx, segCtx, reCtx, nullptr, gcCtx, blockAllocStatus, ioManager, nullptr, &addrInfo, 0);
 
     EXPECT_CALL(*allocCtx, Dispose);
     EXPECT_CALL(*segCtx, Dispose);
@@ -82,7 +86,8 @@ TEST(ContextManager, FlushContexts_testFlushStarted)
     NiceMock<MockBlockAllocationStatus>* blockAllocStatus = new NiceMock<MockBlockAllocationStatus>();
     NiceMock<MockContextIoManager>* ioManager = new NiceMock<MockContextIoManager>;
     NiceMock<MockTelemetryPublisher> tc;
-    ContextManager ctxManager(&tc, allocCtx, segCtx, reCtx, gcCtx, blockAllocStatus, ioManager, nullptr, nullptr, 0);
+    NiceMock<MockVersionedSegmentCtx>* vscCtx = new NiceMock<MockVersionedSegmentCtx>();
+    ContextManager ctxManager(&tc, allocCtx, segCtx, reCtx, vscCtx, gcCtx, blockAllocStatus, ioManager, nullptr, nullptr, 0);
 
     EXPECT_CALL(*ioManager, FlushContexts).WillOnce(Return(0));
 
@@ -102,7 +107,7 @@ TEST(ContextManager, AllocateFreeSegment_TestFreeSegmentAllocationByState)
     NiceMock<MockBlockAllocationStatus>* blockAllocStatus = new NiceMock<MockBlockAllocationStatus>();
     NiceMock<MockContextIoManager>* ioManager = new NiceMock<MockContextIoManager>;
     NiceMock<MockTelemetryPublisher> tc;
-    ContextManager ctxManager(&tc, allocCtx, segCtx, reCtx, gcCtx, blockAllocStatus, ioManager, nullptr, nullptr, 0);
+    ContextManager ctxManager(&tc, allocCtx, segCtx, reCtx, nullptr, gcCtx, blockAllocStatus, ioManager, nullptr, nullptr, 0);
 
     // given 1.
     EXPECT_CALL(*segCtx, AllocateFreeSegment).WillOnce(Return(UNMAP_SEGMENT));
@@ -133,7 +138,7 @@ TEST(ContextManager, AllocateGCVictimSegment_TestIfVictimIsUpdated)
     NiceMock<MockBlockAllocationStatus>* blockAllocStatus = new NiceMock<MockBlockAllocationStatus>();
     NiceMock<MockContextIoManager>* ioManager = new NiceMock<MockContextIoManager>;
     NiceMock<MockTelemetryPublisher> tc;
-    ContextManager ctxManager(&tc, allocCtx, segCtx, reCtx, gcCtx, blockAllocStatus, ioManager, nullptr, nullptr, 0);
+    ContextManager ctxManager(&tc, allocCtx, segCtx, reCtx, nullptr, gcCtx, blockAllocStatus, ioManager, nullptr, nullptr, 0);
 
     EXPECT_CALL(*segCtx, AllocateGCVictimSegment).WillOnce(Return(15));
 
@@ -160,7 +165,7 @@ TEST(ContextManager, GetNumOfFreeSegment_TestSimpleGetter)
     NiceMock<MockBlockAllocationStatus>* blockAllocStatus = new NiceMock<MockBlockAllocationStatus>();
     NiceMock<MockContextIoManager>* ioManager = new NiceMock<MockContextIoManager>;
     NiceMock<MockTelemetryPublisher> tc;
-    ContextManager ctxManager(&tc, allocCtx, segCtx, reCtx, gcCtx, blockAllocStatus, ioManager, nullptr, nullptr, 0);
+    ContextManager ctxManager(&tc, allocCtx, segCtx, reCtx, nullptr, gcCtx, blockAllocStatus, ioManager, nullptr, nullptr, 0);
 
     EXPECT_CALL(*segCtx, GetNumOfFreeSegment).WillOnce(Return(50));
     // when 1.
@@ -185,7 +190,7 @@ TEST(ContextManager, GetGcThreshold_TestSimpleGetterByMode)
     NiceMock<MockBlockAllocationStatus>* blockAllocStatus = new NiceMock<MockBlockAllocationStatus>();
     NiceMock<MockContextIoManager>* ioManager = new NiceMock<MockContextIoManager>;
     NiceMock<MockTelemetryPublisher> tc;
-    ContextManager ctxManager(&tc, allocCtx, segCtx, reCtx, gcCtx, blockAllocStatus, ioManager, nullptr, nullptr, 0);
+    ContextManager ctxManager(&tc, allocCtx, segCtx, reCtx, nullptr, gcCtx, blockAllocStatus, ioManager, nullptr, nullptr, 0);
 
     gcCtx->SetNormalGcThreshold(10);
     gcCtx->SetUrgentThreshold(5);
@@ -211,7 +216,7 @@ TEST(ContextManager, GetStoredContextVersion_TestSimpleGetter)
     NiceMock<MockBlockAllocationStatus>* blockAllocStatus = new NiceMock<MockBlockAllocationStatus>();
     NiceMock<MockContextIoManager>* ioManager = new NiceMock<MockContextIoManager>;
     NiceMock<MockTelemetryPublisher> tc;
-    ContextManager ctxManager(&tc, allocCtx, segCtx, reCtx, gcCtx, blockAllocStatus, ioManager, nullptr, nullptr, 0);
+    ContextManager ctxManager(&tc, allocCtx, segCtx, reCtx, nullptr, gcCtx, blockAllocStatus, ioManager, nullptr, nullptr, 0);
 
     // when 1.
     EXPECT_CALL(*ioManager, GetStoredContextVersion(SEGMENT_CTX));
@@ -232,7 +237,7 @@ TEST(ContextManager, AllocateRebuildTargetSegment_TestSimpleByPassFunc)
     NiceMock<MockBlockAllocationStatus>* blockAllocStatus = new NiceMock<MockBlockAllocationStatus>();
     NiceMock<MockContextIoManager>* ioManager = new NiceMock<MockContextIoManager>;
     NiceMock<MockTelemetryPublisher> tc;
-    ContextManager ctxManager(&tc, allocCtx, segCtx, reCtx, gcCtx, blockAllocStatus, ioManager, nullptr, nullptr, 0);
+    ContextManager ctxManager(&tc, allocCtx, segCtx, reCtx, nullptr, gcCtx, blockAllocStatus, ioManager, nullptr, nullptr, 0);
 
     EXPECT_CALL(*segCtx, GetRebuildTargetSegment).WillOnce(Return(5));
 
@@ -253,7 +258,7 @@ TEST(ContextManager, ReleaseRebuildSegment__TestSimpleByPassFunc)
     NiceMock<MockBlockAllocationStatus>* blockAllocStatus = new NiceMock<MockBlockAllocationStatus>();
     NiceMock<MockContextIoManager>* ioManager = new NiceMock<MockContextIoManager>;
     NiceMock<MockTelemetryPublisher> tc;
-    ContextManager ctxManager(&tc, allocCtx, segCtx, reCtx, gcCtx, blockAllocStatus, ioManager, nullptr, nullptr, 0);
+    ContextManager ctxManager(&tc, allocCtx, segCtx, reCtx, nullptr, gcCtx, blockAllocStatus, ioManager, nullptr, nullptr, 0);
 
     // given 1.
     EXPECT_CALL(*segCtx, SetRebuildCompleted(5)).WillOnce(Return(0));
@@ -287,7 +292,7 @@ TEST(ContextManager, NeedRebuildAgain_TestSimpleByPassFunc)
     NiceMock<MockBlockAllocationStatus>* blockAllocStatus = new NiceMock<MockBlockAllocationStatus>();
     NiceMock<MockContextIoManager>* ioManager = new NiceMock<MockContextIoManager>;
     NiceMock<MockTelemetryPublisher> tc;
-    ContextManager ctxManager(&tc, allocCtx, segCtx, reCtx, gcCtx, blockAllocStatus, ioManager, nullptr, nullptr, 0);
+    ContextManager ctxManager(&tc, allocCtx, segCtx, reCtx, nullptr, gcCtx, blockAllocStatus, ioManager, nullptr, nullptr, 0);
 
     EXPECT_CALL(*segCtx, LoadRebuildList).WillOnce(Return(true));
 
@@ -308,7 +313,7 @@ TEST(ContextManager, GetContextSectionAddr_TestSimpleGetter)
     NiceMock<MockBlockAllocationStatus>* blockAllocStatus = new NiceMock<MockBlockAllocationStatus>();
     NiceMock<MockContextIoManager>* ioManager = new NiceMock<MockContextIoManager>;
     NiceMock<MockTelemetryPublisher> tc;
-    ContextManager ctxManager(&tc, allocCtx, segCtx, reCtx, gcCtx, blockAllocStatus, ioManager, nullptr, nullptr, 0);
+    ContextManager ctxManager(&tc, allocCtx, segCtx, reCtx, nullptr, gcCtx, blockAllocStatus, ioManager, nullptr, nullptr, 0);
 
     EXPECT_CALL(*ioManager, GetContextSectionAddr).WillOnce(Return((char*)100));
 
@@ -329,7 +334,7 @@ TEST(ContextManager, GetContextSectionSize_TestSimpleGetter)
     NiceMock<MockBlockAllocationStatus>* blockAllocStatus = new NiceMock<MockBlockAllocationStatus>();
     NiceMock<MockContextIoManager>* ioManager = new NiceMock<MockContextIoManager>;
     NiceMock<MockTelemetryPublisher> tc;
-    ContextManager ctxManager(&tc, allocCtx, segCtx, reCtx, gcCtx, blockAllocStatus, ioManager, nullptr, nullptr, 0);
+    ContextManager ctxManager(&tc, allocCtx, segCtx, reCtx, nullptr, gcCtx, blockAllocStatus, ioManager, nullptr, nullptr, 0);
 
     EXPECT_CALL(*ioManager, GetContextSectionSize).WillOnce(Return(1000));
 
@@ -350,7 +355,7 @@ TEST(ContextManager, GetRebuildCtx_TestSimpleGetter)
     NiceMock<MockBlockAllocationStatus>* blockAllocStatus = new NiceMock<MockBlockAllocationStatus>();
     NiceMock<MockContextIoManager>* ioManager = new NiceMock<MockContextIoManager>;
     NiceMock<MockTelemetryPublisher> tc;
-    ContextManager ctxManager(&tc, allocCtx, segCtx, reCtx, gcCtx, blockAllocStatus, ioManager, nullptr, nullptr, 0);
+    ContextManager ctxManager(&tc, allocCtx, segCtx, reCtx, nullptr, gcCtx, blockAllocStatus, ioManager, nullptr, nullptr, 0);
     // when
     MockRebuildCtx* ret = reinterpret_cast<MockRebuildCtx*>(ctxManager.GetRebuildCtx());
     // then
@@ -367,7 +372,7 @@ TEST(ContextManager, GetGcCtx_TestSimpleGetter)
     NiceMock<MockBlockAllocationStatus>* blockAllocStatus = new NiceMock<MockBlockAllocationStatus>();
     NiceMock<MockContextIoManager>* ioManager = new NiceMock<MockContextIoManager>;
     NiceMock<MockTelemetryPublisher> tc;
-    ContextManager ctxManager(&tc, allocCtx, segCtx, reCtx, gcCtx, blockAllocStatus, ioManager, nullptr, nullptr, 0);
+    ContextManager ctxManager(&tc, allocCtx, segCtx, reCtx, nullptr, gcCtx, blockAllocStatus, ioManager, nullptr, nullptr, 0);
     // when
     MockGcCtx* ret = reinterpret_cast<MockGcCtx*>(ctxManager.GetGcCtx());
     // then
@@ -385,7 +390,7 @@ TEST(ContextManager, GetContextReplayer_TestSimpleGetter)
     NiceMock<MockContextIoManager>* ioManager = new NiceMock<MockContextIoManager>;
     NiceMock<MockContextReplayer>* ctxReplayer = new NiceMock<MockContextReplayer>();
     NiceMock<MockTelemetryPublisher> tc;
-    ContextManager ctxManager(&tc, allocCtx, segCtx, reCtx, gcCtx, blockAllocStatus, ioManager, ctxReplayer, nullptr, 0);
+    ContextManager ctxManager(&tc, allocCtx, segCtx, reCtx, nullptr, gcCtx, blockAllocStatus, ioManager, ctxReplayer, nullptr, 0);
     // when
     ContextReplayer* ret = ctxManager.GetContextReplayer();
     // then
@@ -402,7 +407,7 @@ TEST(ContextManager, SetNextSsdLsid_TestCheckReturnedSegmentId)
     NiceMock<MockBlockAllocationStatus>* blockAllocStatus = new NiceMock<MockBlockAllocationStatus>();
     NiceMock<MockContextIoManager>* ioManager = new NiceMock<MockContextIoManager>;
     NiceMock<MockTelemetryPublisher> tc;
-    ContextManager ctxManager(&tc, allocCtx, segCtx, reCtx, gcCtx, blockAllocStatus, ioManager, nullptr, nullptr, 0);
+    ContextManager ctxManager(&tc, allocCtx, segCtx, reCtx, nullptr, gcCtx, blockAllocStatus, ioManager, nullptr, nullptr, 0);
 
     // given 1.
     EXPECT_CALL(*segCtx, AllocateFreeSegment).WillOnce(Return(5));
@@ -421,7 +426,7 @@ TEST(ContextManager, SetNextSsdLsid_TestCheckReturnedSegmentId)
     // when 2.
     ret = ctxManager.SetNextSsdLsid();
     // then 2.
-    EXPECT_EQ((int)-EID(ALLOCATOR_NO_FREE_SEGMENT), ret);
+    EXPECT_EQ((int)ERRID(ALLOCATOR_NO_FREE_SEGMENT), ret);
 }
 
 TEST(ContextManager, GetSegmentCtx_TestSimpleGetter)
@@ -434,7 +439,7 @@ TEST(ContextManager, GetSegmentCtx_TestSimpleGetter)
     NiceMock<MockBlockAllocationStatus>* blockAllocStatus = new NiceMock<MockBlockAllocationStatus>();
     NiceMock<MockContextIoManager>* ioManager = new NiceMock<MockContextIoManager>;
     NiceMock<MockTelemetryPublisher> tc;
-    ContextManager ctxManager(&tc, allocCtx, segCtx, reCtx, gcCtx, blockAllocStatus, ioManager, nullptr, nullptr, 0);
+    ContextManager ctxManager(&tc, allocCtx, segCtx, reCtx, nullptr, gcCtx, blockAllocStatus, ioManager, nullptr, nullptr, 0);
     // when
     SegmentCtx* ret = ctxManager.GetSegmentCtx();
     // then
@@ -451,7 +456,7 @@ TEST(ContextManager, GetAllocatorCtx_TestSimpleGetter)
     NiceMock<MockBlockAllocationStatus>* blockAllocStatus = new NiceMock<MockBlockAllocationStatus>();
     NiceMock<MockContextIoManager>* ioManager = new NiceMock<MockContextIoManager>;
     NiceMock<MockTelemetryPublisher> tc;
-    ContextManager ctxManager(&tc, allocCtx, segCtx, reCtx, gcCtx, blockAllocStatus, ioManager, nullptr, nullptr, 0);
+    ContextManager ctxManager(&tc, allocCtx, segCtx, reCtx, nullptr, gcCtx, blockAllocStatus, ioManager, nullptr, nullptr, 0);
     // when
     AllocatorCtx* ret = ctxManager.GetAllocatorCtx();
     // then
@@ -468,7 +473,7 @@ TEST(ContextManager, GetCtxLock_TestSimpleGetter)
     NiceMock<MockBlockAllocationStatus>* blockAllocStatus = new NiceMock<MockBlockAllocationStatus>();
     NiceMock<MockContextIoManager>* ioManager = new NiceMock<MockContextIoManager>;
     NiceMock<MockTelemetryPublisher> tc;
-    ContextManager ctxManager(&tc, allocCtx, segCtx, reCtx, gcCtx, blockAllocStatus, ioManager, nullptr, nullptr, 0);
+    ContextManager ctxManager(&tc, allocCtx, segCtx, reCtx, nullptr, gcCtx, blockAllocStatus, ioManager, nullptr, nullptr, 0);
     // when
     ctxManager.GetCtxLock();
 }
@@ -483,7 +488,7 @@ TEST(ContextManager, NeedRebuildAgain_TestSimpleGetter)
     NiceMock<MockBlockAllocationStatus>* blockAllocStatus = new NiceMock<MockBlockAllocationStatus>();
     NiceMock<MockContextIoManager>* ioManager = new NiceMock<MockContextIoManager>;
     NiceMock<MockTelemetryPublisher> tc;
-    ContextManager ctxManager(&tc, allocCtx, segCtx, reCtx, gcCtx, blockAllocStatus, ioManager, nullptr, nullptr, 0);
+    ContextManager ctxManager(&tc, allocCtx, segCtx, reCtx, nullptr, gcCtx, blockAllocStatus, ioManager, nullptr, nullptr, 0);
     // when
     ctxManager.NeedRebuildAgain();
 }
@@ -498,7 +503,7 @@ TEST(ContextManager, MakeRebuildTargetSegmentList_TestwithFlushOrwithoutFlush)
     NiceMock<MockBlockAllocationStatus>* blockAllocStatus = new NiceMock<MockBlockAllocationStatus>();
     NiceMock<MockContextIoManager>* ioManager = new NiceMock<MockContextIoManager>;
     NiceMock<MockTelemetryPublisher> tc;
-    ContextManager ctxManager(&tc, allocCtx, segCtx, reCtx, gcCtx, blockAllocStatus, ioManager, nullptr, nullptr, 0);
+    ContextManager ctxManager(&tc, allocCtx, segCtx, reCtx, nullptr, gcCtx, blockAllocStatus, ioManager, nullptr, nullptr, 0);
 
     // given 1.
     EXPECT_CALL(*segCtx, MakeRebuildTarget).WillOnce(Return(-1));
@@ -525,7 +530,7 @@ TEST(ContextManager, GetNvramSegmentList_testIfListIsReturnedAsSegmentContextRet
     NiceMock<MockBlockAllocationStatus>* blockAllocStatus = new NiceMock<MockBlockAllocationStatus>();
     NiceMock<MockContextIoManager>* ioManager = new NiceMock<MockContextIoManager>;
     NiceMock<MockTelemetryPublisher> tc;
-    ContextManager ctxManager(&tc, allocCtx, segCtx, reCtx, gcCtx, blockAllocStatus, ioManager, nullptr, nullptr, 0);
+    ContextManager ctxManager(&tc, allocCtx, segCtx, reCtx, nullptr, gcCtx, blockAllocStatus, ioManager, nullptr, nullptr, 0);
 
     // given
     EXPECT_CALL(*segCtx, GetNvramSegmentList)
@@ -551,7 +556,7 @@ TEST(ContextManager, GetRebuildTargetSegmentCount_TestwithFlushOrwithoutFlush)
     NiceMock<MockBlockAllocationStatus>* blockAllocStatus = new NiceMock<MockBlockAllocationStatus>();
     NiceMock<MockContextIoManager>* ioManager = new NiceMock<MockContextIoManager>;
     NiceMock<MockTelemetryPublisher> tc;
-    ContextManager ctxManager(&tc, allocCtx, segCtx, reCtx, gcCtx, blockAllocStatus, ioManager, nullptr, nullptr, 0);
+    ContextManager ctxManager(&tc, allocCtx, segCtx, reCtx, nullptr, gcCtx, blockAllocStatus, ioManager, nullptr, nullptr, 0);
     EXPECT_CALL(*segCtx, GetRebuildTargetSegmentCount).WillOnce(Return(7));
     // when
     int ret = ctxManager.GetRebuildTargetSegmentCount();
@@ -569,7 +574,7 @@ TEST(ContextManager, StopRebuilding_TestwithFlushOrwithoutFlush)
     NiceMock<MockBlockAllocationStatus>* blockAllocStatus = new NiceMock<MockBlockAllocationStatus>();
     NiceMock<MockContextIoManager>* ioManager = new NiceMock<MockContextIoManager>;
     NiceMock<MockTelemetryPublisher> tc;
-    ContextManager ctxManager(&tc, allocCtx, segCtx, reCtx, gcCtx, blockAllocStatus, ioManager, nullptr, nullptr, 0);
+    ContextManager ctxManager(&tc, allocCtx, segCtx, reCtx, nullptr, gcCtx, blockAllocStatus, ioManager, nullptr, nullptr, 0);
 
     // given 1.
     EXPECT_CALL(*segCtx, StopRebuilding).WillOnce(Return(-1));
@@ -586,5 +591,4 @@ TEST(ContextManager, StopRebuilding_TestwithFlushOrwithoutFlush)
     // then 1.
     EXPECT_EQ(0, ret);
 }
-
 } // namespace pos

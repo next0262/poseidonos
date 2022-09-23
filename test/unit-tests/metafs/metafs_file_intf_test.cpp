@@ -58,7 +58,7 @@ class MetaFsFileIntfTester : public MetaFsFileIntf
 {
 public:
     MetaFsFileIntfTester(string fname, int arrayId, MetaFs* metaFs, MetaFsConfigManager* configManager)
-    : MetaFsFileIntf(fname, arrayId, metaFs, configManager)
+    : MetaFsFileIntf(fname, arrayId, metaFs, configManager, MetaFileType::Map)
     {
     }
 
@@ -70,11 +70,6 @@ public:
     int Write(int fd, uint64_t fileOffset, uint64_t length, char* buffer)
     {
         return _Write(fd, fileOffset, length, buffer);
-    }
-
-    void SetFileProperty(MetaVolumeType volumeType)
-    {
-        _SetFileProperty(volumeType);
     }
 
     MetaFilePropertySet& GetFileProperty(void)
@@ -94,8 +89,7 @@ public:
     {
     }
 
-    virtual void
-    SetUp(void)
+    virtual void SetUp(void)
     {
         arrayInfo = new NiceMock<MockIArrayInfo>;
         mgmt = new NiceMock<MockMetaFsManagementApi>;
@@ -110,8 +104,7 @@ public:
         metaFile = new MetaFsFileIntfTester(fileName, arrayId, metaFs, config);
     }
 
-    virtual void
-    TearDown(void)
+    virtual void TearDown(void)
     {
         delete metaFs;
         delete arrayInfo;
@@ -137,35 +130,35 @@ protected:
 
 TEST_F(MetaFsFileIntfFixture, CreateMetaFsFile)
 {
-    EXPECT_CALL(*ctrl, Create).WillRepeatedly(Return(POS_EVENT_ID::SUCCESS));
+    EXPECT_CALL(*ctrl, Create).WillRepeatedly(Return(EID(SUCCESS)));
 
     EXPECT_EQ(metaFile->Create(fileSize), 0);
 }
 
 TEST_F(MetaFsFileIntfFixture, OpenMetaFsFile)
 {
-    EXPECT_CALL(*ctrl, Open).WillRepeatedly(Return(POS_EVENT_ID::SUCCESS));
+    EXPECT_CALL(*ctrl, Open).WillRepeatedly(Return(EID(SUCCESS)));
 
     EXPECT_EQ(metaFile->Open(), 0);
 }
 
 TEST_F(MetaFsFileIntfFixture, CloseMetaFsFile)
 {
-    EXPECT_CALL(*ctrl, Close).WillRepeatedly(Return(POS_EVENT_ID::SUCCESS));
+    EXPECT_CALL(*ctrl, Close).WillRepeatedly(Return(EID(SUCCESS)));
 
     EXPECT_EQ(metaFile->Close(), 0);
 }
 
 TEST_F(MetaFsFileIntfFixture, DeleteMetaFsFile)
 {
-    EXPECT_CALL(*ctrl, Delete).WillRepeatedly(Return(POS_EVENT_ID::SUCCESS));
+    EXPECT_CALL(*ctrl, Delete).WillRepeatedly(Return(EID(SUCCESS)));
 
     EXPECT_EQ(metaFile->Delete(), 0);
 }
 
 TEST_F(MetaFsFileIntfFixture, DoesFileExist)
 {
-    EXPECT_CALL(*ctrl, CheckFileExist).WillRepeatedly(Return(POS_EVENT_ID::SUCCESS));
+    EXPECT_CALL(*ctrl, CheckFileExist).WillRepeatedly(Return(EID(SUCCESS)));
 
     EXPECT_TRUE(metaFile->DoesFileExist());
 }
@@ -179,7 +172,7 @@ TEST_F(MetaFsFileIntfFixture, GetFileSize)
 
 TEST_F(MetaFsFileIntfFixture, IssueAsyncIO)
 {
-    EXPECT_CALL(*io, SubmitIO).WillRepeatedly(Return(POS_EVENT_ID::SUCCESS));
+    EXPECT_CALL(*io, SubmitIO).WillRepeatedly(Return(EID(SUCCESS)));
 
     AsyncMetaFileIoCtx ctx;
 
@@ -205,26 +198,19 @@ TEST_F(MetaFsFileIntfFixture, CheckFileProperty)
     MetaFilePropertySet& property = metaFile->GetFileProperty();
 
     EXPECT_EQ(property.integrity, MetaFileIntegrityType::Default);
-    EXPECT_EQ(property.ioAccPattern, MetaFileAccessPattern::Default);
-    EXPECT_EQ(property.ioOpType, MetaFileDominant::Default);
-
-    metaFile->SetFileProperty(type);
-
-    EXPECT_EQ(property.integrity, MetaFileIntegrityType::Lvl0_Disable);
-    EXPECT_EQ(property.ioAccPattern, MetaFileAccessPattern::ByteIntensive);
-    EXPECT_EQ(property.ioOpType, MetaFileDominant::WriteDominant);
+    EXPECT_EQ(property.type, MetaFileType::Map);
 }
 
 TEST_F(MetaFsFileIntfFixture, ReadMetaFile)
 {
-    EXPECT_CALL(*io, Read(_, _, _, _, _)).WillRepeatedly(Return(POS_EVENT_ID::SUCCESS));
+    EXPECT_CALL(*io, Read(_, _, _, _, _)).WillRepeatedly(Return(EID(SUCCESS)));
 
     EXPECT_EQ(metaFile->Read(0, 0, 0, nullptr), 0);
 }
 
 TEST_F(MetaFsFileIntfFixture, WriteMetaFile)
 {
-    EXPECT_CALL(*io, Write(_, _, _, _, _)).WillRepeatedly(Return(POS_EVENT_ID::SUCCESS));
+    EXPECT_CALL(*io, Write(_, _, _, _, _)).WillRepeatedly(Return(EID(SUCCESS)));
 
     EXPECT_EQ(metaFile->Write(0, 0, 0, nullptr), 0);
 }

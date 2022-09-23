@@ -46,6 +46,7 @@
 #include "src/array/ft/raid5.h"
 #include "src/array/ft/raid0.h"
 #include "src/array/ft/raid_none.h"
+#include "src/array/ft/raid6.h"
 #include "src/helper/calc/calc.h"
 
 namespace pos
@@ -56,7 +57,7 @@ StripePartition::StripePartition(
     vector<ArrayDevice*> devs,
     RaidTypeEnum raid)
 : Partition(devs, type),
-  RebuildTarget(type),
+  RebuildTarget(type == PartitionType::USER_DATA),
   raidType(raid)
 {
 }
@@ -115,7 +116,7 @@ StripePartition::Translate(list<PhysicalEntry>& pel, const LogicalEntry& le)
     {
         int error = EID(ADDRESS_TRANSLATION_INVALID_LBA);
         POS_TRACE_ERROR(error, "{} partition detects invalid address during translate. raidtype:{}, stripeId:{}, offset:{}, totalStripes:{}, totalBlksPerStripe:{}",
-            PARTITION_TYPE_STR[type], raidType, le.addr.stripeId, le.addr.offset, logicalSize.totalStripes, logicalSize.blksPerStripe);
+            PARTITION_TYPE_STR[type], RaidType(raidType).ToString(), le.addr.stripeId, le.addr.offset, logicalSize.totalStripes, logicalSize.blksPerStripe);
         return error;
     }
 
@@ -208,19 +209,28 @@ StripePartition::_SetMethod(uint64_t totalNvmBlks)
     }
     else if (raidType == RaidTypeEnum::RAID5)
     {
-        Raid5* raid5 = new Raid5(&physicalSize);
         uint64_t blksPerStripe = static_cast<uint64_t>(physicalSize.blksPerChunk) * physicalSize.chunksPerStripe;
         uint64_t totalNvmStripes = totalNvmBlks / blksPerStripe;
         uint64_t maxGcStripes = 2048;
-        POS_TRACE_INFO(EID(CREATE_ARRAY_DEBUG_MSG), "Alloc parity pool, size:{}", totalNvmStripes + maxGcStripes);
-        if (raid5->AllocParityPools(totalNvmStripes + maxGcStripes) == false)
+        uint64_t reqBuffersPerNuma = totalNvmStripes + maxGcStripes;
+        Raid5* raid5 = new Raid5(&physicalSize, reqBuffersPerNuma);
+        bool result = raid5->AllocParityPools(reqBuffersPerNuma);
+        if (result == false)
         {
-            delete raid5;
-            int eventId = EID(CREATE_ARRAY_INSUFFICIENT_MEMORY_UNABLE_TO_ALLOC_PARITY_POOL);
-            POS_TRACE_WARN(eventId, "required number of buffers:{}", totalNvmStripes + maxGcStripes);
-            return eventId;
+            POS_TRACE_WARN(EID(RAID_DEBUG_MSG),
+                "Failed to alloc ParityPools for RAID5, request:{}", reqBuffersPerNuma);
         }
         method = raid5;
+    }
+    else if (raidType == RaidTypeEnum::RAID6)
+    {
+        uint64_t blksPerStripe = static_cast<uint64_t>(physicalSize.blksPerChunk) * physicalSize.chunksPerStripe;
+        uint64_t totalNvmStripes = totalNvmBlks / blksPerStripe;
+        uint64_t maxGcStripes = 2048;
+        uint64_t parityCnt = 2;
+        uint64_t reqBuffersPerNuma = (totalNvmStripes + maxGcStripes) * parityCnt;
+        Raid6* raid6 = new Raid6(&physicalSize, reqBuffersPerNuma);
+        method = raid6;
     }
     else if (raidType == RaidTypeEnum::NONE)
     {
@@ -368,9 +378,9 @@ StripePartition::_Pba2Fba(const PhysicalBlkAddr& pba)
 }
 
 list<PhysicalBlkAddr>
-StripePartition::_GetRebuildGroup(FtBlkAddr fba)
+StripePartition::_GetRebuildGroup(FtBlkAddr fba, const vector<uint32_t>& abnormals)
 {
-    list<FtBlkAddr> ftAddrs = method->GetRebuildGroup(fba);
+    list<FtBlkAddr> ftAddrs = method->GetRebuildGroup(fba, abnormals);
     list<PhysicalBlkAddr> ret;
     for (FtBlkAddr fba : ftAddrs)
     {
@@ -423,9 +433,12 @@ StripePartition::GetRecoverMethod(UbioSmartPtr ubio, RecoverMethod& out)
 {
     uint64_t lba = ubio->GetLba();
     ArrayDevice* dev = static_cast<ArrayDevice*>(ubio->GetArrayDev());
+    vector<uint32_t> abnormals = _GetAbnormalDeviceIndex();
+
     if (IsValidLba(lba))
     {
-        if (FindDevice(dev) >= 0)
+        int devIdx = FindDevice(dev);
+        if (devIdx >= 0)
         {
             // Chunk Aliging check
             const uint32_t sectorSize = ArrayConfig::SECTOR_SIZE_BYTE;
@@ -435,54 +448,62 @@ StripePartition::GetRecoverMethod(UbioSmartPtr ubio, RecoverMethod& out)
             BlockAlignment blockAlignment(originPba.lba * sectorSize, ubio->GetSize());
             originPba.lba = blockAlignment.GetHeadBlock() * sectorsPerBlock;
             FtBlkAddr fba = _Pba2Fba(originPba);
-            out.srcAddr = _GetRebuildGroup(fba);
-            out.recoverFunc = method->GetRecoverFunc();
-
+            out.srcAddr = _GetRebuildGroup(fba, abnormals);
+            out.recoverFunc = method->GetRecoverFunc(vector<uint32_t>{(uint32_t)devIdx}, abnormals);
             return EID(SUCCESS);
         }
         else
         {
             int error = EID(RECOVER_REQ_DEV_NOT_FOUND);
-            string devName = "";
-            if (dev->GetUblock() != nullptr)
-            {
-                devName = dev->GetUblock()->GetName();
-            }
-            POS_TRACE_ERROR(error, "Failed to get recover method for {} partition, lba:{}", PARTITION_TYPE_STR[type], lba);
+            POS_TRACE_ERROR(error, "Failed to find device {} in {} partition, lba:{}", dev->GetName(), PARTITION_TYPE_STR[type], lba);
             return error;
         }
     }
     else
     {
         int eid = EID(RECOVER_INVALID_LBA);
-        POS_TRACE_INFO(eid, "part:{}, req_lba:{}", PARTITION_TYPE_STR[type], lba);
         return eid;
     }
 }
 
 unique_ptr<RebuildContext>
-StripePartition::GetRebuildCtx(ArrayDevice* fault)
+StripePartition::GetRebuildCtx(const vector<IArrayDevice*>& fault)
 {
-    int index = FindDevice(fault);
-    POS_TRACE_DEBUG(EID(REBUILD_DEBUG_MSG), "GetRebuildCtx devIndex:{}, index");
-    if (index >= 0)
+    unique_ptr<RebuildContext> ctx(new RebuildContext());
+    _SetRebuildPair(fault, ctx->rp);
+    if (ctx->rp.size() == 0)
     {
-        unique_ptr<RebuildContext> ctx(new RebuildContext());
-        ctx->raidType = raidType;
-        ctx->part = type;
-        ctx->faultIdx = index;
-        ctx->faultDev = fault;
-        ctx->stripeCnt = logicalSize.totalStripes;
-        ctx->size = GetPhysicalSize();
-        {
-            using namespace std::placeholders;
-            F2PTranslator trns = std::bind(&StripePartition::_Fba2Pba, this, _1);
-            ctx->translate = trns;
-        }
-        return ctx;
+        POS_TRACE_INFO(EID(REBUILD_CTX_DEBUG), "GetRebuildCtx returns nullptr, part:{}", PARTITION_TYPE_STR[type]);
+        ctx.reset();
+        return nullptr;
     }
-    POS_TRACE_INFO(EID(REBUILD_DEBUG_MSG), "GetRebuildCtx return nullptr");
-    return nullptr;
+    ctx->part = type;
+    ctx->stripeCnt = logicalSize.totalStripes;
+    ctx->size = GetPhysicalSize();
+    POS_TRACE_INFO(EID(REBUILD_CTX_DEBUG),
+        "GetRebuildCtx, part:{}, rpCnt:{}", PARTITION_TYPE_STR[type], ctx->rp.size());
+    return ctx;
+}
+
+unique_ptr<RebuildContext>
+StripePartition::GetQuickRebuildCtx(const QuickRebuildPair& rebuildPair)
+{
+    unique_ptr<QuickRebuildContext> ctx(new QuickRebuildContext());
+    ctx->rebuildType = RebuildTypeEnum::QUICK;
+    _SetQuickRebuildPair(rebuildPair, ctx->rp, ctx->secondaryRp);
+    if (ctx->rp.size() == 0)
+    {
+        POS_TRACE_INFO(EID(REBUILD_CTX_DEBUG), "GetQuickRebuildCtx returns nullptr, part:{}", PARTITION_TYPE_STR[type]);
+        ctx.reset();
+        return nullptr;
+    }
+    
+    ctx->part = type;
+    ctx->stripeCnt = logicalSize.totalStripes;
+    ctx->size = GetPhysicalSize();
+    POS_TRACE_INFO(EID(REBUILD_CTX_DEBUG), "GetQuickRebuildCtx, part:{}, rpCnt:{}, backupRpCnt:{}",
+        PARTITION_TYPE_STR[type], ctx->rp.size(), ctx->secondaryRp.size());
+    return ctx;
 }
 
 bool
@@ -499,4 +520,98 @@ StripePartition::GetRaidState(void)
 
     return method->GetRaidState(deviceStateList);
 }
+
+void 
+StripePartition::_SetRebuildPair(const vector<IArrayDevice*>& fault, RebuildPairs& rp)
+{
+    vector<uint32_t> rebuildTargetIndexs;
+    for (IArrayDevice* dev : fault)
+    {
+        int index = FindDevice(dev);
+        if (index >= 0)
+        {
+            POS_TRACE_DEBUG(EID(REBUILD_PAIR_DEBUG), "SetRebuildPair, find device, device {} is included at this partition {}",
+                dev->GetName(), PARTITION_TYPE_STR[type]);
+            rebuildTargetIndexs.push_back((uint32_t)index);
+        }
+    }
+    if (rebuildTargetIndexs.size() == 0)
+    {
+        POS_TRACE_INFO(EID(REBUILD_PAIR_DEBUG), "SetRebuildPair, no target found in this partition {}",
+            PARTITION_TYPE_STR[type]);
+        return;
+    }
+
+    vector<uint32_t> abnormalDeviceIndex = _GetAbnormalDeviceIndex();
+    vector<pair<vector<uint32_t>, vector<uint32_t>>> rg =
+        method->GetRebuildGroupPairs(rebuildTargetIndexs);
+    POS_TRACE_INFO(EID(REBUILD_PAIR_DEBUG), "SetRebuildPair, count:{}, raidType:{}", rg.size(), GetRaidType());
+    for (pair<vector<uint32_t>, vector<uint32_t>> group : rg)
+    {
+        vector<uint32_t> srcs = group.first;
+        vector<uint32_t> dsts = group.second;
+        vector<IArrayDevice*> srcDevs;
+        vector<IArrayDevice*> dstDevs;
+        for (uint32_t i : srcs)
+        {
+            srcDevs.push_back(devs.at(i));
+            POS_TRACE_DEBUG(EID(REBUILD_PAIR_DEBUG), "SetRebuildPair, part:{}, srcidx:{}", PARTITION_TYPE_STR[type], i);
+        }
+        for (uint32_t i : dsts)
+        {
+            dstDevs.push_back(devs.at(i));
+            POS_TRACE_DEBUG(EID(REBUILD_PAIR_DEBUG), "SetRebuildPair, part:{}, dstidx:{}", PARTITION_TYPE_STR[type], i);
+        }
+        for (uint32_t i : abnormalDeviceIndex)
+        {
+            POS_TRACE_DEBUG(EID(REBUILD_PAIR_DEBUG), "SetRebuildPair, part:{}, abnormalidx:{}", PARTITION_TYPE_STR[type], i);
+        }
+
+        RecoverFunc func = method->GetRecoverFunc(dsts, abnormalDeviceIndex);
+        rp.emplace_back(new RebuildPair(srcDevs, dstDevs, func));
+    }
+}
+
+void 
+StripePartition::_SetQuickRebuildPair(const QuickRebuildPair& quickRebuildPair, RebuildPairs& rp,
+        RebuildPairs& backupRp)
+{
+    vector<IArrayDevice*> fault;
+    for (auto qrp : quickRebuildPair)
+    {
+        IArrayDevice* dst = qrp.second;
+        POS_TRACE_DEBUG(EID(REBUILD_PAIR_DEBUG), "SetQuickRebuildPair, dev:{}", qrp.second->GetName());
+        int index = FindDevice(dst);
+        if (index >= 0)
+        {
+            fault.push_back(dst);
+            POS_TRACE_DEBUG(EID(REBUILD_PAIR_DEBUG), "SetQuickRebuildPair, device {} is included in this partition {}",
+                dst->GetName(), PARTITION_TYPE_STR[type]);
+            RecoverFunc func = bind(memcpy, placeholders::_1, placeholders::_2, placeholders::_3);
+            rp.emplace_back(new RebuildPair(vector<IArrayDevice*>{qrp.first}, vector<IArrayDevice*>{qrp.second}, func));
+        }
+    }
+    if (rp.size() == 0)
+    {
+        POS_TRACE_INFO(EID(REBUILD_PAIR_DEBUG), "SetQuickRebuildPair, no target found at this partition {}",
+            PARTITION_TYPE_STR[type]);
+        return;
+    }
+
+    POS_TRACE_INFO(EID(REBUILD_PAIR_DEBUG),
+        "QuickRebuildPairs, pairCnt:{}, part:{}", rp.size(), PARTITION_TYPE_STR[type]);
+    _SetRebuildPair(fault, backupRp);
+    POS_TRACE_INFO(EID(REBUILD_PAIR_DEBUG),
+        "QuickRebuildPairsBackup, pairCnt:{}, part:{}", backupRp.size(), PARTITION_TYPE_STR[type]);
+}
+
+vector<uint32_t>
+StripePartition::_GetAbnormalDeviceIndex(void)
+{
+    auto&& abnormalDevIndex = Enumerable::SelectWhere(devs,
+        [](auto d) { return d->GetDataIndex(); }, [](auto i) { return i->GetState() != ArrayDeviceState::NORMAL; });
+
+    return abnormalDevIndex;
+}
+
 } // namespace pos

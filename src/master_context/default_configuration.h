@@ -80,7 +80,9 @@ private:
     vector<ConfigKeyValue> journalData = {
         {"enable", "true"},
         {"buffer_size_in_mb", "0"},
-        {"debug_mode", "false"}
+        {"number_of_log_groups", "2"},
+        {"debug_mode", "false"},
+        {"interval_in_msec_for_metric", "1000"}
     };
     vector<ConfigKeyValue> flushData = {
         {"enable", "false"},
@@ -93,7 +95,7 @@ private:
     vector<ConfigKeyValue> loggerData = {
         {"logfile_size_in_mb", "50"},
         {"logfile_rotation_count", "20"},
-        {"min_allowable_log_level", "\"debug\""},
+        {"min_allowable_log_level", "\"info\""},
         // TODO (mj): The default value of structured_logging will be
         // TRUE after implementing the strcutured logging functionality.
         {"enable_structured_logging", "false"},
@@ -151,13 +153,24 @@ private:
     vector<ConfigKeyValue> metaFsData = {
         {"mio_pool_capacity", "32768"},
         {"mpio_pool_capacity", "32768"},
-        {"write_mpio_cache_enable", "false"},
         {"write_mpio_cache_capacity", "32"},
         {"direct_access_for_journal_enable", "true"},
-        {"time_interval_in_milliseconds_for_metric", "5000"}
+        {"time_interval_in_milliseconds_for_metric", "1000"},
+        {"sampling_skip_count", "100"},
+        {"wrr_count_special_purpose_map", "1"},
+        {"wrr_count_journal", "1"},
+        {"wrr_count_map", "1"},
+        {"wrr_count_general", "1"},
     };
     vector<ConfigKeyValue> wtData = {
         {"enable", "false"}
+    };
+    vector<ConfigKeyValue> traceData = {
+        {"enable", "false"},
+        {"collector_endpoint", "\"http://localhost:3418/v1/traces\""}
+    };
+    vector<ConfigKeyValue> rebuildData = {
+        {"auto_start", "true"}
     };
 
     using ConfigList =
@@ -177,7 +190,9 @@ private:
         {"flow_control", flowControlData},
         {"transport", transportData},
         {"metafs", metaFsData},
-        {"write_through", wtData}
+        {"write_through", wtData},
+        {"trace", traceData},
+        {"rebuild", rebuildData}
     };
 
     const string CONFIGURATION_PATH = "/etc/pos/";

@@ -60,7 +60,7 @@ public:
     const PartitionLogicalSize* GetLogicalSize();
     const PartitionPhysicalSize* GetPhysicalSize();
     bool IsValidLba(uint64_t lba);
-    int FindDevice(ArrayDevice* dev);
+    int FindDevice(IArrayDevice* dev);
     virtual RaidState GetRaidState(void) { return RaidState::NORMAL; }
     virtual void RegisterService(IPartitionServices* svc) {}
     PartitionType GetType(void) { return type; }

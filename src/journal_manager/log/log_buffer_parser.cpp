@@ -32,6 +32,8 @@
 
 #include "log_buffer_parser.h"
 
+#include <unordered_set>
+
 #include "src/include/pos_event_id.h"
 #include "src/journal_manager/log/block_write_done_log_handler.h"
 #include "src/journal_manager/log/gc_block_write_done_log_handler.h"
@@ -83,7 +85,7 @@ LogBufferParser::GetLogs(void* buffer, uint64_t bufferSize, LogList& logs)
     bool validMarkFound = false;
     uint64_t searchOffset = 0;
     uint64_t foundOffset = 0;
-    uint64_t lastSeqNum = UINT64_MAX;
+    std::unordered_set<uint32_t> seqNumSeen;
 
     while ((validMarkFound = finder.GetNextValidMarkOffset(searchOffset, foundOffset)) == true)
     {
@@ -95,7 +97,7 @@ LogBufferParser::GetLogs(void* buffer, uint64_t bufferSize, LogList& logs)
             LogHandlerInterface* log = _GetLogHandler(dataPtr);
             if (log == nullptr)
             {
-                int event = static_cast<int>(POS_EVENT_ID::JOURNAL_INVALID_LOG_FOUND);
+                int event = static_cast<int>(EID(JOURNAL_INVALID_LOG_FOUND));
                 POS_TRACE_ERROR(event, "Unknown type of log is found");
                 return event * -1;
             }
@@ -103,14 +105,35 @@ LogBufferParser::GetLogs(void* buffer, uint64_t bufferSize, LogList& logs)
             logs.AddLog(log);
             _LogFound(log->GetType());
 
-            lastSeqNum = log->GetSeqNum();
+            seqNumSeen.insert(log->GetSeqNum());
             searchOffset = foundOffset + log->GetSize();
         }
         else if (validMark == LOG_GROUP_FOOTER_VALID_MARK)
         {
             LogGroupFooter footer = *(LogGroupFooter*)(dataPtr);
-            logs.SetLogGroupFooter(lastSeqNum, footer);
+            if (footer.isReseted)
+            {
+                int event = static_cast<int>(EID(JOURNAL_INVALID_LOG_FOUND));
+                POS_TRACE_INFO(event, "Reseted footer is found. Found logs whith SeqNumber ({}) will be reseted ", footer.resetedSequenceNumber);
+                seqNumSeen.erase(footer.resetedSequenceNumber);
+                logs.EraseReplayLogGroup(footer.resetedSequenceNumber);
+            }
+            else
+            {
+                logs.SetLogGroupFooter(*seqNumSeen.begin(), footer);
+            }
 
+            if (seqNumSeen.size() > 1)
+            {
+                int event = static_cast<int>(EID(JOURNAL_INVALID_LOG_FOUND));
+                std::string seqNumList = "";
+                for (uint32_t seqNum : seqNumSeen)
+                {
+                    seqNumList += (std::to_string(seqNum) + ", ");
+                }
+                POS_TRACE_ERROR(event, "Several sequence numbers are found in single log group, seqNumSeen List: {}", seqNumList);
+                return event * -1;
+            }
             searchOffset = foundOffset + sizeof(LogGroupFooter);
         }
     }
@@ -164,7 +187,7 @@ LogBufferParser::_PrintFoundLogTypes(void)
     int numGcStripeFlushedLogs = logsFound[(int)LogType::GC_STRIPE_FLUSHED];
     int numVolumeDeletedLogs = logsFound[(int)LogType::VOLUME_DELETED];
 
-    POS_TRACE_DEBUG(POS_EVENT_ID::JOURNAL_DEBUG,
+    POS_TRACE_DEBUG(EID(JOURNAL_DEBUG),
         "Logs found: {} block map, {} stripe map, {} gc stripes, {} volumes deleted",
         numBlockMapUpdatedLogs, numStripeMapUpdatedLogs, numGcStripeFlushedLogs, numVolumeDeletedLogs);
 }

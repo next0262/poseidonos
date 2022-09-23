@@ -59,7 +59,7 @@ ExtentAllocator::Init(MetaLpnType _base, MetaLpnType _last)
 
     freeList.push_back({ fileRegionBaseLpnInVolume, availableLpnCount });
 
-    POS_TRACE_DEBUG(POS_EVENT_ID::MFS_DEBUG_MESSAGE,
+    POS_TRACE_DEBUG(EID(MFS_DEBUG_MESSAGE),
         "ExtentAllocator::Init fileRegionBaseLpnInVolume={}, maxFileRegionLpn={}, availableLpnCount={}",
         fileRegionBaseLpnInVolume, maxFileRegionLpn, availableLpnCount);
 }
@@ -100,23 +100,23 @@ ExtentAllocator::AllocExtents(MetaLpnType lpnCnt)
         _SortAndCalcAvailable(false, newLpnCnt);
     }
 
-    POS_TRACE_INFO((int)POS_EVENT_ID::MFS_INFO_MESSAGE,
+    POS_TRACE_INFO(EID(MFS_INFO_MESSAGE),
         "[ExtentAllocator] base: {}, last: {}, available: {}",
         fileRegionBaseLpnInVolume, maxFileRegionLpn, availableLpnCount);
-    POS_TRACE_INFO((int)POS_EVENT_ID::MFS_INFO_MESSAGE,
+    POS_TRACE_INFO(EID(MFS_INFO_MESSAGE),
         "[ExtentAllocator] requested lpn count: {}, allocated extent count: {}",
         lpnCnt, result.size());
 
     for (auto& extent : result)
     {
-        POS_TRACE_INFO((int)POS_EVENT_ID::MFS_INFO_MESSAGE,
+        POS_TRACE_INFO(EID(MFS_INFO_MESSAGE),
             "allocated extent, startLpn: {}, lpnCount: {}",
             extent.GetStartLpn(), extent.GetCount());
     }
 
     if (result.size() > MetaFsConfig::MAX_PAGE_MAP_CNT)
     {
-        POS_TRACE_ERROR((int)POS_EVENT_ID::MFS_ERROR_MESSAGE,
+        POS_TRACE_ERROR(EID(MFS_ERROR_MESSAGE),
             "It has exceeded the maximum extent count that can be allocated.");
         assert(0);
     }
@@ -212,7 +212,7 @@ ExtentAllocator::SetAllocatedExtentList(std::vector<MetaFileExtent>& list)
 {
     if (list.size() == 0)
     {
-        POS_TRACE_DEBUG(POS_EVENT_ID::MFS_DEBUG_MESSAGE,
+        POS_TRACE_DEBUG(EID(MFS_DEBUG_MESSAGE),
             "There is no content in the list");
         return;
     }
@@ -220,7 +220,7 @@ ExtentAllocator::SetAllocatedExtentList(std::vector<MetaFileExtent>& list)
     // get allocated extent
     for (auto& extent : list)
     {
-        POS_TRACE_DEBUG(POS_EVENT_ID::MFS_DEBUG_MESSAGE,
+        POS_TRACE_DEBUG(EID(MFS_DEBUG_MESSAGE),
             "copy content from outside to allocated list: extent.GetStartLpn()={}, extent.GetCount()={}",
             extent.GetStartLpn(), extent.GetCount());
 
@@ -237,7 +237,7 @@ ExtentAllocator::SetFileBaseLpn(MetaLpnType BaseLpn)
     freeList.clear();
     freeList.push_back({ fileRegionBaseLpnInVolume, availableLpnCount });
 
-    POS_TRACE_DEBUG(POS_EVENT_ID::MFS_DEBUG_MESSAGE,
+    POS_TRACE_DEBUG(EID(MFS_DEBUG_MESSAGE),
         "set file base lpn, availableLpnCount={}", availableLpnCount);
 }
 
@@ -414,18 +414,18 @@ ExtentAllocator::PrintFreeExtentsList(void)
 {
     int totalCount = 0;
 
-    POS_TRACE_DEBUG(POS_EVENT_ID::MFS_DEBUG_MESSAGE,
+    POS_TRACE_DEBUG(EID(MFS_DEBUG_MESSAGE),
         "free space -> {}",
         availableLpnCount);
 
     for (MetaFileExtent extent : freeList)
     {
         totalCount += extent.GetCount();
-        POS_TRACE_DEBUG(POS_EVENT_ID::MFS_DEBUG_MESSAGE,
+        POS_TRACE_DEBUG(EID(MFS_DEBUG_MESSAGE),
             "({}, {})", extent.GetStartLpn(), extent.GetCount());
     }
 
-    POS_TRACE_DEBUG(POS_EVENT_ID::MFS_DEBUG_MESSAGE,
+    POS_TRACE_DEBUG(EID(MFS_DEBUG_MESSAGE),
         "total free lpn count: {} -> calculated)", totalCount);
 }
 } // namespace pos

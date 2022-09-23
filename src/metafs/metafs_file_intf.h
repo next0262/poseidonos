@@ -48,12 +48,13 @@ class MetaFsConfigManager;
 class MetaFsFileIntf : public MetaFileIntf
 {
 public:
-    explicit MetaFsFileIntf(std::string fname, int arrayId,
-                MetaVolumeType volumeType = MetaVolumeType::SsdVolume);
+    explicit MetaFsFileIntf(const std::string fileName, const int arrayId,
+                const MetaFileType fileType,
+                const MetaVolumeType volumeType = MetaVolumeType::SsdVolume);
     // only for test
-    explicit MetaFsFileIntf(std::string fname, int arrayId, MetaFs* metaFs,
-                MetaFsConfigManager* configManager,
-                MetaVolumeType volumeType = MetaVolumeType::SsdVolume);
+    explicit MetaFsFileIntf(const std::string fileName, const int arrayId, MetaFs* metaFs,
+                MetaFsConfigManager* configManager, const MetaFileType fileType,
+                const MetaVolumeType volumeType = MetaVolumeType::SsdVolume);
     virtual ~MetaFsFileIntf(void) override;
 
     virtual int Create(uint64_t fileSize) override;
@@ -68,7 +69,6 @@ public:
     virtual int Close(void) override;
 
 protected:
-    virtual void _SetFileProperty(MetaVolumeType volumeType);
     virtual int _Read(int fd, uint64_t fileOffset, uint64_t length, char* buffer) override;
     virtual int _Write(int fd, uint64_t fileOffset, uint64_t length, char* buffer) override;
 

@@ -168,7 +168,7 @@ RBAStateManager::_AcquireOwnership(uint32_t volumeID, BlkAddr startRba,
     if (unlikely(volumeID >= MAX_VOLUME_COUNT))
     {
         std::pair<POS_EVENT_ID, EventLevel> eventIdWithLevel(
-            POS_EVENT_ID::RBAMGR_WRONG_VOLUME_ID, EventLevel::ERROR);
+            EID(RBAMGR_WRONG_VOLUME_ID), EventLevel::ERROR);
         throw eventIdWithLevel;
     }
 
@@ -185,8 +185,7 @@ RBAStateManager::_ReleaseOwnership(uint32_t volumeID, BlkAddr startRba,
 {
     if (unlikely(volumeID >= MAX_VOLUME_COUNT))
     {
-        PosEventId::Print(POS_EVENT_ID::RBAMGR_WRONG_VOLUME_ID,
-            EventLevel::ERROR);
+        POS_TRACE_ERROR(EID(RBAMGR_WRONG_VOLUME_ID), "");
         return;
     }
 
@@ -285,45 +284,45 @@ int
 RBAStateManager::VolumeCreated(VolumeEventBase* volEventBase, VolumeEventPerf* volEventPerf, VolumeArrayInfo* volArrayInfo)
 {
     CreateRBAState(volEventBase->volId, ChangeByteToBlock(volEventBase->volSizeByte));
-    return (int)POS_EVENT_ID::VOL_EVENT_OK;
+    return EID(VOL_EVENT_OK);
 }
 
 int
 RBAStateManager::VolumeDeleted(VolumeEventBase* volEventBase, VolumeArrayInfo* volArrayInfo)
 {
     DeleteRBAState(volEventBase->volId);
-    return (int)POS_EVENT_ID::VOL_EVENT_OK;
+    return EID(VOL_EVENT_OK);
 }
 
 int
 RBAStateManager::VolumeMounted(VolumeEventBase* volEventBase, VolumeEventPerf* volEventPerf, VolumeArrayInfo* volArrayInfo)
 {
-    return (int)POS_EVENT_ID::VOL_EVENT_OK;
+    return EID(VOL_EVENT_OK);
 }
 
 int
 RBAStateManager::VolumeUnmounted(VolumeEventBase* volEventBase, VolumeArrayInfo* volArrayInfo)
 {
-    return (int)POS_EVENT_ID::VOL_EVENT_OK;
+    return EID(VOL_EVENT_OK);
 }
 
 int
 RBAStateManager::VolumeLoaded(VolumeEventBase* volEventBase, VolumeEventPerf* volEventPerf, VolumeArrayInfo* volArrayInfo)
 {
     CreateRBAState(volEventBase->volId, ChangeByteToBlock(volEventBase->volSizeByte));
-    return (int)POS_EVENT_ID::VOL_EVENT_OK;
+    return EID(VOL_EVENT_OK);
 }
 
 int
 RBAStateManager::VolumeUpdated(VolumeEventBase* volEventBase, VolumeEventPerf* volEventPerf, VolumeArrayInfo* volArrayInfo)
 {
-    return (int)POS_EVENT_ID::VOL_EVENT_OK;
+    return EID(VOL_EVENT_OK);
 }
 
 int
 RBAStateManager::VolumeDetached(vector<int> volList, VolumeArrayInfo* volArrayInfo)
 {
-    return (int)POS_EVENT_ID::VOL_EVENT_OK;
+    return EID(VOL_EVENT_OK);
 }
 
 } // namespace pos

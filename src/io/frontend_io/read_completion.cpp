@@ -32,10 +32,12 @@
 
 #include "src/io/frontend_io/read_completion.h"
 
-#include "src/include/pos_event_id.hpp"
-#include "src/include/branch_prediction.h"
-#include "src/lib/block_alignment.h"
+#include <air/Air.h>
+
 #include "src/bio/volume_io.h"
+#include "src/include/branch_prediction.h"
+#include "src/include/pos_event_id.hpp"
+#include "src/lib/block_alignment.h"
 #include "src/logger/logger.h"
 
 namespace pos
@@ -63,7 +65,7 @@ ReadCompletion::_DoSpecificJob(void)
     {
         if (unlikely(nullptr == volumeIo))
         {
-            POS_EVENT_ID eventId = POS_EVENT_ID::RDCMP_INVALID_UBIO;
+            POS_EVENT_ID eventId = EID(RDCMP_INVALID_UBIO);
             POS_TRACE_ERROR(static_cast<int>(eventId),
                 "Ubio is null at ReadCompleteHandler");
             throw eventId;
@@ -76,7 +78,7 @@ ReadCompletion::_DoSpecificJob(void)
             // this error will be automatically transfered to AIO
             // with callback mechanism.
             // Check Partition type and ft method
-            POS_EVENT_ID eventId = POS_EVENT_ID::RDCMP_READ_FAIL;
+            POS_EVENT_ID eventId = EID(RDCMP_READ_FAIL);
             POS_TRACE_ERROR(static_cast<int>(eventId),
                 "Uncorrectable data error");
         }
@@ -95,6 +97,8 @@ ReadCompletion::_DoSpecificJob(void)
     {
     }
     volumeIo = nullptr;
+    airlog("CompleteUserRead", "user", GetEventType(), 1);
+
     return true;
 }
 

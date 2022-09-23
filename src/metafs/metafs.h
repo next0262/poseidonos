@@ -46,15 +46,20 @@
 #include "src/metafs/mai/metafs_wbt_api.h"
 #include "src/metafs/storage/mss.h"
 #include "src/telemetry/telemetry_client/telemetry_publisher.h"
+#include "src/metafs/mvm/volume/file_descriptor_allocator.h"
+#include "rocksdb/db.h"
 
 namespace pos
 {
+class MetaFsConfigManager;
+
 class MetaFs : public IMountSequence
 {
 public:
     MetaFs(void);
-    MetaFs(IArrayInfo* arrayInfo, bool isLoaded);
-    MetaFs(IArrayInfo* arrayInfo, bool isLoaded, MetaFsManagementApi* mgmt,
+    MetaFs(IArrayInfo* arrayInfo, const bool isLoaded);
+    // for test
+    MetaFs(IArrayInfo* arrayInfo, const bool isLoaded, MetaFsManagementApi* mgmt,
         MetaFsFileControlApi* ctrl, MetaFsIoApi* io, MetaFsWBTApi* wbt,
         MetaStorageSubsystem* metaStorage, TelemetryPublisher* tp);
     virtual ~MetaFs(void);
@@ -66,6 +71,15 @@ public:
 
     virtual uint64_t GetEpochSignature(void);
     virtual StripeId GetTheLastValidStripeId(void);
+
+    virtual rocksdb::DB* GetRocksMeta(void)
+    {
+        return rocksMeta;
+    }
+    virtual FileDescriptorAllocator* GetFileDescriptorAllocator(void)
+    {
+        return fileDescriptorAllocator;
+    }
     virtual int EstimateAlignedFileIOSize(MetaFilePropertySet& prop);
 
     MetaFsManagementApi* mgmt;
@@ -79,6 +93,7 @@ private:
     POS_EVENT_ID _CreateMetaVolume(void);
     POS_EVENT_ID _OpenMetaVolume(void);
     POS_EVENT_ID _CloseMetaVolume(void);
+    POS_EVENT_ID _CreateRocksDBMetaFs(void);
 
     void _RegisterMediaInfoIfAvailable(PartitionType ptnType, MetaStorageInfoList& mediaList);
     std::shared_ptr<MetaStorageInfo> _MakeMetaStorageMediaInfo(PartitionType ptnType);
@@ -93,5 +108,8 @@ private:
     int arrayId_;
     MetaStorageSubsystem* metaStorage_;
     TelemetryPublisher* telemetryPublisher_;
+    rocksdb::DB* rocksMeta;
+    FileDescriptorAllocator* fileDescriptorAllocator;
+    MetaFsConfigManager* configMgr_;
 };
 } // namespace pos

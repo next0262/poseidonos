@@ -43,6 +43,8 @@
 #include "src/metadata/meta_event_factory.h"
 #include "src/metadata/meta_updater.h"
 #include "src/metadata/meta_volume_event_handler.h"
+#include "src/metadata/segment_context_updater.h"
+#include "src/telemetry/telemetry_client/telemetry_client.h"
 #include "src/volume/volume_service.h"
 
 namespace pos
@@ -67,6 +69,7 @@ Metadata::Metadata(IArrayInfo* info, Mapper* mapper, Allocator* allocator,
   volumeEventHandler(nullptr),
   metaService(service),
   metaUpdater(nullptr),
+  segmentContextUpdater(nullptr),
   metaEventFactory(nullptr)
 {
     volumeEventHandler = new MetaVolumeEventHandler(arrayInfo,
@@ -74,10 +77,13 @@ Metadata::Metadata(IArrayInfo* info, Mapper* mapper, Allocator* allocator,
         allocator,
         (journal->IsEnabled() ? journal->GetVolumeEventHandler() : nullptr));
 
+    auto sizeInfo = info->GetSizeInfo(PartitionType::USER_DATA);
+    segmentContextUpdater = new SegmentContextUpdater(allocator->GetISegmentCtx(), journal->GetVersionedSegmentContext(), sizeInfo);
+
     metaEventFactory = new MetaEventFactory(
         mapper->GetIVSAMap(),
         mapper->GetIStripeMap(),
-        allocator->GetISegmentCtx(),
+        segmentContextUpdater,
         allocator->GetIWBStripeAllocator(),
         allocator->GetIContextManager(),
         arrayInfo);
@@ -123,6 +129,12 @@ Metadata::~Metadata(void)
         metaEventFactory = nullptr;
     }
 
+    if (segmentContextUpdater != nullptr)
+    {
+        delete segmentContextUpdater;
+        segmentContextUpdater = nullptr;
+    }
+
     if (metaUpdater != nullptr)
     {
         delete metaUpdater;
@@ -133,7 +145,7 @@ Metadata::~Metadata(void)
 int
 Metadata::Init(void)
 {
-    int eventId = static_cast<int>(POS_EVENT_ID::MOUNT_ARRAY_DEBUG_MSG);
+    int eventId = static_cast<int>(EID(MOUNT_ARRAY_DEBUG_MSG));
     int result = 0;
 
     std::string arrayName = arrayInfo->GetName();
@@ -143,7 +155,6 @@ Metadata::Init(void)
     if (result != 0)
     {
         POS_TRACE_ERROR(eventId, "[Metadata Error!!] Failed to Init Mapper, array {}", arrayName);
-        mapper->Dispose();
         return result;
     }
 
@@ -152,10 +163,10 @@ Metadata::Init(void)
     if (result != 0)
     {
         POS_TRACE_ERROR(eventId, "[Metadata Error!!] Failed to Init Allocator, array {}", arrayName);
-        allocator->Dispose();
-        mapper->Dispose();
         return result;
     }
+
+    allocator->PrepareVersionedSegmentCtx(journal->GetVersionedSegmentContext());
 
     // MetaUpdater should be registered before journal initialized
     //  as journal might request stripe flush and meta udpate in journal recovery
@@ -181,12 +192,6 @@ Metadata::Init(void)
     if (result != 0)
     {
         POS_TRACE_ERROR(eventId, "[Metadata Error!!] Failed to Init Journal, array {}", arrayName);
-        journal->Dispose();
-        allocator->Dispose();
-        mapper->Dispose();
-
-        metaService->Unregister(arrayInfo->GetName());
-
         return result;
     }
 
@@ -196,7 +201,7 @@ Metadata::Init(void)
 void
 Metadata::Dispose(void)
 {
-    int eventId = static_cast<int>(POS_EVENT_ID::UNMOUNT_ARRAY_DEBUG_MSG);
+    int eventId = static_cast<int>(EID(UNMOUNT_ARRAY_DEBUG_MSG));
     std::string arrayName = arrayInfo->GetName();
 
     POS_TRACE_INFO(eventId, "Start disposing allocator of array {}", arrayName);
@@ -214,7 +219,7 @@ Metadata::Dispose(void)
 void
 Metadata::Shutdown(void)
 {
-    int eventId = static_cast<int>(POS_EVENT_ID::UNMOUNT_ARRAY_DEBUG_MSG);
+    int eventId = static_cast<int>(EID(UNMOUNT_ARRAY_DEBUG_MSG));
     std::string arrayName = arrayInfo->GetName();
 
     POS_TRACE_INFO(eventId, "Start shutdown allocator of array {}", arrayName);
@@ -245,7 +250,7 @@ Metadata::NeedRebuildAgain(void)
     }
     else
     {
-        int eventId = static_cast<int>(POS_EVENT_ID::UNKNOWN_ALLOCATOR_ERROR);
+        int eventId = static_cast<int>(EID(UNKNOWN_ALLOCATOR_ERROR));
         POS_TRACE_ERROR(eventId, "Can't find context manager to check if rebuild is needed");
         return false;
     }
@@ -267,7 +272,7 @@ Metadata::StopRebuilding(void)
     }
     else
     {
-        int eventId = static_cast<int>(POS_EVENT_ID::UNKNOWN_ALLOCATOR_ERROR);
+        int eventId = static_cast<int>(EID(UNKNOWN_ALLOCATOR_ERROR));
         POS_TRACE_ERROR(eventId, "Can't find context manager to check if rebuild is needed");
     }
 }

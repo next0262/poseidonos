@@ -33,6 +33,7 @@
 #include "src/allocator/allocator.h"
 
 #include <fstream>
+#include <set>
 #include <sstream>
 #include <string>
 
@@ -94,20 +95,35 @@ Allocator::Init(void)
 
         _RegisterToAllocatorService();
         isInitialized = true;
+
+        POS_TRACE_INFO(EID(ALLOCATOR_INITIALIZE),
+            "Allocator of array {} is initialized", iArrayInfo->GetName());
+    }
+    else
+    {
+        POS_TRACE_WARN(EID(ALLOCATOR_INITIALIZE),
+            "Allocator of array {} is already initialized, so skip Init(). \
+            Init() is designed to be idempotent, but needs developer's further attention when called multiple times",
+            iArrayInfo->GetName());
     }
     return 0;
 }
 
 void
+Allocator::PrepareVersionedSegmentCtx(IVersionedSegmentContext* vscSegCtx)
+{
+    contextManager->PrepareVersionedSegmentCtx(vscSegCtx);
+}
+
+void
 Allocator::Dispose(void)
 {
-    POS_TRACE_INFO(EID(UNMOUNT_ARRAY_DEBUG_MSG), "[Allocator] Dispose, init:{}", isInitialized);
     if (isInitialized == true)
     {
-        POS_TRACE_INFO(EID(UNMOUNT_ARRAY_DEBUG_MSG), "Start flushing all write buffer stripes");
+        POS_TRACE_INFO(EID(ALLOCATOR_DISPOSE), "Start flushing all write buffer stripes");
         wbStripeManager->FlushAllWbStripes();
 
-        POS_TRACE_INFO(EID(UNMOUNT_ARRAY_DEBUG_MSG), "Start disposing write buffer stripe manager");
+        POS_TRACE_INFO(EID(ALLOCATOR_DISPOSE), "Start disposing write buffer stripe manager");
         wbStripeManager->Dispose();
 
         contextManager->FlushContexts(nullptr, true);
@@ -119,6 +135,16 @@ Allocator::Dispose(void)
             TelemetryClientSingleton::Instance()->DeregisterPublisher(tp->GetName());
         }
         isInitialized = false;
+
+        POS_TRACE_INFO(EID(ALLOCATOR_DISPOSE),
+            "Allocator of array {} is disposed", iArrayInfo->GetName());
+    }
+    else
+    {
+        POS_TRACE_WARN(EID(ALLOCATOR_DISPOSE),
+            "Allocator of array {} is already disposed, so skip Dispose(). \
+            Dispose() is designed to be idempotent, but needs developer's further attention when called multiple times",
+            iArrayInfo->GetName());
     }
 }
 
@@ -212,7 +238,7 @@ Allocator::PrepareRebuild(void)
     ret = contextManager->MakeRebuildTargetSegmentList();
     if (ret != 0)
     {
-        if (ret == (int)POS_EVENT_ID::ALLOCATOR_REBUILD_TARGET_SET_EMPTY)
+        if (ret == EID(ALLOCATOR_REBUILD_TARGET_SET_EMPTY))
         {
             // No segments to rebuild, complete rebuild
             POS_TRACE_INFO(EID(ALLOCATOR_MAKE_REBUILD_TARGET), "No segments to rebuild");
@@ -262,7 +288,7 @@ Allocator::SetUrgentThreshold(uint32_t inputThreshold)
 int
 Allocator::GetMeta(WBTAllocatorMetaType type, std::string fname, MetaFileIntf* file)
 {
-    MetaFileIntf* dumpFile = new MockFileIntf(fname, iArrayInfo->GetIndex());
+    MetaFileIntf* dumpFile = new MockFileIntf(fname, iArrayInfo->GetIndex(), MetaFileType::Map);
     if (file != nullptr)
     {
         delete dumpFile;
@@ -273,7 +299,7 @@ Allocator::GetMeta(WBTAllocatorMetaType type, std::string fname, MetaFileIntf* f
     if (ret < 0)
     {
         POS_TRACE_ERROR(EID(ALLOCATOR_START), "WBT failed to open output file {}", fname);
-        return -EID(ALLOCATOR_START);
+        return ERRID(ALLOCATOR_START);
     }
 
     dumpFile->Open();
@@ -288,7 +314,7 @@ Allocator::GetMeta(WBTAllocatorMetaType type, std::string fname, MetaFileIntf* f
         if (ret < 0)
         {
             POS_TRACE_ERROR(EID(ALLOCATOR_META_ARCHIVE_STORE), "WBT Sync Write(SegmentInfo) to {} Failed, ret:{}", fname, ret);
-            ret = -EID(ALLOCATOR_META_ARCHIVE_STORE);
+            ret = ERRID(ALLOCATOR_META_ARCHIVE_STORE);
         }
         delete[] buf;
     }
@@ -297,7 +323,7 @@ Allocator::GetMeta(WBTAllocatorMetaType type, std::string fname, MetaFileIntf* f
         if (WBT_NUM_ALLOCATOR_META <= type)
         {
             POS_TRACE_ERROR(EID(ALLOCATOR_META_ARCHIVE_STORE), "WBT wrong alloctor meta type, type:{}", type);
-            ret = -EID(ALLOCATOR_META_ARCHIVE_STORE);
+            ret = ERRID(ALLOCATOR_META_ARCHIVE_STORE);
         }
         else
         {
@@ -305,7 +331,7 @@ Allocator::GetMeta(WBTAllocatorMetaType type, std::string fname, MetaFileIntf* f
             if (ret < 0)
             {
                 POS_TRACE_ERROR(EID(ALLOCATOR_META_ARCHIVE_STORE), "WBT Sync Write(allocatorCtx) to {} Failed, ret:{}", fname, ret);
-                ret = -EID(ALLOCATOR_META_ARCHIVE_STORE);
+                ret = ERRID(ALLOCATOR_META_ARCHIVE_STORE);
             }
         }
     }
@@ -318,7 +344,7 @@ Allocator::GetMeta(WBTAllocatorMetaType type, std::string fname, MetaFileIntf* f
 int
 Allocator::SetMeta(WBTAllocatorMetaType type, std::string fname, MetaFileIntf* file)
 {
-    MetaFileIntf* fileProvided = new MockFileIntf(fname, iArrayInfo->GetIndex());
+    MetaFileIntf* fileProvided = new MockFileIntf(fname, iArrayInfo->GetIndex(), MetaFileType::Map);
     if (file != nullptr)
     {
         delete fileProvided;
@@ -336,7 +362,7 @@ Allocator::SetMeta(WBTAllocatorMetaType type, std::string fname, MetaFileIntf* f
         if (ret < 0)
         {
             POS_TRACE_ERROR(EID(ALLOCATOR_META_ARCHIVE_LOAD), "WBT Sync Read(SegmentInfo) from {} Failed, ret:{}", fname, ret);
-            ret = -EID(ALLOCATOR_META_ARCHIVE_LOAD);
+            ret = ERRID(ALLOCATOR_META_ARCHIVE_LOAD);
         }
         else
         {
@@ -354,7 +380,7 @@ Allocator::SetMeta(WBTAllocatorMetaType type, std::string fname, MetaFileIntf* f
             if (ret < 0)
             {
                 POS_TRACE_ERROR(EID(ALLOCATOR_META_ARCHIVE_LOAD), "WBT Sync Read(wblsid bitmap) from {} Failed, ret:{}", fname, ret);
-                ret = -EID(ALLOCATOR_META_ARCHIVE_LOAD);
+                ret = ERRID(ALLOCATOR_META_ARCHIVE_LOAD);
             }
             else
             {
@@ -369,7 +395,7 @@ Allocator::SetMeta(WBTAllocatorMetaType type, std::string fname, MetaFileIntf* f
             if (ret < 0)
             {
                 POS_TRACE_ERROR(EID(ALLOCATOR_META_ARCHIVE_LOAD), "WBT Sync Read(allocatorCtx) from {} Failed, ret:{}", fname, ret);
-                ret = -EID(ALLOCATOR_META_ARCHIVE_LOAD);
+                ret = ERRID(ALLOCATOR_META_ARCHIVE_LOAD);
             }
         }
     }

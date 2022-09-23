@@ -81,9 +81,9 @@ type SMARTLOGReqParam struct {
 
 type CreateDeviceReqParam struct {
 	DEVICENAME string `json:"name"`
-	NUMBLOCKS  int    `json:"num_blocks"`
-	BLOCKSIZE  int    `json:"block_size"`
-	DEVICETYPE string `json:"dev_type"`
+	NUMBLOCKS  int    `json:"numBlocks"`
+	BLOCKSIZE  int    `json:"blockSize"`
+	DEVICETYPE string `json:"devType"`
 	NUMA       int    `json:"numa"`
 }
 
@@ -108,6 +108,7 @@ type CreateVolumeParam struct {
 	VOLUMESIZE   uint64 `json:"size"`
 	MAXIOPS      int    `json:"maxiops,omitempty"`
 	MAXBANDWIDTH int    `json:"maxbw,omitempty"`
+	ISWALVOL     bool   `json:"iswalvol"`
 }
 
 type DeleteVolumeParam struct {
@@ -169,9 +170,9 @@ type CreateSubsystemParam struct {
 	SUBNQN        string `json:"name"`
 	SERIAL        string `json:"sn,omitempty"`
 	MODEL         string `json:"mn,omitempty"`
-	MAXNAMESPACES int    `json:"max_namespaces,omitempty"`
-	ALLOWANYHOST  bool   `json:"allow_any_host,omitempty"`
-	ANAREPORTING  bool   `json:"ana_reporting,omitempty"`
+	MAXNAMESPACES int    `json:"maxNamespaces,omitempty"`
+	ALLOWANYHOST  bool   `json:"allowAnyHost,omitempty"`
+	ANAREPORTING  bool   `json:"anaReporting,omitempty"`
 }
 
 type CreateSubsystemAutoParam struct {

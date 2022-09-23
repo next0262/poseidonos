@@ -32,12 +32,16 @@
 
 #include "log_write_handler.h"
 
+#include <string>
+
 #include "buffer_offset_allocator.h"
 #include "src/include/pos_event_id.hpp"
 #include "src/journal_manager/log_buffer/journal_log_buffer.h"
 #include "src/journal_manager/log_write/log_write_statistics.h"
 #include "src/journal_manager/replay/replay_stripe.h"
 #include "src/logger/logger.h"
+#include "src/telemetry/telemetry_client/telemetry_publisher.h"
+#include "src/metadata/block_map_update.h"
 
 namespace pos
 {
@@ -52,7 +56,9 @@ LogWriteHandler::LogWriteHandler(LogWriteStatistics* statistics, WaitingLogList*
 : logBuffer(nullptr),
   bufferAllocator(nullptr),
   logWriteStats(statistics),
-  waitingList(waitingList)
+  waitingList(waitingList),
+  telemetryPublisher(nullptr),
+  interval(nullptr)
 {
     numIosRequested = 0;
     numIosCompleted = 0;
@@ -62,14 +68,21 @@ LogWriteHandler::~LogWriteHandler(void)
 {
     delete logWriteStats;
     delete waitingList;
+
+    if (nullptr != interval)
+    {
+        delete interval;
+    }
 }
 
 void
-LogWriteHandler::Init(BufferOffsetAllocator* allocator, JournalLogBuffer* buffer,
-    JournalConfiguration* journalConfig)
+LogWriteHandler::Init(BufferOffsetAllocator* allocator, IJournalLogBuffer* buffer,
+    JournalConfiguration* journalConfig, TelemetryPublisher* tp, ConcurrentMetaFsTimeInterval* timeInterval)
 {
     bufferAllocator = allocator;
     logBuffer = buffer;
+    telemetryPublisher = tp;
+    interval = timeInterval;
 
     if (journalConfig->IsDebugEnabled() == true)
     {
@@ -98,6 +111,21 @@ LogWriteHandler::AddLog(LogWriteContext* context)
         context->SetBufferAllocated(allocatedOffset, groupId, seqNum);
         context->SetInternalCallback(std::bind(&LogWriteHandler::LogWriteDone, this, std::placeholders::_1));
 
+        EventSmartPtr metaUpdateEvent = context->GetClientCallback();
+        MetaUpdateCallback* metaUpdateCb = dynamic_cast<MetaUpdateCallback*>(metaUpdateEvent.get());
+
+        if (nullptr != metaUpdateCb)
+        {
+            metaUpdateCb->SetLogGroupId(groupId);
+        }
+        else
+        {
+            // log writes that not use MetaUpdateCallback will be skipped intentionally.
+            // metaUpdateCb is nullable by design since certain callback (e.g. VolumeDeletedLogWriteCallback)
+            // may not want to use VersionedSegmentContext feature (hence, not inheriting MetaUpdateCallback)
+        }
+
+        context->stopwatch.StoreTimestamp(LogStage::Issue);
         result = logBuffer->WriteLog(context);
         if (EID(SUCCESS) == result)
         {
@@ -128,14 +156,18 @@ LogWriteHandler::LogWriteDone(AsyncMetaFileIoCtx* ctx)
     numIosCompleted++;
 
     LogWriteContext* context = dynamic_cast<LogWriteContext*>(ctx);
+
     if (context != nullptr)
     {
+        context->stopwatch.StoreTimestamp(LogStage::Complete);
+        _PublishPeriodicMetrics(context);
+
         bool statusUpdatedToStats = false;
 
         if (context->GetError() != 0)
         {
             // When log write fails due to error, should log the error and complete write
-            POS_TRACE_ERROR(POS_EVENT_ID::JOURNAL_LOG_WRITE_FAILED,
+            POS_TRACE_ERROR(EID(JOURNAL_LOG_WRITE_FAILED),
                 "Log write failed due to io error");
 
             statusUpdatedToStats = false;
@@ -158,6 +190,42 @@ LogWriteHandler::LogWriteDone(AsyncMetaFileIoCtx* ctx)
         }
     }
     _StartWaitingIos();
+}
+
+void
+LogWriteHandler::_PublishPeriodicMetrics(LogWriteContext* context)
+{
+    uint64_t elapsedTime = context->stopwatch.GetElapsedInMilli(LogStage::Issue, LogStage::Complete).count();
+    uint64_t time = sumOfTimeSpentPerInterval.fetch_and(elapsedTime) + elapsedTime;
+    uint64_t count = doneCountPerInterval.fetch_and(1) + 1;
+
+    if (telemetryPublisher && interval && interval->CheckInterval())
+    {
+        sumOfTimeSpentPerInterval = 0;
+        doneCountPerInterval = 0;
+
+        std::string logGroupId = std::to_string(context->GetLogGroupId());
+        POSMetricVector* v = new POSMetricVector();
+
+        POSMetric metricIssueCnt(TEL36005_JRN_LOG_COUNT, POSMetricTypes::MT_GAUGE);
+        metricIssueCnt.AddLabel("group_id", logGroupId);
+        metricIssueCnt.SetGaugeValue(numIosRequested);
+        v->emplace_back(metricIssueCnt);
+
+        POSMetric metricDoneCnt(TEL36006_JRN_LOG_DONE_COUNT, POSMetricTypes::MT_GAUGE);
+        metricDoneCnt.AddLabel("group_id", logGroupId);
+        metricDoneCnt.SetGaugeValue(numIosCompleted);
+        v->emplace_back(metricDoneCnt);
+
+        if (count)
+        {
+            POSMetric m(TEL36007_JRN_LOG_WRITE_TIME_AVERAGE, POSMetricTypes::MT_GAUGE);
+            m.SetGaugeValue(time / count);
+            v->emplace_back(m);
+        }
+
+        telemetryPublisher->PublishMetricList(v);
+    }
 }
 
 void

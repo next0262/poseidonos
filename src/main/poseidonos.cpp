@@ -32,17 +32,23 @@
 
 #include "poseidonos.h"
 
-#include <string>
+#include <iostream>
+#include <air/Air.h>
 
-#include "Air.h"
+#include <string>
+#include <vector>
+#include <sstream>
+
 #include "src/array_mgmt/array_manager.h"
 #include "src/cli/cli_server.h"
+#include "src/cli/grpc_cli_server.h"
 #include "src/cpu_affinity/affinity_manager.h"
 #include "src/cpu_affinity/affinity_viewer.h"
 #include "src/device/device_manager.h"
 #include "src/event_scheduler/event.h"
 #include "src/event_scheduler/event_scheduler.h"
 #include "src/event_scheduler/io_completer.h"
+#include "src/event_scheduler/io_timeout_checker.h"
 #include "src/include/pos_event_id.h"
 #include "src/io/frontend_io/flush_command_manager.h"
 #include "src/io/frontend_io/unvmf_io_handler.h"
@@ -56,31 +62,52 @@
 #include "src/metafs/include/metafs_service.h"
 #include "src/network/nvmf_target.h"
 #include "src/network/transport_configuration.h"
+#include "src/pos_replicator/grpc_publisher.h"
+#include "src/pos_replicator/grpc_subscriber.h"
+#include "src/pos_replicator/posreplicator_manager.h"
 #include "src/qos/qos_manager.h"
-#include "src/signal_handler/user_signal_interface.h"
+#include "src/resource_checker/resource_checker.h"
+#include "src/resource_checker/smart_collector.h"
 #include "src/signal_handler/signal_handler.h"
+#include "src/signal_handler/user_signal_interface.h"
+#include "src/spdk_wrapper/accel_engine_api.h"
 #include "src/spdk_wrapper/spdk.h"
 #include "src/telemetry/telemetry_air/telemetry_air_delegator.h"
 #include "src/telemetry/telemetry_client/telemetry_client.h"
 #include "src/telemetry/telemetry_client/telemetry_publisher.h"
-#include "src/cli/grpc_cli_server.h"
+#include "src/resource_checker/resource_checker.h"
+#include "src/resource_checker/smart_collector.h"
+#include "src/trace/trace_exporter.h"
+#include "src/trace/otlp_factory.h"
 
 namespace pos
 {
-void
+int
 Poseidonos::Init(int argc, char** argv)
 {
-    _InitSignalHandler();
-    _LoadConfiguration();
-    _LoadVersion();
-    _InitSpdk(argc, argv);
-    _InitAffinity();
-    _SetupThreadModel();
-    _SetPerfImpact();
-    _InitDebugInfo();
-    _InitAIR();
-    _InitIOInterface();
-    _InitMemoryChecker();
+    POS_TRACE_TRACE(EID(POS_TRACE_STARTED), "");
+    int ret = _LoadConfiguration();
+    if (ret == 0)
+    {
+        _InitSignalHandler();
+        _LoadVersion();
+        _InitSpdk(argc, argv);
+        _InitAffinity();
+        _SetupThreadModel();
+        _SetPerfImpact();
+        _InitDebugInfo();
+        _InitAIR();
+        _InitIOInterface();
+        _InitMemoryChecker();
+        _InitResourceChecker();
+        _InitReplicatorManager();
+        _InitTraceExporter(argv[0], pos::ConfigManagerSingleton::Instance(), pos::VersionProviderSingleton::Instance(), pos::TraceExporterSingleton::Instance(new OtlpFactory()));
+    }
+    else
+    {
+        POS_TRACE_TRACE(EID(POS_TRACE_INIT_FAIL), "{}", ConfigManagerSingleton::Instance()->RawData());
+    }
+    return ret;
 }
 
 void
@@ -95,15 +122,24 @@ Poseidonos::_InitIOInterface(void)
 }
 
 void
+Poseidonos::_InitReplicatorManager(void)
+{
+    PosReplicatorManager* posReplicatorManager = PosReplicatorManagerSingleton::Instance();
+    posReplicatorManager->Init(new GrpcPublisher(nullptr, ConfigManagerSingleton::Instance()), new GrpcSubscriber(ConfigManagerSingleton::Instance()));
+}
+
+void
 Poseidonos::Run(void)
 {
     _RunCLIService();
+    POS_TRACE_TRACE(EID(POS_TRACE_INIT_SUCCESS), "{}", ConfigManagerSingleton::Instance()->RawData());
     pos_cli::Wait();
 }
 
 void
 Poseidonos::Terminate(void)
 {
+    POS_TRACE_TRACE(EID(POS_TRACE_TERMINATING), "");
     MemoryChecker::Enable(false);
     EventSchedulerSingleton::Instance()->SetTerminate(true);
     NvmfTargetSingleton::ResetInstance();
@@ -113,6 +149,7 @@ Poseidonos::Terminate(void)
     QosManagerSingleton::Instance()->FinalizeSpdkManager();
     QosManagerSingleton::ResetInstance();
     FlushCmdManagerSingleton::ResetInstance();
+    SmartLogMgrSingleton::ResetInstance();
     delete debugInfo;
     IOSubmitHandler* submitHandler = static_cast<IOSubmitHandler*>(IIOSubmitHandler::GetInstance());
     delete submitHandler;
@@ -121,7 +158,13 @@ Poseidonos::Terminate(void)
         delete ioRecoveryEventFactory;
     }
     ArrayManagerSingleton::ResetInstance();
+    AccelEngineApi::Finalize();
+    SpdkCallerSingleton::Instance()->SpdkBdevPosUnRegisterPoller(UNVMfCompleteHandler);
     EventFrameworkApiSingleton::ResetInstance();
+    SpdkSingleton::ResetInstance();
+    IoTimeoutCheckerSingleton::ResetInstance();
+
+    IoTimeoutCheckerSingleton::ResetInstance();
 
     air_deactivate();
     air_finalize();
@@ -144,6 +187,16 @@ Poseidonos::Terminate(void)
         UserSignalInterface::Enable(false);
     }
     SignalHandlerSingleton::ResetInstance();
+    ResourceCheckerSingleton::ResetInstance();
+    SmartCollectorSingleton::ResetInstance();
+
+    TraceExporterSingleton::ResetInstance();
+    ConfigManagerSingleton::ResetInstance();
+    VersionProviderSingleton::ResetInstance();
+
+    free(GrpcCliServerThread);
+
+    POS_TRACE_TRACE(EID(POS_TRACE_TERMINATED), "");
 }
 
 void
@@ -172,7 +225,7 @@ Poseidonos::_InitAIR(void)
     }
     if (nullptr == telemetryAirDelegator)
     {
-        telemetryAirDelegator = new TelemetryAirDelegator {telemtryPublisherForAir};
+        telemetryAirDelegator = new TelemetryAirDelegator{telemtryPublisherForAir};
         telemetryAirDelegator->RegisterAirEvent();
     }
 }
@@ -202,13 +255,13 @@ Poseidonos::_InitDebugInfo(void)
     ret = system("mkdir -p /etc/pos/core");
     if (ret != 0)
     {
-        POS_TRACE_DEBUG(POS_EVENT_ID::DEBUG_CORE_DUMP_SETTING_FAILED, "Core directory will not be created");
+        POS_TRACE_DEBUG(EID(DEBUG_CORE_DUMP_SETTING_FAILED), "Core directory will not be created");
         return;
     }
     ret = system("echo /etc/pos/core/%E.core > /proc/sys/kernel/core_pattern");
     if (ret != 0)
     {
-        POS_TRACE_DEBUG(POS_EVENT_ID::DEBUG_CORE_DUMP_SETTING_FAILED, "Core pattern is not set properly");
+        POS_TRACE_DEBUG(EID(DEBUG_CORE_DUMP_SETTING_FAILED), "Core pattern is not set properly");
         return;
     }
 
@@ -245,7 +298,8 @@ void
 Poseidonos::_SetupThreadModel(void)
 {
     AffinityManager* affinityManager = pos::AffinityManagerSingleton::Instance();
-    POS_TRACE_DEBUG(POS_EVENT_ID::DEVICEMGR_SETUPMODEL, "_SetupThreadModel");
+    SpdkCallerSingleton::Instance()->SpdkBdevPosRegisterPoller(UNVMfCompleteHandler);
+    POS_TRACE_DEBUG(EID(DEVICEMGR_SETUPMODEL), "_SetupThreadModel");
     uint32_t coreCount =
         affinityManager->GetCoreCount(CoreType::EVENT_WORKER);
     uint32_t workerCount = coreCount * EVENT_THREAD_CORE_RATIO;
@@ -266,6 +320,8 @@ Poseidonos::_SetupThreadModel(void)
     MetaFsServiceSingleton::Instance()->Initialize(coreCount,
         schedulerCPUSet, workerCPUSet);
     FlushCmdManagerSingleton::Instance();
+
+    IoTimeoutCheckerSingleton::Instance()->Initialize();
 }
 
 void
@@ -298,9 +354,24 @@ Poseidonos::_InitMemoryChecker(void)
 }
 
 void
+Poseidonos::_InitResourceChecker(void)
+{
+    ResourceChecker* resourceChecker = ResourceCheckerSingleton::Instance();
+    if (nullptr != resourceChecker)
+    {
+        resourceChecker->Enable();
+    }
+}
+
+int
 Poseidonos::_LoadConfiguration(void)
 {
-    ConfigManagerSingleton::Instance()->ReadFile();
+    int ret = ConfigManagerSingleton::Instance()->ReadFile();
+    if (ret == EID(CONFIG_FILE_READ_DONE))
+    {
+        return 0;
+    }
+    return ret;
 }
 
 void
@@ -308,7 +379,7 @@ Poseidonos::_LoadVersion(void)
 {
     std::string version =
         pos::VersionProviderSingleton::Instance()->GetVersion();
-    POS_TRACE_INFO(static_cast<uint32_t>(POS_EVENT_ID::SYSTEM_VERSION_LOAD_SUCCESS),
+    POS_TRACE_INFO(EID(SYSTEM_VERSION_LOAD_SUCCESS),
         "POS Version {}", version.c_str());
 }
 
@@ -322,30 +393,29 @@ Poseidonos::_SetPerfImpact(void)
     if (ret == EID(SUCCESS))
     {
         qos_backend_policy newRebuildPolicy;
-        if (impact.compare("highest") == 0)
+        if (impact.compare("high") == 0)
         {
-            newRebuildPolicy.priorityImpact = PRIORITY_HIGHEST;
+            newRebuildPolicy.priorityImpact = PRIORITY_HIGH;
         }
         else if (impact.compare("medium") == 0)
         {
             newRebuildPolicy.priorityImpact = PRIORITY_MEDIUM;
         }
-        else if (impact.compare("lowest") == 0)
+        else if (impact.compare("low") == 0)
         {
-            newRebuildPolicy.priorityImpact = PRIORITY_LOWEST;
+            newRebuildPolicy.priorityImpact = PRIORITY_LOW;
         }
-
         else
         {
-            newRebuildPolicy.priorityImpact = PRIORITY_LOWEST;
-            POS_TRACE_INFO(static_cast<uint32_t>(POS_EVENT_ID::QOS_SET_EVENT_POLICY),
+            newRebuildPolicy.priorityImpact = PRIORITY_LOW;
+            POS_TRACE_INFO(static_cast<uint32_t>(EID(QOS_SET_EVENT_POLICY)),
                 "Rebuild Perf Impact not supported, Set to default lowest");
         }
         newRebuildPolicy.policyChange = true;
         retVal = QosManagerSingleton::Instance()->UpdateBackendPolicy(BackendEvent_UserdataRebuild, newRebuildPolicy);
         if (retVal != SUCCESS)
         {
-            POS_TRACE_INFO(static_cast<uint32_t>(POS_EVENT_ID::QOS_SET_EVENT_POLICY),
+            POS_TRACE_INFO(static_cast<uint32_t>(EID(QOS_SET_EVENT_POLICY)),
                 "Failed to set Rebuild Policy");
         }
     }
@@ -358,4 +428,60 @@ Poseidonos::_RunCLIService(void)
     GrpcCliServerThread = new std::thread(RunGrpcServer);
 }
 
+int
+Poseidonos::_InitTraceExporter(char *procFullName,
+    ConfigManager *cm,
+    VersionProvider *vp,
+    TraceExporter *te
+    )
+{
+    bool traceEnabled = false;
+    int ret = cm->GetValue("trace", "enable", &traceEnabled, ConfigType::CONFIG_TYPE_BOOL);
+
+    if (EID(SUCCESS) != ret)
+    {
+        POS_TRACE_INFO(EID(TRACE_CONFIG_ERROR), "Specify whether the trace should be enabled or not in configuration");
+        return EID(TRACE_CONFIG_ERROR);
+    }
+
+    if (true != traceEnabled)
+    {
+        POS_TRACE_INFO(EID(TRACE_NOT_ENABLED), "The trace is not enabled by configuration");
+        return EID(TRACE_NOT_ENABLED);
+    }
+    
+    std::string traceEndPoint = "";
+    ret = cm->GetValue("trace", "collector_endpoint", &traceEndPoint, ConfigType::CONFIG_TYPE_STRING);
+
+    if (EID(SUCCESS) != ret)
+    {
+        POS_TRACE_INFO(EID(TRACE_CONFIG_ERROR), "Trace is not enabled. Specify an endpoint of the traces in configuration");
+        return EID(TRACE_CONFIG_ERROR);
+    }
+    
+    // Set service name
+    std::stringstream ss(procFullName);
+    std::string token, serviceName;
+
+    while(std::getline(ss, token, '/')) {
+        serviceName = token;
+    }
+
+    // Set service version
+    std::string serviceVersion = vp->GetVersion();
+
+    // Initialize trace exporter
+    te->Init(serviceName, serviceVersion, traceEndPoint);
+
+    if(te->IsEnabled())
+    {
+        POS_TRACE_INFO(EID(TRACE_ENABLED), "Trace is enabled. Traces generated by {} will be exported to {}", serviceName + " " + serviceVersion, traceEndPoint);
+        return EID(SUCCESS);
+    }
+    else
+    {
+        POS_TRACE_INFO(EID(TRACE_NOT_ENABLED), "Trace exporter is not enabled.");
+        return EID(TRACE_NOT_ENABLED);
+    }
+}
 } // namespace pos

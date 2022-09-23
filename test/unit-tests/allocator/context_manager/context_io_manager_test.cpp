@@ -175,13 +175,13 @@ TEST(ContextIoManager, FlushContexts_IfSyncSuccessAllFile)
     ContextIoManager ioManager(&info, &tp, &scheduler, segmentCtxIo, allocatorCtxIo, nullptr);
 
     EXPECT_CALL(*segmentCtxIo, Flush)
-        .WillOnce([&](AllocatorCtxIoCompletion completion)
+        .WillOnce([&](AllocatorCtxIoCompletion completion, int dstSectionId, char* externalBuf)
         {
             completion();
             return 0;
         });
     EXPECT_CALL(*allocatorCtxIo, Flush)
-        .WillOnce([&](AllocatorCtxIoCompletion completion)
+        .WillOnce([&](AllocatorCtxIoCompletion completion, int dstSectionId, char* externalBuf)
         {
             completion();
             return 0;
@@ -277,7 +277,7 @@ TEST(ContextIoManager, FlushContexts_IfAsyncAlreadyFlushing)
     // when 2
     ret = ioManager.FlushContexts(nullptr, false);
     // then
-    EXPECT_EQ((int)POS_EVENT_ID::ALLOCATOR_META_ARCHIVE_FLUSH_IN_PROGRESS, ret);
+    EXPECT_EQ(EID(ALLOCATOR_META_ARCHIVE_FLUSH_IN_PROGRESS), ret);
 }
 
 TEST(ContextIoManager, FlushContexts_IfAsyncSuccessAllFile)

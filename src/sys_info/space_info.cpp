@@ -43,22 +43,22 @@
 namespace pos
 {
 bool
-SpaceInfo::IsEnough(std::string& arrayName, uint64_t size)
+SpaceInfo::IsEnough(uint32_t arrayId, uint64_t size)
 {
-    return Remaining(arrayName) >= size;
+    return Remaining(arrayId) >= size;
 }
 
 uint64_t
-SpaceInfo::OPSize(std::string& arrayName)
+SpaceInfo::OPSize(uint32_t arrayId)
 {
-    uint64_t capa = TotalCapacity(arrayName);
+    uint64_t capa = RawCapacity(arrayId);
     return (uint64_t)(capa * ArrayConfig::OVER_PROVISIONING_RATIO / 100);
 }
 
 uint64_t
-SpaceInfo::TotalCapacity(std::string& arrayName)
+SpaceInfo::RawCapacity(uint32_t arrayId)
 {
-    ComponentsInfo* info = ArrayMgr()->GetInfo(arrayName);
+    ComponentsInfo* info = ArrayMgr()->GetInfo(arrayId);
     if (info != nullptr)
     {
         const PartitionLogicalSize* ptnSize =
@@ -74,34 +74,32 @@ SpaceInfo::TotalCapacity(std::string& arrayName)
 }
 
 uint64_t
-SpaceInfo::SystemCapacity(std::string& arrayName)
+SpaceInfo::TotalCapacity(uint32_t arrayId)
 {
-    uint64_t total = TotalCapacity(arrayName);
-    uint64_t op = OPSize(arrayName);
-    POS_TRACE_INFO(9000, "SystemCapacity: total:{} - op:{} = sys:{} ",
+    uint64_t total = RawCapacity(arrayId);
+    uint64_t op = OPSize(arrayId);
+    POS_TRACE_INFO(9000, "TotalCapacity: total:{} - op:{} = sys:{} ",
         total, op, total - op);
     return total - op;
 }
 
 uint64_t
-SpaceInfo::Used(std::string& arrayName)
+SpaceInfo::Used(uint32_t arrayId)
 {
     uint64_t usedSize = 0;
     IVolumeInfoManager* volMgr =
-        VolumeServiceSingleton::Instance()->GetVolumeManager(arrayName);
+        VolumeServiceSingleton::Instance()->GetVolumeManager(arrayId);
 
     if (volMgr != nullptr)
     {
         usedSize = volMgr->EntireVolumeSize();
     }
-
     return usedSize;
 }
 
 uint64_t
-SpaceInfo::Remaining(std::string& arrayName)
+SpaceInfo::Remaining(uint32_t arrayId)
 {
-    return SystemCapacity(arrayName) - Used(arrayName);
+    return TotalCapacity(arrayId) - Used(arrayId);
 }
-
 } // namespace pos

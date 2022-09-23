@@ -1,6 +1,6 @@
 /*
  *   BSD LICENSE
- *   Copyright (c) 2021 Samsung Electronics Corporation
+ *   Copyright (c) 2022 Samsung Electronics Corporation
  *   All rights reserved.
  *
  *   Redistribution and use in source and binary forms, with or without
@@ -56,7 +56,11 @@ public:
     // Can be called before initialized
     virtual bool IsEnabled(void);
     virtual bool IsDebugEnabled(void);
+    virtual bool IsVscEnabled(void);
+    virtual uint64_t GetIntervalForMetric(void);
     virtual bool AreReplayWbStripesInUserArea(void);
+    virtual bool IsRocksdbEnabled(void);
+    virtual std::string GetRocksdbPath(void);
 
     virtual int GetNumLogGroups(void);
     virtual uint64_t GetLogBufferSize(void);
@@ -82,18 +86,27 @@ protected:
     uint64_t logBufferSizeInConfig;
     uint64_t metaPageSize;
     uint64_t maxPartitionSize;
+    bool rocksdbEnabled;
     MetaVolumeType metaVolumeToUse;
+    std::string rocksdbPath;
+    bool vscEnabled;
 
 private:
     void _ReadConfiguration(void);
     bool _IsJournalEnabled(void);
+    bool _IsVscEnabled(void);
     bool _IsDebugEnabled(void);
+    uint64_t _GetIntervalForMetric(void);
     uint64_t _ReadLogBufferSize(void);
+    uint64_t _ReadNumLogGroup(void);
+    bool _IsRocksdbEnabled(void);
+    std::string _GetRocksdbPath(void);
 
     void _ReadMetaFsConfiguration(MetaFsFileControlApi* metaFsCtrl);
 
     bool areReplayWbStripesInUserArea;
     bool debugEnabled;
+    uint64_t intervalForMetric;
 
     ConfigManager* configManager;
     int numLogGroups;
@@ -103,6 +116,7 @@ private:
     LogBufferLayout bufferLayout;
 
     const uint64_t SIZE_MB = 1024 * 1024;
+    const static uint64_t DEFAULT_NUMBER_OF_LOG_GROUPS = 2;
 };
 
 } // namespace pos

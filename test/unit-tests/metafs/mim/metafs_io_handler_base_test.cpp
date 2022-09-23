@@ -35,6 +35,7 @@
 #include <gtest/gtest.h>
 #include <unistd.h>
 
+#include <atomic>
 #include <string>
 #include <thread>
 #include <utility>
@@ -90,7 +91,7 @@ public:
     }
 
 private:
-    bool touched;
+    std::atomic<bool> touched;
 };
 
 TEST(MetaFsIoHandlerBaseTest, testIfTheThreadCanBeStartAndStop)
@@ -99,7 +100,7 @@ TEST(MetaFsIoHandlerBaseTest, testIfTheThreadCanBeStartAndStop)
     const std::string threadName = "TestThread";
     MetaFsIoHandlerBaseTest test(0, coreId, threadName);
     test.StartThread();
-    usleep(100);
+    usleep(2000);
     test.ExitThread();
 
     EXPECT_TRUE(test.GetTouched());

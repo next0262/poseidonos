@@ -31,46 +31,26 @@
  */
 
 #include "rebuild_behavior.h"
-
-#include "src/array_models/dto/partition_physical_size.h"
-#include "src/include/array_config.h"
-#include "src/resource_manager/buffer_pool.h"
-#include "src/resource_manager/memory_manager.h"
 #include "src/logger/logger.h"
 
 using namespace pos;
 
-RebuildBehavior::RebuildBehavior(unique_ptr<RebuildContext> ctx,
-    MemoryManager* mm)
-: ctx(move(ctx)),
-  mm(mm)
+RebuildBehavior::RebuildBehavior(unique_ptr<RebuildContext> c)
+: ctx(move(c))
 {
+    if (ctx == nullptr)
+    {
+        POS_TRACE_WARN(EID(REBUILD_CTX_DEBUG), "Failed to initialize rebuild, ctx is null");
+        return;
+    }
 }
+
 // LCOV_EXCL_START
 RebuildBehavior::~RebuildBehavior(void)
 {
-    if (recoverBuffers != nullptr)
-    {
-        if (recoverBuffers->IsFull() == false)
-        {
-            POS_TRACE_ERROR(EID(REBUILD_DEBUG_MSG),
-                "Some buffers in recoverBuffers were not returned but deleted.");
-        }
-        mm->DeleteBufferPool(recoverBuffers);
-        recoverBuffers = nullptr;
-    }
-    if (rebuildReadBuffers != nullptr)
-    {
-        if (rebuildReadBuffers->IsFull() == false)
-        {
-            POS_TRACE_ERROR(EID(REBUILD_DEBUG_MSG),
-                "Some buffers in rebuildReadBuffers were not returned but deleted.");
-        }
-        mm->DeleteBufferPool(rebuildReadBuffers);
-        rebuildReadBuffers = nullptr;
-    }
 }
 // LCOV_EXCL_STOP
+
 void
 RebuildBehavior::StopRebuilding(void)
 {
@@ -81,59 +61,4 @@ RebuildContext*
 RebuildBehavior::GetContext(void)
 {
     return ctx.get();
-}
-
-bool
-RebuildBehavior::_InitRecoverBuffers(string owner)
-{
-    BufferInfo info = {
-        .owner = owner,
-        .size = ctx->size->blksPerChunk * ArrayConfig::BLOCK_SIZE_BYTE,
-        .count = ctx->size->stripesPerSegment};
-    recoverBuffers = mm->CreateBufferPool(info);
-    if (recoverBuffers == nullptr)
-    {
-        return false;
-    }
-    return true;
-}
-
-bool
-RebuildBehavior::_InitRebuildReadBuffers(string owner, int totalChunksToRead)
-{
-    BufferInfo info = {
-        .owner = owner,
-        .size = ctx->size->blksPerChunk * ArrayConfig::BLOCK_SIZE_BYTE * totalChunksToRead,
-        .count = ctx->size->stripesPerSegment};
-    rebuildReadBuffers = mm->CreateBufferPool(info);
-    if (rebuildReadBuffers == nullptr)
-    {
-        return false;
-    }
-    return true;
-}
-
-bool
-RebuildBehavior::_InitBuffers(void)
-{
-    string owner = _GetClassName() + to_string(ctx->arrayIndex);
-    bool ret = _InitRecoverBuffers(owner);
-    if (ret == false)
-    {
-        return ret;
-    }
-
-    int totalChunks = _GetTotalReadChunksForRecovery();
-    ret = _InitRebuildReadBuffers(owner, totalChunks);
-    return ret;
-}
-
-int
-RebuildBehavior::_GetTotalReadChunksForRecovery(void)
-{
-    if (ctx->raidType == RaidTypeEnum::RAID10)
-    {
-        return 1;
-    }
-    return ctx->size->chunksPerStripe - 1; // for RAID5
 }

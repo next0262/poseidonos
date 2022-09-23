@@ -32,6 +32,8 @@
 
 #include "unvme_cmd.h"
 
+#include "spdk/include/spdk/nvme_spec.h"
+#include "src/admin/disk_query_manager.h"
 #include "src/bio/ubio.h"
 #include "src/include/pos_error_code.hpp"
 #include "src/logger/logger.h"
@@ -39,8 +41,6 @@
 #include "src/spdk_wrapper/caller/spdk_nvme_caller.h"
 #include "unvme_device_context.h"
 #include "unvme_io_context.h"
-#include "spdk/include/spdk/nvme_spec.h"
-#include "src/admin/disk_query_manager.h"
 namespace pos
 {
 UnvmeCmd::UnvmeCmd(SpdkNvmeCaller* spdkNvmeCaller)
@@ -115,15 +115,30 @@ UnvmeCmd::RequestIO(UnvmeDeviceContext* deviceContext,
             deviceContext->IncAdminCommandCount();
             ioCtx->SetAdminCommand();
             GetLogPageContext* pageContext = static_cast<GetLogPageContext*>(data);
-            if (pageContext->lid == SPDK_NVME_LOG_HEALTH_INFORMATION)
+            if ((pageContext->lid == SPDK_NVME_LOG_HEALTH_INFORMATION) ||
+                (pageContext->lid == SPDK_NVME_LOG_EXTENDED_SMART))
             {
+                uint32_t payloadSize = 0;
+                switch (pageContext->lid)
+                {
+                    case SPDK_NVME_LOG_HEALTH_INFORMATION:
+                        payloadSize = sizeof(struct spdk_nvme_health_information_page);
+                        break;
+
+                    case SPDK_NVME_LOG_EXTENDED_SMART:
+                        payloadSize = sizeof(struct spdk_nvme_log_samsung_extended_information_entry);
+                        break;
+
+                    default:
+                        assert(false);
+                }
                 struct spdk_nvme_ctrlr* ctrlr =
                     spdkNvmeCaller->SpdkNvmeNsGetCtrlr(deviceContext->ns);
                 ret = spdkNvmeCaller->SpdkNvmeCtrlrCmdGetLogPage(ctrlr,
                     pageContext->lid,
                     SPDK_NVME_GLOBAL_NS_TAG,
                     pageContext->payload,
-                    sizeof(struct spdk_nvme_health_information_page),
+                    payloadSize,
                     0,
                     callbackFunc,
                     ioCtx);
@@ -153,7 +168,7 @@ UnvmeCmd::RequestIO(UnvmeDeviceContext* deviceContext,
 
     if (!ioCtx->IsFrontEnd())
     {
-        POS_EVENT_ID eventId = POS_EVENT_ID::UNVME_DEBUG_REQUEST_IO;
+        POS_EVENT_ID eventId = EID(UNVME_DEBUG_REQUEST_IO);
         POS_TRACE_DEBUG_IN_MEMORY(ModuleInDebugLogDump::IO_GENERAL, eventId,
             "Request IO in unvme_drv, startLBA: {}, sectorCount : {}, direction : {} deviceName : {} ret : {}",
             startLBA, sectorCount, static_cast<int>(dir),
@@ -225,6 +240,7 @@ UnvmeCmd::_RequestDeallocate(UnvmeDeviceContext* deviceContext,
         rangeDefinition, num_range, callbackFunc, static_cast<void*>(ioCtx));
     POS_TRACE_DEBUG(EID(DEVICE_DEBUG_MSG),
         "Requesting Trimming from {} with block number : {}", startingLBA, NumberOfLogicalBlocks);
+    free(rangeDefinition);
     return returnValue;
 }
 

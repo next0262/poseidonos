@@ -41,10 +41,12 @@
 #include "src/gc/flow_control/flow_control.h"
 #include "src/gc/garbage_collector.h"
 #include "src/io/general_io/rba_state_manager.h"
+#include "src/io_scheduler/io_dispatcher_submission.h"
 #include "src/volume/volume_manager.h"
 #include "src/metafs/metafs.h"
 #include "src/network/nvmf.h"
 #include "src/admin/smart_log_meta_io.h"
+#include "src/pos_replicator/replicator_volume_subscriber.h"
 #include "src/telemetry/telemetry_client/telemetry_publisher.h"
 
 using namespace std;
@@ -70,12 +72,14 @@ public:
         IStateControl* state,
         Array* array,
         VolumeManager* volMgr,
+        ReplicatorVolumeSubscriber* replicatorVolumeSubscriber,
         GarbageCollector* gc,
         Metadata* meta,
         RBAStateManager* rbaStateMgr,
         function<MetaFs* (Array*, bool)> metaFsFactory,
         Nvmf* nvmf,
         SmartLogMetaIo* smartLogMetaIo,
+        StateObserverForIO* stateObserverForIO,
         ArrayMountSequence* mountSequence = nullptr);
     virtual ~ArrayComponents(void);
     virtual ComponentsInfo* GetInfo(void);
@@ -88,6 +92,8 @@ public:
     virtual void RebuildDone(void);
     virtual Array* GetArray(void) { return array; }
     virtual TelemetryPublisher* GetTelemetryPublisher(void) { return telPublisher; }
+    virtual void SetTargetAddress(string targetAddress);
+    virtual string GetTargetAddress(void);
 
 private:
     void _SetMountSequence(void);
@@ -106,6 +112,7 @@ private:
     GarbageCollector* gc = nullptr;
     Metadata* meta = nullptr;
     VolumeManager* volMgr = nullptr;
+    ReplicatorVolumeSubscriber* replicatorVolumeSubscriber = nullptr;
     MetaFs* metafs = nullptr;
     RBAStateManager* rbaStateMgr = nullptr;
     Nvmf* nvmf = nullptr;
@@ -116,6 +123,7 @@ private:
 
     // MetaFs factory: MetaFs creation is not determined during ArrayComponents construction. Hence, we need a lambda.
     function<MetaFs* (Array*, bool)> metaFsFactory = nullptr;
+    StateObserverForIO* stateObserverForIO = nullptr;
 
     // telemetry
     TelemetryPublisher* telPublisher = nullptr;

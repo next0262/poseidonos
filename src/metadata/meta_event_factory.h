@@ -51,13 +51,14 @@ class MetaEventFactory
 {
 public:
     MetaEventFactory(void) = default;
-    MetaEventFactory(IVSAMap* vsaMap, IStripeMap* stripeMap, ISegmentCtx* segmentCtx,
-        IWBStripeAllocator* wbStripeAllocator, IContextManager* contextManager, IArrayInfo* arrayInfo);
+    MetaEventFactory(IVSAMap* vsaMap, IStripeMap* stripeMap,
+        ISegmentCtx* segmentCtx_, IWBStripeAllocator* wbStripeAllocator,
+        IContextManager* contextManager, IArrayInfo* arrayInfo);
     virtual ~MetaEventFactory(void) = default;
 
     virtual CallbackSmartPtr CreateBlockMapUpdateEvent(VolumeIoSmartPtr volumeIo);
     virtual CallbackSmartPtr CreateStripeMapUpdateEvent(Stripe* stripe);
-    virtual CallbackSmartPtr CreateGcMapUpdateEvent(Stripe* stripe, GcStripeMapUpdateList mapUpdateInfoList, std::map<SegmentId, uint32_t> invalidSegCnt);
+    virtual CallbackSmartPtr CreateGcMapUpdateEvent(StripeSmartPtr stripe, GcStripeMapUpdateList mapUpdateInfoList, std::map<SegmentId, uint32_t> invalidSegCnt);
 
 private:
     IVSAMap* vsaMap;

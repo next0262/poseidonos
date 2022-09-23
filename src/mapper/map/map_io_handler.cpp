@@ -32,16 +32,23 @@
 
 #include "src/mapper/map/map_io_handler.h"
 
+#include <utility>
+
 #include "src/event_scheduler/event_scheduler.h"
 #include "src/logger/logger.h"
 #include "src/mapper/i_map_flush.h"
 #include "src/mapper/map/event_mpage_async_io.h"
 #include "src/meta_file_intf/mock_file_intf.h"
 #include "src/metafs/metafs_file_intf.h"
+#include "src/mapper/map/create_map_flush_event.h"
+#include "src/mapper/map/map_flush_event.h"
+#include "src/metafs/include/metafs_service.h"
+#include "src/metafs/config/metafs_config_manager.h"
+#include "src/meta_file_intf/rocksdb_metafs_intf.h"
 
 namespace pos
 {
-MapIoHandler::MapIoHandler(MetaFileIntf* file_, Map* mapData, MapHeader* mapHeaderData, int mapId_, MapperAddressInfo* addrInfo_)
+MapIoHandler::MapIoHandler(MetaFileIntf* file_, Map* mapData, MapHeader* mapHeaderData, int mapId_, MapperAddressInfo* addrInfo_, EventScheduler* scheduler_)
 : touchedPages(nullptr),
   mapId(mapId_),
   map(mapData),
@@ -53,12 +60,14 @@ MapIoHandler::MapIoHandler(MetaFileIntf* file_, Map* mapData, MapHeader* mapHead
   numPagesAsyncIoDone(0),
   flushInProgress(false),
   ioError(0),
-  addrInfo(addrInfo_)
+  addrInfo(addrInfo_),
+  eventScheduler(scheduler_),
+  rocksDbEnabled(MetaFsServiceSingleton::Instance()->GetConfigManager()->IsRocksdbEnabled())
 {
 }
 
-MapIoHandler::MapIoHandler(Map* mapData, MapHeader* mapHeaderData, int mapId_, MapperAddressInfo* addrInfo_)
-: MapIoHandler(nullptr,  mapData, mapHeaderData, mapId_, addrInfo_)
+MapIoHandler::MapIoHandler(Map* mapData, MapHeader* mapHeaderData, int mapId_, MapperAddressInfo* addrInfo_, EventScheduler* scheduler_)
+: MapIoHandler(nullptr,  mapData, mapHeaderData, mapId_, addrInfo_, scheduler_)
 {
 }
 // LCOV_EXCL_START
@@ -68,18 +77,25 @@ MapIoHandler::~MapIoHandler(void)
 }
 // LCOV_EXCL_STOP
 int
-MapIoHandler::OpenFile(std::string fileName, uint64_t fileSize)
+MapIoHandler::OpenFile(std::string fileName, uint64_t fileSize, MetaFileType fileType)
 {
     if (addrInfo->IsUT() == false)
     {
         assert(file == nullptr);
-        file = new MetaFsFileIntf(fileName, addrInfo->GetArrayId());
+        if(rocksDbEnabled)
+        {
+            file = new RocksDBMetaFsIntf(fileName, addrInfo->GetArrayId(), fileType);
+        }
+        else
+        {
+            file = new MetaFsFileIntf(fileName, addrInfo->GetArrayId(), fileType);
+        }
     }
     else
     {
         if (file == nullptr)
         {
-            file = new MockFileIntf(fileName, addrInfo->GetArrayId());
+            file = new MockFileIntf(fileName, addrInfo->GetArrayId(), fileType);
         }
     }
 
@@ -190,7 +206,7 @@ int
 MapIoHandler::FlushHeader(EventSmartPtr callback)
 {
     if (_PrepareFlush(callback) == false)
-        return -EID(MAP_FLUSH_IN_PROGRESS);
+        return ERRID(MAP_FLUSH_IN_PROGRESS);
     {
     }
     return _IssueFlushHeader();
@@ -201,7 +217,7 @@ MapIoHandler::FlushDirtyPagesGiven(MpageList dirtyPages, EventSmartPtr callback)
 {
     if (_PrepareFlush(callback) == false)
     {
-        return -EID(MAP_FLUSH_IN_PROGRESS);
+        return ERRID(MAP_FLUSH_IN_PROGRESS);
     }
 
     int result = EID(SUCCESS);
@@ -212,8 +228,8 @@ MapIoHandler::FlushDirtyPagesGiven(MpageList dirtyPages, EventSmartPtr callback)
     {
         POS_TRACE_DEBUG(EID(MAP_FLUSH_STARTED), "FlushDirtyPagesGiven mapId:{} started", mapId);
 
-        SequentialPageFinder sequentialPages(dirtyPages);
-        result = _Flush(sequentialPages);
+        std::unique_ptr<SequentialPageFinder> sequentialPages = std::make_unique<SequentialPageFinder>(dirtyPages);
+        _Flush(std::move(sequentialPages));
     }
     else
     {
@@ -230,7 +246,7 @@ MapIoHandler::FlushTouchedPages(EventSmartPtr callback)
     if (_PrepareFlush(callback) == false)
     {
         POS_TRACE_DEBUG(EID(MAP_FLUSH_COMPLETED), "[MAPPER FLUSH] Failed to Issue Flush, Another Flush is still progressing, mapId:{}, status:{}", mapId, status);
-        return -EID(MAP_FLUSH_IN_PROGRESS);
+        return ERRID(MAP_FLUSH_IN_PROGRESS);
     }
     int result = EID(SUCCESS);
     BitMap* copiedBitmap = mapHeader->GetBitmapFromTempBuffer(mapHeaderTempBuffer);
@@ -240,8 +256,8 @@ MapIoHandler::FlushTouchedPages(EventSmartPtr callback)
     {
         POS_TRACE_DEBUG(EID(MAP_FLUSH_STARTED), "[MAPPER FlushTouchedPages mapId:{}] started", mapId);
         numPagesToAsyncIo = touchedPages->GetNumBitsSet();
-        SequentialPageFinder finder(touchedPages);
-        result = _Flush(finder);
+        std::unique_ptr<SequentialPageFinder> sequentialPages = std::make_unique<SequentialPageFinder>(touchedPages);
+        _Flush(std::move(sequentialPages));
     }
     else
     {
@@ -342,7 +358,7 @@ MapIoHandler::_HeaderAsyncLoaded(AsyncMetaFileIoCtx* ctx)
     MetaIoCbPtr mpageAsyncLoadReqCB = std::bind(&MapIoHandler::_MpageAsyncLoaded, this, std::placeholders::_1);
 
     EventSmartPtr mpageLoadRequest = std::make_shared<EventMpageAsyncIo>(mapHeader, map, file, mpageAsyncLoadReqCB);
-    EventSchedulerSingleton::Instance()->EnqueueEvent(mpageLoadRequest);
+    eventScheduler->EnqueueEvent(mpageLoadRequest);
 
     delete[] headerLoadReqCtx->buffer;
     delete headerLoadReqCtx;
@@ -398,15 +414,30 @@ MapIoHandler::_RemoveCleanPages(MpageList& pages)
 }
 
 int
-MapIoHandler::_Flush(SequentialPageFinder& sequentialPages)
+MapIoHandler::CreateFlushRequestFor(const MpageSet& mpageSet)
 {
-    int ret = 0;
-    while (sequentialPages.IsRemaining() == true)
+    return _FlushMpages(mpageSet.startMpage, mpageSet.numMpages);
+}
+
+void
+MapIoHandler::CreateFlushEvents(std::unique_ptr<SequentialPageFinder> sequentialPages)
+{
+    while (sequentialPages->IsRemaining())
     {
-        MpageSet mpageSet = sequentialPages.PopNextMpageSet();
-        ret = _FlushMpages(mpageSet.startMpage, mpageSet.numMpages);
+        MpageSet mpageSet = sequentialPages->PopNextMpageSet();
+        EventSmartPtr event(new MapFlushEvent(this, mpageSet));
+        eventScheduler->EnqueueEvent(event);
     }
-    return ret;
+}
+
+void
+MapIoHandler::_Flush(std::unique_ptr<SequentialPageFinder> sequentialPages)
+{
+    if (sequentialPages->IsRemaining())
+    {
+        EventSmartPtr event(new CreateMapFlushEvent(this, std::move(sequentialPages)));
+        eventScheduler->EnqueueEvent(event);
+    }
 }
 
 int
@@ -569,7 +600,7 @@ MapIoHandler::_PrepareFlush(EventSmartPtr callback)
 void
 MapIoHandler::_CompleteFlush(void)
 {
-    EventSchedulerSingleton::Instance()->EnqueueEvent(flushDoneCallBack);
+    eventScheduler->EnqueueEvent(flushDoneCallBack);
     delete touchedPages;
     touchedPages = nullptr;
     delete[] mapHeaderTempBuffer;

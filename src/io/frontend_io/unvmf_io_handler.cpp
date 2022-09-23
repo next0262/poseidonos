@@ -29,24 +29,26 @@
  *   (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  *   OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-#include "src/volume/volume_manager.h"
-#include "src/event_scheduler/io_completer.h"
-
 #include "src/io/frontend_io/unvmf_io_handler.h"
+
+#include <air/Air.h>
 
 #include <vector>
 
 #include "spdk/pos.h"
-#include "src/include/pos_event_id.hpp"
-#include "src/include/branch_prediction.h"
-#include "src/io/frontend_io/aio.h"
 #include "src/bio/ubio.h"
-#include "src/logger/logger.h"
+#include "src/cpu_affinity/affinity_manager.h"
 #include "src/event_scheduler/event.h"
 #include "src/event_scheduler/event_scheduler.h"
-#include "src/spdk_wrapper/event_framework_api.h"
-#include "src/qos/qos_manager.h"
+#include "src/event_scheduler/io_completer.h"
+#include "src/include/branch_prediction.h"
+#include "src/include/pos_event_id.hpp"
+#include "src/io/frontend_io/aio.h"
 #include "src/io/frontend_io/aio_submission_adapter.h"
+#include "src/logger/logger.h"
+#include "src/qos/qos_manager.h"
+#include "src/spdk_wrapper/event_framework_api.h"
+#include "src/volume/volume_manager.h"
 using namespace pos;
 using namespace std;
 
@@ -57,11 +59,20 @@ UNVMfCompleteHandler(void)
     {
         AIO aio;
         aio.CompleteIOs();
-        EventFrameworkApiSingleton::Instance()->CompleteEvents();
+        bool ret1 = EventFrameworkApiSingleton::Instance()->CompleteEvents();
+        uint32_t currentReactor = EventFrameworkApiSingleton::Instance()->GetCurrentReactor();
+        if (AffinityManagerSingleton::Instance()->IsEventReactor(currentReactor))
+        {
+            bool ret2 = EventFrameworkApiSingleton::Instance()->CompleteSingleQueueEvents();
+            if (ret1 == true && ret2 == true)
+            {
+                usleep(1);
+            }
+        }
     }
     catch (...)
     {
-        POS_EVENT_ID eventId = POS_EVENT_ID::SCHEDAPI_COMPLETION_POLLING_FAIL;
+        POS_EVENT_ID eventId = EID(SCHEDAPI_COMPLETION_POLLING_FAIL);
         POS_TRACE_ERROR(static_cast<int>(eventId),
             "Fail to poll ibof completion");
     }
@@ -74,7 +85,7 @@ UNVMfSubmitHandler(struct pos_io* io)
     {
         if (unlikely(nullptr == io))
         {
-            POS_EVENT_ID eventId = POS_EVENT_ID::SCHEDAPI_NULL_COMMAND;
+            POS_EVENT_ID eventId = EID(SCHEDAPI_NULL_COMMAND);
             POS_TRACE_ERROR(static_cast<int>(eventId),
                 "Command from bdev is empty");
             throw eventId;
@@ -92,9 +103,9 @@ UNVMfSubmitHandler(struct pos_io* io)
             {
                 if (unlikely(1 != io->iovcnt))
                 {
-                    POS_EVENT_ID eventId = POS_EVENT_ID::SCHEDAPI_WRONG_BUFFER;
+                    POS_EVENT_ID eventId = EID(SCHEDAPI_WRONG_BUFFER);
                     POS_TRACE_ERROR(static_cast<int>(eventId),
-                            "Single IO command should have a continuous buffer");
+                        "Single IO command should have a continuous buffer");
                     throw eventId;
                 }
                 break;
@@ -103,12 +114,13 @@ UNVMfSubmitHandler(struct pos_io* io)
             {
                 AIO aio;
                 aio.SubmitFlush(*io);
+                airlog("UserFlushProcess", "user", io->ioType, 1);
                 return POS_IO_STATUS_SUCCESS;
             }
             break;
             default:
             {
-                POS_EVENT_ID eventId = POS_EVENT_ID::BLKHDLR_WRONG_IO_DIRECTION;
+                POS_EVENT_ID eventId = EID(BLKHDLR_WRONG_IO_DIRECTION);
                 POS_TRACE_ERROR(eventId, "Wrong IO direction (only read/write types are suppoered)");
                 throw eventId;
                 break;
@@ -117,17 +129,19 @@ UNVMfSubmitHandler(struct pos_io* io)
 
         QosManager* qosManager = QosManagerSingleton::Instance();
 
-        IVolumeIoManager* volumeManager
-            = VolumeServiceSingleton::Instance()->GetVolumeManager(io->array_id);
+        IVolumeIoManager* volumeManager = VolumeServiceSingleton::Instance()->GetVolumeManager(io->array_id);
 
         AIO aio;
         VolumeIoSmartPtr volumeIo = aio.CreateVolumeIo(*io);
-        if (unlikely(EID(SUCCESS) != volumeManager->IncreasePendingIOCountIfNotZero(io->volume_id)))
+        if (unlikely(EID(SUCCESS) != volumeManager->IncreasePendingIOCountIfNotZero(io->volume_id, static_cast<VolumeIoType>(io->ioType))))
         {
             IoCompleter ioCompleter(volumeIo);
             ioCompleter.CompleteUbioWithoutRecovery(IOErrorType::VOLUME_UMOUNTED, true);
             return POS_IO_STATUS_SUCCESS;
         }
+
+        airlog("UserWritePendingCnt", "user", io->volume_id, 1);
+        airlog("UserReadPendingCnt", "user", io->volume_id, 1);
 
         if (true == qosManager->IsFeQosEnabled())
         {
@@ -141,13 +155,14 @@ UNVMfSubmitHandler(struct pos_io* io)
     }
     catch (...)
     {
-        POS_EVENT_ID eventId = POS_EVENT_ID::SCHEDAPI_SUBMISSION_FAIL;
+        POS_EVENT_ID eventId = EID(SCHEDAPI_SUBMISSION_FAIL);
         POS_TRACE_ERROR(static_cast<int>(eventId),
             "Fail to submit ibof IO");
 
         if (nullptr != io && nullptr != io->complete_cb)
         {
             io->complete_cb(io, POS_IO_STATUS_FAIL);
+            airlog("UserFailIo", "user", io->ioType, 1);
         }
     }
 

@@ -38,24 +38,30 @@
 #include "src/include/pos_event_id.h"
 #include "src/journal_manager/checkpoint/checkpoint_completion.h"
 #include "src/journal_manager/checkpoint/dirty_map_manager.h"
-#include "src/journal_manager/log_buffer/callback_sequence_controller.h"
 #include "src/logger/logger.h"
+#include "src/telemetry/telemetry_client/telemetry_publisher.h"
 
 namespace pos
 {
 CheckpointManager::CheckpointManager(void)
-: CheckpointManager(new CheckpointHandler())
+: CheckpointManager(new CheckpointHandler(INT_MAX), INT_MAX)
 {
 }
 
-CheckpointManager::CheckpointManager(CheckpointHandler* cpHandler)
+CheckpointManager::CheckpointManager(const int arrayId)
+: CheckpointManager(new CheckpointHandler(arrayId), arrayId)
+{
+}
+
+CheckpointManager::CheckpointManager(CheckpointHandler* cpHandler, const int arrayId)
 : eventScheduler(nullptr),
-  sequenceController(nullptr),
   dirtyMapManager(nullptr),
   checkpointHandler(cpHandler),
   checkpointInProgress(false),
   checkpointBlocked(false),
-  clientCallback(nullptr)
+  clientCallback(nullptr),
+  telemetryPublisher(nullptr),
+  arrayId(arrayId)
 {
 }
 
@@ -69,12 +75,11 @@ CheckpointManager::~CheckpointManager(void)
 
 void
 CheckpointManager::Init(IMapFlush* mapFlush, IContextManager* ctxManager,
-    EventScheduler* scheduler, CallbackSequenceController* seqController, DirtyMapManager* dMapManager)
+    EventScheduler* scheduler, DirtyMapManager* dMapManager, TelemetryPublisher* tp)
 {
     eventScheduler = scheduler;
-
-    sequenceController = seqController;
     dirtyMapManager = dMapManager;
+    telemetryPublisher = tp;
 
     checkpointHandler->Init(mapFlush, ctxManager, scheduler);
 }
@@ -105,14 +110,14 @@ CheckpointManager::StartCheckpoint(EventSmartPtr cb)
 {
     if (checkpointInProgress == true || checkpointBlocked != true)
     {
-        POS_TRACE_DEBUG(POS_EVENT_ID::JOURNAL_CHECKPOINT_IN_PROGRESS,
-            "Checkpoint cannot start right away, inProgress {} blocked {}",
-            checkpointInProgress, checkpointBlocked);
-        return -1 * static_cast<int>(POS_EVENT_ID::JOURNAL_CHECKPOINT_IN_PROGRESS);
+        POS_TRACE_DEBUG(EID(JOURNAL_CHECKPOINT_IN_PROGRESS),
+            "Checkpoint cannot start right away, inProgress {} blocked {}, arrayId:{}",
+            checkpointInProgress, checkpointBlocked, arrayId);
+        return -1 * static_cast<int>(EID(JOURNAL_CHECKPOINT_IN_PROGRESS));
     }
 
     checkpointInProgress = true;
-    CheckpointRequest request = {.groupId = -1, .callback = cb};
+    CheckpointRequest request = {.groupId = ALL_LOG_GROUP, .callback = cb};
     return _StartCheckpoint(request);
 }
 
@@ -133,6 +138,13 @@ CheckpointManager::CheckpointCompleted(void)
 {
     _CompleteCheckpoint();
     _StartPendingRequests();
+
+    if (telemetryPublisher)
+    {
+        POSMetric metric(TEL36001_JRN_CHECKPOINT, POSMetricTypes::MT_GAUGE);
+        metric.SetGaugeValue(0);
+        telemetryPublisher->PublishMetric(metric);
+    }
 }
 
 void
@@ -228,11 +240,18 @@ CheckpointManager::_StartCheckpoint(CheckpointRequest request)
 {
     assert(clientCallback == nullptr);
 
+    if (telemetryPublisher)
+    {
+        POSMetric metric(TEL36001_JRN_CHECKPOINT, POSMetricTypes::MT_GAUGE);
+        metric.SetGaugeValue(1);
+        telemetryPublisher->PublishMetric(metric);
+    }
+
     clientCallback = request.callback;
     EventSmartPtr completionEvent(new CheckpointCompletion(this));
 
     MapList dirtyMaps;
-    if (request.groupId == -1)
+    if (ALL_LOG_GROUP == request.groupId)
     {
         dirtyMaps = dirtyMapManager->GetTotalDirtyList();
     }
@@ -241,9 +260,8 @@ CheckpointManager::_StartCheckpoint(CheckpointRequest request)
         dirtyMaps = dirtyMapManager->GetDirtyList(request.groupId);
     }
 
-    sequenceController->GetCheckpointExecutionApproval();
+    checkpointHandler->UpdateLogGroupInProgress(request.groupId);
     int ret = checkpointHandler->Start(dirtyMaps, completionEvent);
-    sequenceController->AllowCallbackExecution();
     if (ret != 0)
     {
         // TODO(huijeong.kim): Go to the fail mode - not to journal any more

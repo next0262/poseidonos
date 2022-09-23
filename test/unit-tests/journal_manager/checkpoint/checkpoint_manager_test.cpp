@@ -17,7 +17,7 @@ namespace pos
 TEST(CheckpointManager, Init_testIfInitializedSuccessfully)
 {
     // Given
-    NiceMock<MockCheckpointHandler>* cpHandler = new NiceMock<MockCheckpointHandler>;
+    NiceMock<MockCheckpointHandler>* cpHandler = new NiceMock<MockCheckpointHandler>(0);
 
     // Then: CheckpointHandler should be initialized
     EXPECT_CALL(*cpHandler, Init).Times(1);
@@ -30,13 +30,12 @@ TEST(CheckpointManager, Init_testIfInitializedSuccessfully)
 TEST(CheckpointManager, RequestCheckpoint_testIfCheckpointStarted)
 {
     // Given
-    NiceMock<MockCheckpointHandler>* cpHandler = new NiceMock<MockCheckpointHandler>;
+    NiceMock<MockCheckpointHandler>* cpHandler = new NiceMock<MockCheckpointHandler>(0);
 
     NiceMock<MockDirtyMapManager> dirtyMapManager;
-    NiceMock<MockCallbackSequenceController> seqController;
 
     CheckpointManager cpManager(cpHandler);
-    cpManager.Init(nullptr, nullptr, nullptr, &seqController, &dirtyMapManager);
+    cpManager.Init(nullptr, nullptr, nullptr, &dirtyMapManager, nullptr);
 
     // Then
     int logGroupId = 1;
@@ -44,9 +43,7 @@ TEST(CheckpointManager, RequestCheckpoint_testIfCheckpointStarted)
 
     {
         InSequence s;
-        EXPECT_CALL(seqController, GetCheckpointExecutionApproval).Times(1);
         EXPECT_CALL(*cpHandler, Start).Times(1);
-        EXPECT_CALL(seqController, AllowCallbackExecution).Times(1);
     }
 
     // When: Request checkpoint of log group 1
@@ -56,13 +53,12 @@ TEST(CheckpointManager, RequestCheckpoint_testIfCheckpointStarted)
 TEST(CheckpointManager, RequestCheckpoint_testIfCheckpointPended)
 {
     // Given
-    NiceMock<MockCheckpointHandler>* cpHandler = new NiceMock<MockCheckpointHandler>;
+    NiceMock<MockCheckpointHandler>* cpHandler = new NiceMock<MockCheckpointHandler>(0);
 
     NiceMock<MockDirtyMapManager> dirtyMapManager;
-    NiceMock<MockCallbackSequenceController> seqController;
 
     CheckpointManager cpManager(cpHandler);
-    cpManager.Init(nullptr, nullptr, nullptr, &seqController, &dirtyMapManager);
+    cpManager.Init(nullptr, nullptr, nullptr, &dirtyMapManager, nullptr);
 
     // Then
     int logGroupId = 0;
@@ -70,9 +66,7 @@ TEST(CheckpointManager, RequestCheckpoint_testIfCheckpointPended)
 
     {
         InSequence s;
-        EXPECT_CALL(seqController, GetCheckpointExecutionApproval).Times(1);
         EXPECT_CALL(*cpHandler, Start).Times(1);
-        EXPECT_CALL(seqController, AllowCallbackExecution).Times(1);
     }
 
     // When: Request checkpoint of log group 1
@@ -89,22 +83,19 @@ TEST(CheckpointManager, RequestCheckpoint_testIfCheckpointPended)
 TEST(CheckpointManager, RequestCheckpoint_testIfCheckpointStartedWhenLogGroupIdIsMinusOne)
 {
     // Given
-    NiceMock<MockCheckpointHandler>* cpHandler = new NiceMock<MockCheckpointHandler>;
+    NiceMock<MockCheckpointHandler>* cpHandler = new NiceMock<MockCheckpointHandler>(0);
 
     NiceMock<MockDirtyMapManager> dirtyMapManager;
-    NiceMock<MockCallbackSequenceController> seqController;
 
     CheckpointManager cpManager(cpHandler);
-    cpManager.Init(nullptr, nullptr, nullptr, &seqController, &dirtyMapManager);
+    cpManager.Init(nullptr, nullptr, nullptr, &dirtyMapManager, nullptr);
 
     // Then
     EXPECT_CALL(dirtyMapManager, GetTotalDirtyList);
 
     {
         InSequence s;
-        EXPECT_CALL(seqController, GetCheckpointExecutionApproval).Times(1);
         EXPECT_CALL(*cpHandler, Start).Times(1);
-        EXPECT_CALL(seqController, AllowCallbackExecution).Times(1);
     }
 
     // When: Request checkpoint of log group 1
@@ -114,7 +105,7 @@ TEST(CheckpointManager, RequestCheckpoint_testIfCheckpointStartedWhenLogGroupIdI
 TEST(CheckpointManager, GetStatus_testIfExecutedSuccessfully)
 {
     // Given
-    NiceMock<MockCheckpointHandler>* cpHandler = new NiceMock<MockCheckpointHandler>;
+    NiceMock<MockCheckpointHandler>* cpHandler = new NiceMock<MockCheckpointHandler>(0);
 
     CheckpointStatus expected = CheckpointStatus::INIT;
     EXPECT_CALL(*cpHandler, GetStatus).WillRepeatedly(Return(expected));
@@ -130,17 +121,16 @@ TEST(CheckpointManager, GetStatus_testIfExecutedSuccessfully)
 TEST(CheckpointManager, CheckpointCompleted_testIfCallbackCompleted)
 {
     // Given
-    NiceMock<MockCheckpointHandler>* cpHandler = new NiceMock<MockCheckpointHandler>;
+    NiceMock<MockCheckpointHandler>* cpHandler = new NiceMock<MockCheckpointHandler>(0);
 
     NiceMock<MockEventScheduler> eventScheduler;
     NiceMock<MockDirtyMapManager> dirtyMapManager;
-    NiceMock<MockCallbackSequenceController> seqController;
 
     EventSmartPtr firstCallback(new NiceMock<MockEvent>);
     EventSmartPtr secondCallback(new NiceMock<MockEvent>);
 
     CheckpointManager cpManager(cpHandler);
-    cpManager.Init(nullptr, nullptr, &eventScheduler, &seqController, &dirtyMapManager);
+    cpManager.Init(nullptr, nullptr, &eventScheduler, &dirtyMapManager, nullptr);
 
     // When 1: first checkpoint is requested
     EXPECT_CALL(*cpHandler, Start).Times(1);
@@ -164,7 +154,7 @@ TEST(CheckpointManager, CheckpointCompleted_testIfCallbackCompleted)
 TEST(CheckpointManager, BlockCheckpointAndWaitToBeIdle_testIfCheckpointBlocked)
 {
     // Given
-    NiceMock<MockCheckpointHandler>* cpHandler = new NiceMock<MockCheckpointHandler>;
+    NiceMock<MockCheckpointHandler>* cpHandler = new NiceMock<MockCheckpointHandler>(0);
     CheckpointManager cpManager(cpHandler);
 
     // When: Checkpoint blocked and another checkpoint is requested
@@ -181,14 +171,13 @@ TEST(CheckpointManager, BlockCheckpointAndWaitToBeIdle_testIfCheckpointBlocked)
 TEST(CheckpointManager, BlockCheckpointAndWaitToBeIdle_testWaitingToBeIdle)
 {
     // Given
-    NiceMock<MockCheckpointHandler>* cpHandler = new NiceMock<MockCheckpointHandler>;
+    NiceMock<MockCheckpointHandler>* cpHandler = new NiceMock<MockCheckpointHandler>(0);
 
     NiceMock<MockEventScheduler> eventScheduler;
     NiceMock<MockDirtyMapManager> dirtyMapManager;
-    NiceMock<MockCallbackSequenceController> seqController;
 
     CheckpointManager cpManager(cpHandler);
-    cpManager.Init(nullptr, nullptr, &eventScheduler, &seqController, &dirtyMapManager);
+    cpManager.Init(nullptr, nullptr, &eventScheduler, &dirtyMapManager, nullptr);
 
     cpManager.RequestCheckpoint(1, nullptr);
     EXPECT_TRUE(cpManager.IsCheckpointInProgress() == true);
@@ -207,14 +196,13 @@ TEST(CheckpointManager, BlockCheckpointAndWaitToBeIdle_testWaitingToBeIdle)
 TEST(CheckpointManager, UnblockCheckpoint_testIfCheckpointUnblocked)
 {
     // Given
-    NiceMock<MockCheckpointHandler>* cpHandler = new NiceMock<MockCheckpointHandler>;
+    NiceMock<MockCheckpointHandler>* cpHandler = new NiceMock<MockCheckpointHandler>(0);
 
     NiceMock<MockEventScheduler> eventScheduler;
     NiceMock<MockDirtyMapManager> dirtyMapManager;
-    NiceMock<MockCallbackSequenceController> seqController;
 
     CheckpointManager cpManager(cpHandler);
-    cpManager.Init(nullptr, nullptr, &eventScheduler, &seqController, &dirtyMapManager);
+    cpManager.Init(nullptr, nullptr, &eventScheduler, &dirtyMapManager, nullptr);
 
     // When 1: Checkpoint blocked and another checkpoint is requested
     cpManager.BlockCheckpointAndWaitToBeIdle();

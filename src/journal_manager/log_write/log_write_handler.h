@@ -37,14 +37,17 @@
 #include "../log/waiting_log_list.h"
 #include "../log_buffer/buffer_write_done_notifier.h"
 #include "src/meta_file_intf/async_context.h"
+#include "src/journal_manager/log_buffer/i_journal_log_buffer.h"
+#include "src/metafs/lib/concurrent_metafs_time_interval.h"
 
 namespace pos
 {
 class BufferOffsetAllocator;
 class LogWriteContext;
-class JournalLogBuffer;
+class IJournalLogBuffer;
 class JournalConfiguration;
 class LogWriteStatistics;
+class TelemetryPublisher;
 
 class LogWriteHandler : public LogBufferWriteDoneEvent
 {
@@ -53,8 +56,9 @@ public:
     LogWriteHandler(LogWriteStatistics* statistics, WaitingLogList* waitingList);
     virtual ~LogWriteHandler(void);
 
-    virtual void Init(BufferOffsetAllocator* allocator, JournalLogBuffer* buffer,
-        JournalConfiguration* config);
+    virtual void Init(BufferOffsetAllocator* allocator, IJournalLogBuffer* buffer,
+        JournalConfiguration* config, TelemetryPublisher* telemetryPublisher,
+        ConcurrentMetaFsTimeInterval* timeInterval = nullptr);
     virtual void Dispose(void);
 
     virtual int AddLog(LogWriteContext* context);
@@ -66,8 +70,9 @@ public:
 
 private:
     void _StartWaitingIos(void);
+    void _PublishPeriodicMetrics(LogWriteContext* context);
 
-    JournalLogBuffer* logBuffer;
+    IJournalLogBuffer* logBuffer;
     BufferOffsetAllocator* bufferAllocator;
 
     LogWriteStatistics* logWriteStats;
@@ -75,6 +80,11 @@ private:
 
     std::atomic<uint64_t> numIosRequested;
     std::atomic<uint64_t> numIosCompleted;
+
+    TelemetryPublisher* telemetryPublisher;
+    ConcurrentMetaFsTimeInterval* interval;
+    std::atomic<uint64_t> sumOfTimeSpentPerInterval;
+    std::atomic<uint64_t> doneCountPerInterval;
 };
 
 } // namespace pos

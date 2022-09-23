@@ -95,7 +95,7 @@ WbtMetafsCmdHandler::DumpFilesList(Args argv)
 int
 WbtMetafsCmdHandler::CreateFile(Args argv)
 {
-    if (argv.size() < 7)
+    if (argv.size() < 6)
     {
         std::cout << "mfs_create_file Command. Too Few Arguments." << std::endl;
         return RESULT_FAILURE;
@@ -107,8 +107,7 @@ WbtMetafsCmdHandler::CreateFile(Args argv)
     std::string arrayName = argv["array"].get<std::string>();
     uint32_t fileSizeBytes = stoi(argv["size"].get<std::string>());
     int integrityType = stoi(argv["integrity"].get<std::string>());
-    int ioAccPatternType = stoi(argv["access"].get<std::string>());
-    int ioOpType = stoi(argv["operation"].get<std::string>());
+    int fileType = stoi(argv["filetype"].get<std::string>());
     int type = stoi(argv["volume"].get<std::string>());
 
     MetaVolumeType volumeType = (MetaVolumeType)type;
@@ -116,15 +115,14 @@ WbtMetafsCmdHandler::CreateFile(Args argv)
         return RESULT_FAILURE;
 
     fileProperty.integrity = static_cast<MetaFileIntegrityType>(integrityType);
-    fileProperty.ioAccPattern = static_cast<MetaFileAccessPattern>(ioAccPatternType);
-    fileProperty.ioOpType = static_cast<MetaFileDominant>(ioOpType);
+    fileProperty.type = static_cast<MetaFileType>(fileType);
 
     MetaFs* metaFs = MetaFsServiceSingleton::Instance()->GetMetaFs(arrayName);
     if (nullptr == metaFs)
         return RESULT_FAILURE;
 
     POS_EVENT_ID rc = metaFs->ctrl->Create(fileName, fileSizeBytes, fileProperty, volumeType);
-    if (rc != POS_EVENT_ID::SUCCESS)
+    if (rc != EID(SUCCESS))
         return RESULT_FAILURE;
 
     return RESULT_SUCCESS;
@@ -154,7 +152,7 @@ WbtMetafsCmdHandler::OpenFile(Args argv)
         return RESULT_FAILURE;
 
     POS_EVENT_ID rc = metaFs->ctrl->Open(fileName, fd, volumeType);
-    if (rc != POS_EVENT_ID::SUCCESS)
+    if (rc != EID(SUCCESS))
         return RESULT_FAILURE;
 
     return fd;
@@ -182,7 +180,7 @@ WbtMetafsCmdHandler::CloseFile(Args argv)
         return RESULT_FAILURE;
 
     POS_EVENT_ID rc = metaFs->ctrl->Close(fd, volumeType);
-    if (rc != POS_EVENT_ID::SUCCESS)
+    if (rc != EID(SUCCESS))
         return RESULT_FAILURE;
 
     return RESULT_SUCCESS;
@@ -231,7 +229,7 @@ WbtMetafsCmdHandler::ReadFile(Args argv)
     memset(buffer, 0, byteSize);
 
     POS_EVENT_ID rc = metaFs->io->Read(fd, byteOffset, byteSize, (void*)buffer, storage);
-    if (rc != POS_EVENT_ID::SUCCESS || _WriteBufferInFile(outFile, buffer, byteSize) != RESULT_SUCCESS)
+    if (rc != EID(SUCCESS) || _WriteBufferInFile(outFile, buffer, byteSize) != RESULT_SUCCESS)
     {
         retVal = false;
     }
@@ -286,14 +284,14 @@ WbtMetafsCmdHandler::WriteFile(Args argv)
     }
     else
     {
-        rc = POS_EVENT_ID::MFS_FILE_READ_FAILED;
+        rc = EID(MFS_FILE_READ_FAILED);
     }
 
     // MakeSure to delete buffer
     if (buffer != nullptr)
         delete[] buffer;
 
-    if (rc != POS_EVENT_ID::SUCCESS)
+    if (rc != EID(SUCCESS))
         return RESULT_FAILURE;
 
     return RESULT_SUCCESS;
@@ -501,8 +499,7 @@ WbtMetafsCmdHandler::_DumpInodeInfoToJson(MetaFileInodeDumpCxt *data, JsonElemen
 
     // Set propertry
     fileProperty.SetAttribute(JsonAttribute("integrity", std::to_string(static_cast<int>(data->inodeInfo.data.field.fileProperty.integrity))));
-    fileProperty.SetAttribute(JsonAttribute("ioAccPattern", std::to_string(static_cast<int>(data->inodeInfo.data.field.fileProperty.ioAccPattern))));
-    fileProperty.SetAttribute(JsonAttribute("ioOpType", std::to_string(static_cast<int>(data->inodeInfo.data.field.fileProperty.ioOpType))));
+    fileProperty.SetAttribute(JsonAttribute("fileType", std::to_string(static_cast<int>(data->inodeInfo.data.field.fileProperty.type))));
 
     metaInode.SetElement(fileProperty);
     metaInode.SetElement(fileExtentMap);

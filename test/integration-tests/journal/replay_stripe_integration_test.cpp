@@ -116,7 +116,7 @@ TEST_F(ReplayStripeIntegrationTest, ReplayFullStripeSeveralTimes)
     EXPECT_TRUE(journal->DoRecoveryForTest() == 0);
 }
 
-TEST_F(ReplayStripeIntegrationTest, ReplayeSeveralUnflushedStripe)
+TEST_F(ReplayStripeIntegrationTest, ReplaySeveralUnflushedStripe)
 {
     POS_TRACE_DEBUG(9999, "ReplayStripeIntegrationTest::ReplaySeveralUnflushedStripe");
 

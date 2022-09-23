@@ -68,7 +68,7 @@ MetaIOScheduler::HandleIOCallback(void* data)
 
     delete cxt;
     g_meta_outstandingCmd--;
-    MFS_TRACE_DEBUG((int)POS_EVENT_ID::MFS_DEBUG_MESSAGE, "callback done");
+    MFS_TRACE_DEBUG(EID(MFS_DEBUG_MESSAGE), "callback done");
 }
 
 #include "meta_io_manager.h"
@@ -138,7 +138,7 @@ MetaIoHandler::MetaFsIOSubmitHandler(struct pos_io* io, int fd)
     }
     g_meta_outstandingCmd++;
 
-    return (POS_EVENT_ID::SUCCESS == rc_io) ? 0 : 1;
+    return (EID(SUCCESS) == rc_io) ? 0 : 1;
 }
 
 void

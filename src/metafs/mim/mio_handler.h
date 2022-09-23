@@ -32,18 +32,19 @@
 
 #pragma once
 
-#include <chrono>
 #include <map>
 #include <string>
-#include <vector>
 
 #include "metafs_io_handler_base.h"
-#include "metafs_io_multilevel_q.h"
 #include "mfs_io_range_overlap_chker.h"
 #include "mpio_handler.h"
+#include "src/event_scheduler/event.h"
+#include "src/event_scheduler/event_scheduler.h"
 #include "src/metafs/include/meta_storage_specific.h"
 #include "src/metafs/lib/metafs_pool.h"
 #include "src/metafs/lib/metafs_time_interval.h"
+#include "src/metafs/mim/metafs_io_q.h"
+#include "src/metafs/mim/metafs_io_wrr_q.h"
 #include "src/metafs/mim/mio.h"
 #include "src/metafs/util/metafs_time.h"
 #include "src/telemetry/telemetry_client/telemetry_publisher.h"
@@ -60,8 +61,8 @@ public:
     // for test
     MioHandler(const int threadId, const int coreId,
         MetaFsConfigManager* configManager,
-        MetaFsIoMultilevelQ<MetaFsIoRequest*, RequestPriority>* ioSQ,
-        MetaFsIoMultilevelQ<Mio*, RequestPriority>* ioCQ, MpioAllocator* mpioAllocator,
+        MetaFsIoWrrQ<MetaFsIoRequest*, MetaFileType>* ioSQ,
+        MetaFsIoQ<Mio*>* ioCQ, MpioAllocator* mpioAllocator,
         MetaFsPool<Mio*>* mioPool, TelemetryPublisher* tp);
     virtual ~MioHandler(void);
 
@@ -92,17 +93,18 @@ private:
     void _HandleRetryQDeferred(void);
     void _DiscoverIORangeOverlap(void);
     bool _IsPendedRange(MetaFsIoRequest* reqMsg);
-    void _SendPeriodicMetrics(void);
+    void _UpdateSubmissionMetricsConditionally(const Mio& mio);
+    void _UpdateCompletionMetricsConditionally(Mio* mio);
+    void _PublishPeriodicMetrics(void);
     void _CreateMioPool(void);
     bool _ExecutePendedIo(MetaFsIoRequest* reqMsg);
 
-    MetaFsIoMultilevelQ<MetaFsIoRequest*, RequestPriority>* ioSQ;
-    MetaFsIoMultilevelQ<Mio*, RequestPriority>* ioCQ;
+    MetaFsIoWrrQ<MetaFsIoRequest*, MetaFileType>* ioSQ;
+    MetaFsIoQ<Mio*>* ioCQ;
 
     MpioHandler* bottomhalfHandler;
     MetaFsPool<Mio*>* mioPool;
     MpioAllocator* mpioAllocator;
-    int cpuStallCnt;
     MioAsyncDoneCb mioCompletionCallback;
     PartialMpioDoneCb partialMpioDoneNotifier;
     MpioDonePollerCb mpioDonePoller;
@@ -118,8 +120,16 @@ private:
     int coreId;
 
     TelemetryPublisher* telemetryPublisher = nullptr;
-    int64_t metricSumOfSpendTime;
-    int64_t metricSumOfMioCount;
+    int64_t sampledTimeSpentProcessingAllStages;
+    int64_t sampledTimeSpentFromIssueToComplete;
+    int64_t totalProcessedMioCount;
+    int64_t sampledProcessedMioCount;
     MetaFsTimeInterval metaFsTimeInterval;
+    size_t skipCount;
+    const size_t SAMPLING_SKIP_COUNT;
+
+    static const uint32_t NUM_FILE_TYPE = (int)MetaFileType::MAX;
+    int64_t issueCountByStorage[NUM_STORAGE];
+    int64_t issueCountByFileType[NUM_FILE_TYPE];
 };
 } // namespace pos

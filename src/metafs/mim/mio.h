@@ -40,7 +40,7 @@
 #include "mpio.h"
 #include "mpio_allocator.h"
 #include "src/metafs/common/metafs_stopwatch.h"
-#include "src/metafs/mim/metafs_io_multilevel_q.h"
+#include "src/metafs/mim/metafs_io_q.h"
 
 namespace pos
 {
@@ -100,14 +100,14 @@ public:
     virtual void SetMpioDoneNotifier(PartialMpioDoneCb& partialMpioDoneHandler);
     virtual void SetMpioDonePoller(MpioDonePollerCb& mpioDonePoller);
 
-    virtual void SetIoCQ(MetaFsIoMultilevelQ<Mio*, RequestPriority>* ioCQ);
+    virtual void SetIoCQ(MetaFsIoQ<Mio*>* ioCQ);
 
     void NotifiyPartialMpioDone(Mpio* mpio);
     virtual bool IsSyncIO(void);
 
     virtual bool IsRead(void);
     virtual MetaLpnType GetStartLpn(void);
-    virtual MetaStorageType GetTargetStorage(void);
+    virtual MetaStorageType GetTargetStorage(void) const;
     virtual bool Init(MioState expNextState = MioState::Max);
     virtual bool Issue(MioState expNextState = MioState::Max);
     virtual bool Complete(MioState expNextState = MioState::Max);
@@ -119,6 +119,10 @@ public:
     virtual uint64_t GetId(void) const
     {
         return UNIQUE_ID;
+    }
+    virtual MetaFileType GetFileType(void) const
+    {
+        return fileType;
     }
 
     virtual void SetMergedRequestList(std::vector<MetaFsIoRequest*>* list);
@@ -137,17 +141,17 @@ protected:
     Mpio* _AllocMpio(MpioIoInfo& mpioIoInfo, bool partialIO);
     void _HandleMpioDone(void* data);
     MpioType _LookupMpioType(MetaIoRequestType type);
-    MetaLpnType _GetCalculateStartLpn(MetaFsIoRequest* ioReq);
 
     MetaFsIoRequest* originReq;
     MetaIoOpcode opCode;
     uint32_t fileDataChunkSize;
     MetaLpnType startLpn;
     MfsError error;
-    MetaFsIoMultilevelQ<Mio*, RequestPriority>* ioCQ;
+    MetaFsIoQ<Mio*>* ioCQ;
     MpioAllocator* mpioAllocator;
     MetaAsyncCbCxt aioCbCxt;
     std::vector<MetaFsIoRequest*>* mergedRequestList;
+    MetaFileType fileType;
 
     static const MetaIoOpcode ioOpcodeMap[static_cast<uint32_t>(MetaIoRequestType::Max)];
     MetaFsSpinLock mpioListCxtLock;

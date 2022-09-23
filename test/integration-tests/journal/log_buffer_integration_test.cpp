@@ -39,13 +39,13 @@ JournalLogBufferIntegrationTest::SetUp(void)
     ON_CALL(config, GetLogGroupSize).WillByDefault(Return(LOG_GROUP_SIZE));
 
     // TODO(huijeong.kim) This injected modules should be deleted
-    factory.Init(&config, new LogBufferWriteDoneNotifier(), new CallbackSequenceController());
+    factory.Init(&config, new LogBufferWriteDoneNotifier());
 
-    logBuffer = new JournalLogBuffer(new MockFileIntf(GetLogFileName(), 0));
+    logBuffer = new JournalLogBuffer(new MockFileIntf(GetLogFileName(), 0, MetaFileType::Journal));
     logBuffer->Delete();
 
     _PrepareLogBuffer();
-    logBuffer->Init(&config, &factory, 0);
+    logBuffer->Init(&config, &factory, 0, nullptr);
     logBuffer->SyncResetAll();
 }
 
@@ -67,9 +67,9 @@ void
 JournalLogBufferIntegrationTest::SimulateSPOR(void)
 {
     delete logBuffer;
-    logBuffer = new JournalLogBuffer(new MockFileIntf(GetLogFileName(), 0));
+    logBuffer = new JournalLogBuffer(new MockFileIntf(GetLogFileName(), 0, MetaFileType::Journal));
     _PrepareLogBuffer();
-    logBuffer->Init(&config, &factory, 0);
+    logBuffer->Init(&config, &factory, 0, nullptr);
 }
 
 int
@@ -210,6 +210,7 @@ JournalLogBufferIntegrationTest::_WaitForLogWriteDone(int numLogsWaitingFor)
 {
     while (numLogsWritten != numLogsWaitingFor)
     {
+        usleep(1);
     }
 }
 

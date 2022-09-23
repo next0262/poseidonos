@@ -56,13 +56,12 @@ public:
     virtual int DeleteAbr(string arrayName) override;
     virtual int LoadAbr(ArrayMeta& meta) override;
     virtual int SaveAbr(ArrayMeta& meta) override;
-    virtual bool GetMfsInit(string arrayName) override;
-    virtual int SetMfsInit(string arrayName, bool value) override;
     virtual int ResetMbr(void) override;
     virtual string FindArrayWithDeviceSN(string devSN) override;
     virtual string GetLastUpdatedDateTime(string arrayName) override;
     virtual string GetCreatedDateTime(string arrayName) override;
     virtual int GetAbrList(std::vector<ArrayBootRecord>& abrList);
+    virtual void InitDisk(UblockSharedPtr dev);
 
 private:
     MbrManager* mbrManager;

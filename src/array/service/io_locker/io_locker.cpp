@@ -107,6 +107,43 @@ IOLocker::TryBusyLock(IArrayDevice* dev, StripeId from, StripeId to)
 }
 
 bool
+IOLocker::TryBusyLock(set<IArrayDevice*>& devs, StripeId from, StripeId to, IArrayDevice*& failed)
+{
+    vector<IArrayDevice*> lockedDevs;
+    bool ret = true;
+    for (IArrayDevice* dev : devs)
+    {
+        StripeLocker* locker = _Find(dev);
+        if (locker != nullptr)
+        {
+            ret = locker->TryBusyLock(from, to);
+            if (ret == true)
+            {
+                lockedDevs.push_back(dev);
+            }
+            else
+            {
+                failed = dev;
+                break;
+            }
+        }
+    }
+
+    if (ret == false)
+    {
+        for (IArrayDevice* dev : lockedDevs)
+        {
+            StripeLocker* locker = _Find(dev);
+            for (StripeId id = from; id <= to; id++)
+            {
+                locker->Unlock(id);
+            }
+        }
+    }
+    return ret;
+}
+
+bool
 IOLocker::TryLock(set<IArrayDevice*>& devs, StripeId val)
 {
     set<StripeLocker*> lockersByGroup;
@@ -170,7 +207,7 @@ IOLocker::Unlock(set<IArrayDevice*>& devs, StripeId val)
 }
 
 bool
-IOLocker::ResetBusyLock(IArrayDevice* dev)
+IOLocker::ResetBusyLock(IArrayDevice* dev, bool forceReset)
 {
     StripeLocker* locker = _Find(dev);
     if (locker == nullptr)
@@ -178,6 +215,16 @@ IOLocker::ResetBusyLock(IArrayDevice* dev)
         return true;
     }
     return locker->ResetBusyLock();
+}
+
+void
+IOLocker::WriteBusyLog(IArrayDevice* dev)
+{
+    StripeLocker* locker = _Find(dev);
+    if (locker != nullptr)
+    {
+        return locker->WriteBusyLog();
+    }
 }
 
 StripeLocker*

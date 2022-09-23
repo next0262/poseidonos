@@ -53,7 +53,15 @@ static bool
 CompareNamespaceEntry(struct NsEntry* first, struct NsEntry* second)
 {
     int result = memcmp(first->trAddr, second->trAddr, MAX_TR_ADDR_LENGTH);
-    bool firstLess = (0 >= result);
+    bool firstLess = (0 > result);
+
+    if (0 == result)
+    {
+        uint32_t firstNsId = spdk_nvme_ns_get_id(first->u.nvme.ns);
+        uint32_t secondNsId = spdk_nvme_ns_get_id(second->u.nvme.ns);
+
+        firstLess = (firstNsId < secondNsId);
+    }
 
     return firstLess;
 }
@@ -104,7 +112,7 @@ UnvmeMgmt::ScanDevs(vector<UblockSharedPtr>* devs, Nvme* nvmeSsd, UnvmeDrv* drv)
                 std::string name = DEVICE_NAME_PREFIX;
                 name = name + std::to_string(nsIndex);
 
-                POS_TRACE_INFO((int)POS_EVENT_ID::UNVME_SSD_SCANNED,
+                POS_TRACE_INFO(EID(UNVME_SSD_SCANNED),
                     "uNVMe Device has been scanned: {}, {}",
                     name, nsEntry->trAddr);
 
@@ -124,7 +132,7 @@ UnvmeMgmt::ScanDevs(vector<UblockSharedPtr>* devs, Nvme* nvmeSsd, UnvmeDrv* drv)
                     UblockSharedPtr dev = make_shared<UnvmeSsd>(name, diskSize, drv,
                         nsEntry->u.nvme.ns, nsEntry->trAddr);
 
-                    POS_EVENT_ID eventId = POS_EVENT_ID::UNVME_SSD_DEBUG_CREATED;
+                    POS_EVENT_ID eventId = EID(UNVME_SSD_DEBUG_CREATED);
                     POS_TRACE_DEBUG(eventId, "Create Ublock, Pointer : {}", name);
                     devs->push_back(dev);
                     addedDeviceCount++;
@@ -137,7 +145,7 @@ UnvmeMgmt::ScanDevs(vector<UblockSharedPtr>* devs, Nvme* nvmeSsd, UnvmeDrv* drv)
         }
         else
         {
-            POS_TRACE_ERROR((int)POS_EVENT_ID::UNVME_SSD_SCAN_FAILED,
+            POS_TRACE_ERROR(EID(UNVME_SSD_SCAN_FAILED),
                 "Failed to Scan uNVMe devices");
         }
     }
@@ -164,7 +172,7 @@ UnvmeMgmt::Open(DeviceContext* deviceContext)
 
                 if (nullptr == qpair)
                 {
-                    POS_TRACE_ERROR((int)POS_EVENT_ID::UNVME_SSD_OPEN_FAILED,
+                    POS_TRACE_ERROR(EID(UNVME_SSD_OPEN_FAILED),
                         "uNVMe Device open failed: namespace #{}",
                         spdkCaller->SpdkNvmeNsGetId(devCtx->ns));
                 }
@@ -193,7 +201,7 @@ UnvmeMgmt::Close(DeviceContext* deviceContext)
             int retError = spdkCaller->SpdkNvmeCtrlrFreeIoQpair(devCtx->ioQPair);
             if (0 != retError)
             {
-                POS_EVENT_ID eventId = POS_EVENT_ID::UNVME_SSD_CLOSE_FAILED;
+                POS_EVENT_ID eventId = EID(UNVME_SSD_CLOSE_FAILED);
                 POS_TRACE_ERROR(static_cast<int>(eventId),
                     "uNVMe Device close failed: namespace #{}",
                     spdkCaller->SpdkNvmeNsGetId(devCtx->ns));
@@ -217,7 +225,7 @@ UnvmeMgmt::_CheckConstraints(const NsEntry* nsEntry)
     struct spdk_nvme_ns* ns = nsEntry->u.nvme.ns;
     if (spdkCaller->SpdkNvmeNsGetSectorSize(ns) != ALLOWED_DEVICE_SECTOR_SIZE)
     {
-        POS_EVENT_ID eventId = POS_EVENT_ID::UNVME_NOT_SUPPORTED_DEVICE;
+        POS_EVENT_ID eventId = EID(UNVME_NOT_SUPPORTED_DEVICE);
         POS_TRACE_WARN(eventId,
             "Device {} is not supported. Sector size is not {}",
             nsEntry->name,

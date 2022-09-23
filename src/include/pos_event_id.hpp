@@ -35,7 +35,7 @@
 
 #include <string>
 
-#include "pos_event_id.h"
+#include "src/include/pos_event_id.h"
 
 namespace pos
 {
@@ -65,11 +65,11 @@ private:
     };
 
     static PosEventIdEntry RESERVED_EVENT_ENTRY;
-    static PosEventIdEntry SYSTEM_EVENT_ENTRY[(int)POS_EVENT_ID::SYSTEM_COUNT];
-    static PosEventIdEntry QOS_EVENT_ENTRY[(int)POS_EVENT_ID::QOS_COUNT];
-    static PosEventIdEntry IOPATH_NVMF_EVENT_ENTRY[(int)POS_EVENT_ID::IONVMF_COUNT];
-    static PosEventIdEntry IOPATH_FRONTEND_EVENT_ENTRY[(int)POS_EVENT_ID::IOFRONTEND_COUNT];
-    static PosEventIdEntry IOPATH_BACKEND_EVENT_ENTRY[(int)POS_EVENT_ID::IOBACKEND_COUNT];
+    static PosEventIdEntry SYSTEM_EVENT_ENTRY[2];
+    static PosEventIdEntry QOS_EVENT_ENTRY[13];
+    static PosEventIdEntry IOPATH_NVMF_EVENT_ENTRY[33];
+    static PosEventIdEntry IOPATH_FRONTEND_EVENT_ENTRY[140];
+    static PosEventIdEntry IOPATH_BACKEND_EVENT_ENTRY[73];
 
     PosEventId(void) = delete;
     ~PosEventId(void);

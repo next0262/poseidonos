@@ -33,21 +33,22 @@
 #include "src/event_scheduler/event_scheduler.h"
 
 #include <stdexcept>
-#include "Air.h"
 
 #include "src/cpu_affinity/affinity_manager.h"
+#include "src/device/i_io_dispatcher.h"
+#include "src/event_scheduler/backend_event_minimum_policy.h"
+#include "src/event_scheduler/backend_event_ratio_policy.h"
 #include "src/event_scheduler/event.h"
 #include "src/event_scheduler/event_queue.h"
 #include "src/event_scheduler/event_worker.h"
 #include "src/event_scheduler/scheduler_queue.h"
-#include "src/event_scheduler/backend_event_minimum_policy.h"
-#include "src/event_scheduler/backend_event_ratio_policy.h"
+#include "src/event_scheduler/spdk_event_scheduler.h"
 #include "src/include/branch_prediction.h"
 #include "src/include/pos_event_id.hpp"
-#include "src/device/i_io_dispatcher.h"
 #include "src/logger/logger.h"
 #include "src/master_context/config_manager.h"
 #include "src/qos/qos_manager.h"
+#include "src/spdk_wrapper/accel_engine_api.h"
 
 namespace pos
 {
@@ -98,6 +99,19 @@ EventScheduler::EventScheduler(QosManager* qosManagerArg,
     totalWorkerIDVector.clear();
     ioDispatcher = nullptr;
     terminateStarted = false;
+    ioReactorCount = 0;
+    for (uint32_t coreIndex = 0; coreIndex < MAX_CORE; coreIndex++)
+    {
+        ioReactorCore[coreIndex] = 0;
+    }
+    for (uint32_t coreIndex = 0; coreIndex < MAX_CORE; coreIndex++)
+    {
+        if (AffinityManagerSingleton::Instance()->IsIoReactor(coreIndex))
+        {
+            ioReactorCore[ioReactorCount] = coreIndex;
+            ioReactorCount++;
+        }
+    }
 }
 
 EventScheduler::~EventScheduler(void)
@@ -153,7 +167,7 @@ EventScheduler::Initialize(uint32_t workerCountInput,
 }
 
 void
-EventScheduler::InjectIODispatcher(IIODispatcher *input)
+EventScheduler::InjectIODispatcher(IIODispatcher* input)
 {
     ioDispatcher = input;
 }
@@ -167,7 +181,38 @@ EventScheduler::EjectIODispatcher(void)
 void
 EventScheduler::EnqueueEvent(EventSmartPtr input)
 {
-    policy->EnqueueEvent(input);
+    if (!affinityManager->UseEventReactor())
+    {
+        policy->EnqueueEvent(input);
+    }
+    else
+    {
+        static std::atomic<uint32_t> lastReactorIndex;
+        uint32_t type = static_cast<uint32_t>(input->GetEventType());
+        if (type == BackendEvent_UserdataRebuild || type == BackendEvent_MetadataRebuild ||
+            type == BackendEvent_FlushMap || type == BackendEvent_GC || type == BackendEvent_Unknown)
+        {
+            type = ReactorType_SpecialEvent;
+        }
+        else
+        {
+            type = ReactorType_IOEvent;
+        }
+
+        uint32_t coreIndex = lastReactorIndex;
+        uint32_t targetCore = ioReactorCore[coreIndex], coreCount = ioReactorCount;
+        bool ret = false;
+        if (type == ReactorType_IOEvent)
+        {
+            ret = SpdkEventScheduler::SendSpdkEvent(targetCore, input);
+            lastReactorIndex = (lastReactorIndex + 1) % coreCount;
+        }
+        else
+        {
+            ret = SpdkEventScheduler::SendSpdkEvent(input);
+        }
+        assert(ret);
+    }
 }
 
 std::queue<EventSmartPtr>
@@ -194,7 +239,7 @@ EventScheduler::CheckAndSetQueueOccupancy(BackendEvent eventId)
 }
 
 EventSmartPtr
-EventScheduler::PickWorkerEvent(EventWorker *worker)
+EventScheduler::PickWorkerEvent(EventWorker* worker)
 {
     return policy->PickWorkerEvent(worker);
 }
@@ -240,7 +285,7 @@ EventScheduler::_BuildCpuSet(cpu_set_t& cpuSet)
             if (unlikely(cpuIndex >= totalCore))
             {
                 POS_EVENT_ID eventId =
-                    POS_EVENT_ID::EVENTSCHEDULER_NOT_MATCH_WORKER_COUNT;
+                    EID(EVENTSCHEDULER_NOT_MATCH_WORKER_COUNT);
                 POS_TRACE_ERROR(static_cast<int>(eventId),
                     "EventScheduler receives wrong worker count and cpu_set_t");
                 throw std::runtime_error("cpuIndex is bigger than totalCore");

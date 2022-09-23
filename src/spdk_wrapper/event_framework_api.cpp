@@ -43,18 +43,13 @@
 #include "src/include/core_const.h"
 #include "src/include/pos_event_id.hpp"
 #include "src/logger/logger.h"
+#include "src/master_context/config_manager.h"
 
 namespace pos
 {
 thread_local uint32_t EventFrameworkApi::targetReactor = UINT32_MAX;
 const uint32_t EventFrameworkApi::MAX_REACTOR_COUNT;
 const uint32_t EventFrameworkApi::MAX_PROCESSABLE_EVENTS = 16;
-std::array<EventFrameworkApi::EventQueue,
-    EventFrameworkApi::MAX_REACTOR_COUNT>
-    EventFrameworkApi::eventQueues;
-std::array<EventFrameworkApi::EventQueueLock,
-    EventFrameworkApi::MAX_REACTOR_COUNT>
-    EventFrameworkApi::eventQueueLocks;
 
 static inline void
 EventFuncWrapper(void* ctx)
@@ -69,6 +64,14 @@ EventFrameworkApi::EventFrameworkApi(SpdkThreadCaller* spdkThreadCaller,
 : spdkThreadCaller(spdkThreadCaller),
   spdkEnvCaller(spdkEnvCaller)
 {
+    bool enable = false;
+    int ret = ConfigManagerSingleton::Instance()->GetValue("performance",
+        "numa_dedicated", &enable, CONFIG_TYPE_BOOL);
+    numaDedicatedSchedulingPolicy = false;
+    if (ret == EID(SUCCESS))
+    {
+        numaDedicatedSchedulingPolicy = enable;
+    }
 }
 
 EventFrameworkApi::~EventFrameworkApi(void)
@@ -112,58 +115,94 @@ EventFrameworkApi::SendSpdkEvent(uint32_t core, EventFuncOneParam func, void* ar
 {
     if (unlikely(core >= MAX_REACTOR_COUNT))
     {
-        POS_EVENT_ID eventId = POS_EVENT_ID::EVENTFRAMEWORK_INVALID_REACTOR;
+        POS_EVENT_ID eventId = EID(EVENTFRAMEWORK_INVALID_REACTOR);
         POS_TRACE_ERROR(eventId, "Reactor {} is not processable", core);
         return false;
     }
-    struct spdk_thread* thread = spdkThreadCaller->GetNvmfThreadFromReactor(core);
-
-    // If nvmf target module is initialized, we can utilize.
-    if (unlikely(thread == nullptr))
-    {
-        POS_EVENT_ID eventId =
-            POS_EVENT_ID::EVENTFRAMEWORK_FAIL_TO_ALLOCATE_EVENT;
-        POS_TRACE_WARN(eventId, "Spdk Event Not Initialized");
-        return false;
-    }
-
-    int eventCallSuccess = spdkThreadCaller->SpdkThreadSendMsg(thread, func, arg1);
-
-    if (0 != eventCallSuccess)
-    {
-        POS_EVENT_ID eventId =
-            POS_EVENT_ID::EVENTFRAMEWORK_FAIL_TO_ALLOCATE_EVENT;
-        POS_TRACE_WARN(eventId, "Fail to allocate spdk event");
-        _SendEventToSpareQueue(core, func, arg1);
-    }
+    _SendEventToSpareQueue(core, func, arg1);
     return true;
 }
 
 void
+EventFrameworkApi::_SendEventToSingleQueue(EventFuncOneParam func, void* arg1)
+{
+    EventArgument eventArgument = std::make_tuple(func, arg1);
+    uint32_t numaIndex = 0;
+    if (numaDedicatedSchedulingPolicy)
+    {
+        numaIndex = AffinityManagerSingleton::Instance()->GetNumaIdFromCurrentThread();
+    }
+    eventSingleQueue[numaIndex].push(eventArgument);
+}
+
+bool
+EventFrameworkApi::SendSpdkEvent(EventFuncOneParam func, void* arg1)
+{
+    _SendEventToSingleQueue(func, arg1);
+    return true;
+}
+
+bool
 EventFrameworkApi::CompleteEvents(void)
 {
     if (IsReactorNow() == false)
     {
-        return;
+        return false;
     }
 
     uint32_t core = GetCurrentReactor();
-    std::lock_guard<EventQueueLock> lock(eventQueueLocks[core]);
     EventQueue& eventQueue = eventQueues[core];
     uint32_t processedEvents = 0;
-    while (eventQueue.empty() == false)
+    EventArgument eventArgument;
+    while (eventQueue.try_pop(eventArgument) == true)
     {
-        EventArgument eventArgument = eventQueue.front();
         EventFuncOneParam func = std::get<0>(eventArgument);
         void* arg1 = std::get<1>(eventArgument);
         func(arg1);
-        eventQueue.pop();
         processedEvents++;
         if (processedEvents >= MAX_PROCESSABLE_EVENTS)
         {
             break;
         }
     }
+    if (eventQueue.empty() == true)
+    {
+	    return true;
+    }
+    return false;
+}
+
+bool
+EventFrameworkApi::CompleteSingleQueueEvents(void)
+{
+    if (IsReactorNow() == false)
+    {
+        return false;
+    }
+    uint32_t numaIndex = 0;
+    if (numaDedicatedSchedulingPolicy)
+    {
+        numaIndex = AffinityManagerSingleton::Instance()->GetNumaIdFromCurrentThread();
+    }
+    EventQueue& eventQueue = eventSingleQueue[numaIndex];
+    uint32_t processedEvents = 0;
+    EventArgument eventArgument;
+    while (eventQueue.try_pop(eventArgument) == true)
+    {
+        EventFuncOneParam func = std::get<0>(eventArgument);
+        void* arg1 = std::get<1>(eventArgument);
+        func(arg1);
+        processedEvents++;
+        if (processedEvents >= MAX_PROCESSABLE_EVENTS)
+        {
+            break;
+        }
+    }
+    if (eventQueue.empty() == true)
+    {
+        return true;
+    }
+    return false;
 }
 
 uint32_t
@@ -208,7 +247,6 @@ EventFrameworkApi::_SendEventToSpareQueue(uint32_t core, EventFuncOneParam func,
     void* arg1)
 {
     EventArgument eventArgument = std::make_tuple(func, arg1);
-    std::lock_guard<EventQueueLock> lock(eventQueueLocks[core]);
     eventQueues[core].push(eventArgument);
 }
 } // namespace pos

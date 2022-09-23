@@ -34,22 +34,25 @@
 
 #include "src/event_scheduler/event.h"
 #include "src/include/smart_ptr_type.h"
+#include "src/journal_manager/log/log_group_footer.h"
 
 namespace pos
 {
-class JournalLogBuffer;
+class IJournalLogBuffer;
 
 class ResetLogGroup : public Event
 {
 public:
     ResetLogGroup(void) = default;
-    ResetLogGroup(JournalLogBuffer* logBuffer, int groupId, EventSmartPtr callback);
+    ResetLogGroup(IJournalLogBuffer* logBuffer, int logGroupId, LogGroupFooter footer, uint64_t footerOffset, EventSmartPtr callback);
 
     virtual bool Execute(void) override;
 
 private:
-    JournalLogBuffer* logBuffer;
+    IJournalLogBuffer* logBuffer;
     int logGroupId;
+    LogGroupFooter footer;
+    uint64_t footerOffset;
     EventSmartPtr callback;
 };
 } // namespace pos

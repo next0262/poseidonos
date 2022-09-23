@@ -32,17 +32,22 @@
 
 #pragma once
 
+#include <numa.h>
+#include <sched.h>
+
 #include <string>
+
 #include "meta_storage_specific.h"
 #include "metafs_common.h"
 #include "metafs_mutex.h"
 #include "metafs_spinlock.h"
 #include "os_header.h"
-#include "src/metafs/include/meta_file_context.h"
 #include "src/bio/volume_io.h"
-#include "src/metafs/include/meta_file_extent.h"
-#include "src/metafs/common/metafs_stopwatch.h"
 #include "src/meta_file_intf/meta_file_include.h"
+#include "src/metafs/common/metafs_stopwatch.h"
+#include "src/metafs/include/meta_file_context.h"
+#include "src/metafs/include/meta_file_extent.h"
+#include "src/metafs/include/mf_property.h"
 
 namespace pos
 {
@@ -85,6 +90,8 @@ enum class IoRequestStage
     Create,
     Enqueue,
     Dequeue,
+    EnqueueToRetryQ,
+    DequeueToRetryQ,
     Complete,
     Count
 };
@@ -93,10 +100,11 @@ enum class IoRequestStage
 class MetaFsIoRequest : public MetaFsRequestBase, public MetaFsStopwatch<IoRequestStage>
 {
 public:
-    MetaFsIoRequest(void);
+    MetaFsIoRequest(const uint32_t numaId = numa_node_of_cpu(sched_getcpu()));
+    // copy except retryFlag, ioDone and error
+    MetaFsIoRequest(const MetaFsIoRequest& req);
     virtual ~MetaFsIoRequest(void);
 
-    virtual void CopyUserReqMsg(const MetaFsIoRequest& req);
     virtual bool IsValid(void);
     virtual bool IsSyncIO(void);
     virtual bool IsIoCompleted(void);
@@ -110,6 +118,9 @@ public:
         return retryFlag;
     }
     virtual std::string GetLogString(void) const;
+    virtual MetaLpnType GetStartLpn(void) const;
+    virtual size_t GetRequestLpnCount(void) const;
+    virtual MetaFileType GetFileType(void) const;
 
     MetaIoRequestType reqType;
     MetaIoMode ioMode;
@@ -130,6 +141,7 @@ public:
     int requestCount;
     MetaFileContext* fileCtx;
     RequestPriority priority;
+    uint32_t numaId;
 
 private:
     bool retryFlag;

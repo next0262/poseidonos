@@ -34,7 +34,10 @@
 #define ARRAY_DEVICE_H_
 
 #include <atomic>
+#include <string>
 #include "src/include/i_array_device.h"
+
+using namespace std;
 
 namespace pos
 {
@@ -42,7 +45,8 @@ class ArrayDevice : public IArrayDevice
 {
 public:
     ArrayDevice(UblockSharedPtr uBlock,
-        ArrayDeviceState state = ArrayDeviceState::NORMAL);
+        ArrayDeviceState state = ArrayDeviceState::NORMAL,
+        uint32_t dataIndex = 0);
     ~ArrayDevice(void) override;
 
     ArrayDeviceState GetState(void) override;
@@ -51,10 +55,17 @@ public:
     UblockSharedPtr GetUblock(void) override;
     UBlockDevice* GetUblockPtr(void) override;
     void SetUblock(UblockSharedPtr uBlock) override;
+    string GetName(void);
+    string GetSerial(void);
+    uint32_t GetDataIndex(void) { return dataIndex; }
+    string PrevUblockInfo() { return prevUblockInfo; }
 
 private:
+    void _UpdateTrace(UblockSharedPtr uBlock);
+    string prevUblockInfo = "";
     UblockSharedPtr uBlock;
     ArrayDeviceState state;
+    uint32_t dataIndex;
 };
 
 } // namespace pos

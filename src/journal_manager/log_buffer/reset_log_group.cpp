@@ -32,14 +32,17 @@
 
 #include "src/journal_manager/log_buffer/reset_log_group.h"
 
-#include "src/journal_manager/log_buffer/journal_log_buffer.h"
+#include "src/journal_manager/log_buffer/i_journal_log_buffer.h"
+#include "src/journal_manager/log_buffer/log_group_footer_write_event.h"
+#include "src/logger/logger.h"
 
 namespace pos
 {
-ResetLogGroup::ResetLogGroup(JournalLogBuffer* logBuffer,
-    int logGroupId, EventSmartPtr callback)
+ResetLogGroup::ResetLogGroup(IJournalLogBuffer* logBuffer, int logGroupId, LogGroupFooter footer, uint64_t footerOffset, EventSmartPtr callback)
 : logBuffer(logBuffer),
   logGroupId(logGroupId),
+  footer(footer),
+  footerOffset(footerOffset),
   callback(callback)
 {
 }
@@ -47,13 +50,20 @@ ResetLogGroup::ResetLogGroup(JournalLogBuffer* logBuffer,
 bool
 ResetLogGroup::Execute(void)
 {
-    int ret = logBuffer->AsyncReset(logGroupId, callback);
-
-    if (ret != 0)
+    EventSmartPtr event(new LogGroupFooterWriteEvent(logBuffer, footer, footerOffset, logGroupId, callback));
+    bool result = event->Execute();
+    if (result != true)
     {
-        // TODO(huijeong.kim) add log
+        POS_TRACE_ERROR(EID(JOUNRAL_WRITE_LOG_GROUP_FOOTER),
+            "Failed to reset log group using log group footer");
+        return false;
     }
-
-    return (ret == 0);
+    else
+    {
+        POS_TRACE_DEBUG(EID(JOUNRAL_WRITE_LOG_GROUP_FOOTER),
+            "Success to reset log group using log group footer (LogGroupId {}, seqNum {})", logGroupId, footer.resetedSequenceNumber);
+        return true;
+    }
+    return 0;
 }
 } // namespace pos

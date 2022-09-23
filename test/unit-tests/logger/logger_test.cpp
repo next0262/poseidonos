@@ -6,7 +6,10 @@
 #include <fstream>
 #include <nlohmann/json.hpp>
 
+#include "test/unit-tests/logger/logger_mock.h"
+
 using json = nlohmann::json;
+using ::testing::NiceMock;
 
 namespace pos
 {
@@ -116,21 +119,21 @@ TEST(Logger, ApplyFilter_testIfFilterIsAppliedWellByGetPreferencesAfterApplyingT
     json jsonDoc = json::parse(jsonString.c_str());
 
     string filterIncluded = "";
-    if (jsonDoc["data"].contains("filter_included"))
+    if (jsonDoc["data"].contains("filterIncluded"))
     {
-        filterIncluded = jsonDoc["data"]["filter_included"].get<string>();
+        filterIncluded = jsonDoc["data"]["filterIncluded"].get<string>();
     }
 
     string filterExcluded = "";
-    if (jsonDoc["data"].contains("filter_included"))
+    if (jsonDoc["data"].contains("filterExcluded"))
     {
-        filterExcluded = jsonDoc["data"]["filter_excluded"].get<string>();
+        filterExcluded = jsonDoc["data"]["filterExcluded"].get<string>();
     }
 
     int filterEnabled = 0;
-    if (jsonDoc["data"].contains("filter_enabled"))
+    if (jsonDoc["data"].contains("filterEnabled"))
     {
-        filterEnabled = jsonDoc["data"]["filter_enabled"].get<int>();
+        filterEnabled = jsonDoc["data"]["filterEnabled"].get<int>();
     }
 
     ASSERT_EQ(filterEnabled, 1);
@@ -174,4 +177,27 @@ TEST(Logger, ShouldLog_testIfFilterIsApplied)
     ASSERT_EQ(exclude, false);
 }
 
+TEST(ChangeLogger, LoggingStateChangeConditionally_testIfLoggerWillNotPrintAnyLogWhenCurrentStateIsTheSame)
+{
+    NiceMock<Logger> testLogger;
+    ChangeLogger<int> logger(&testLogger, 0);
+    POS_TRACE_ERROR_CONDITIONALLY(&logger, 0, 0, "test");
+
+    // when the current value is the same as prev value
+    // the count will increase
+    int expectedCount = 1;
+    EXPECT_EQ(logger.GetCount(), expectedCount);
+}
+
+TEST(ChangeLogger, LoggingStateChangeConditionally_testIfLoggerWillPrintLogWhenCurrentStateIsTheSame)
+{
+    NiceMock<Logger> testLogger;
+    ChangeLogger<int> logger(&testLogger, 0);
+    POS_TRACE_ERROR_CONDITIONALLY(&logger, 0, 1, "test");
+
+    // when the current value is not the same as prev value
+    // the count will be cleared
+    int expectedCount = 0;
+    EXPECT_EQ(logger.GetCount(), expectedCount);
+}
 } // namespace pos

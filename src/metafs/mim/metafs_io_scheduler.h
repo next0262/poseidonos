@@ -1,6 +1,6 @@
 /*
  *   BSD LICENSE
- *   Copyright (c) 2021 Samsung Electronics Corporation
+ *   Copyright (c) 2022 Samsung Electronics Corporation
  *   All rights reserved.
  *
  *   Redistribution and use in source and binary forms, with or without
@@ -34,24 +34,32 @@
 
 #include <sched.h>
 
+#include <unordered_map>
 #include <string>
 #include <vector>
 
-#include "src/metafs/mim/metafs_io_multilevel_q.h"
+#include "src/metafs/mim/metafs_io_wrr_q.h"
 #include "src/metafs/mim/scalable_meta_io_worker.h"
 
 namespace pos
 {
+class TelemetryPublisher;
+class MetaFsConfigManager;
+class MetaFsTimeInterval;
+
 class MetaFsIoScheduler : public MetaFsIoHandlerBase
 {
 public:
+    // only for test
+    MetaFsIoScheduler(void);
     explicit MetaFsIoScheduler(const int threadId, const int coreId,
         const int totalCoreCount, const std::string& threadName,
         const cpu_set_t mioCoreSet, MetaFsConfigManager* config,
-        TelemetryPublisher* tp);
+        TelemetryPublisher* tp, MetaFsTimeInterval* timeInterval,
+        const std::vector<int> weight, const bool supportNumaDedicatedScheduling);
     virtual ~MetaFsIoScheduler(void);
 
-    void IssueRequest(MetaFsIoRequest* reqMsg);
+    void IssueRequestAndDelete(MetaFsIoRequest* reqMsg);
     virtual void EnqueueNewReq(MetaFsIoRequest* reqMsg);
 
     virtual bool AddArrayInfo(const int arrayId, const MaxMetaLpnMapPerMetaStorage& map) override;
@@ -61,19 +69,54 @@ public:
     virtual void ExitThread(void) override;
     void Execute(void);
 
+    void RegisterMetaIoWorkerForTest(ScalableMetaIoWorker* metaIoWorker);
+
+    // for test
+    const int64_t* GetIssueCount(size_t& size /* output */) const;
+
 private:
     MetaFsIoRequest* _FetchPendingNewReq(void);
     void _CreateMioThread(void);
+    void _SetRequestCountOrCallbackCountOfCurrentRequest(int count);
+    void _SetCurrentContextFrom(MetaFsIoRequest* reqMsg);
+    void _ClearCurrentContext(void);
+    void _UpdateCurrentLpnToNextExtent(void);
+    void _UpdateCurrentLpnToNextExtentConditionally(void);
+    void _PushToMioThreadList(const uint32_t coreId, ScalableMetaIoWorker* worker);
+    void _IssueRequestToMioWorker(MetaFsIoRequest* reqMsg);
+    bool _DoesMioWorkerForNumaExist(const int numaId);
+    uint32_t _GetNumaIdConsideringNumaDedicatedScheduling(const uint32_t numaId);
+    uint32_t _GetIndexOfWorkerConsideringNumaDedicatedScheduling(const uint32_t numaId);
 
-    std::vector<ScalableMetaIoWorker*> metaIoWorkerList_;
+    const size_t TOTAL_NUMA_COUNT;
+    const bool SUPPORT_NUMA_DEDICATED_SCHEDULING;
     const size_t TOTAL_CORE_COUNT;
-    const size_t MIO_CORE_COUNT;
     const cpu_set_t MIO_CORE_SET;
+    std::unordered_map<uint32_t, std::vector<ScalableMetaIoWorker*>> metaIoWorkerList_;
+    size_t mioCoreCount_;
+    std::vector<size_t> mioCoreCountInTheSameNuma_;
     MetaFsConfigManager* config_;
     TelemetryPublisher* tp_;
     size_t cpuStallCnt_;
+    MetaFsTimeInterval* timeInterval_;
     const size_t MAX_CPU_STALL_COUNT = 1000;
 
-    MetaFsIoMultilevelQ<MetaFsIoRequest*, RequestPriority> ioMultiQ;
+    MetaFsIoWrrQ<MetaFsIoRequest*, MetaFileType> ioSQ_;
+    MetaFsIoRequest* currentReqMsg_;
+    FileSizeType chunkSize_;
+    MetaLpnType fileBaseLpn_;
+    MetaLpnType startLpn_;
+    MetaLpnType currentLpn_;
+    size_t requestCount_;
+    size_t remainCount_;
+    int extentsCount_;
+    int currentExtent_;
+    MetaFileExtent* extents_;
+    std::vector<int> weight_;
+    bool needToIgnoreNuma_;
+
+    static const uint32_t NUM_STORAGE = (int)MetaStorageType::Max;
+    int64_t issueCount_[NUM_STORAGE];
+    std::string metricNameForStorage_[NUM_STORAGE];
 };
 } // namespace pos

@@ -32,20 +32,22 @@
 
 #include "src/io/frontend_io/write_completion.h"
 
+#include <air/Air.h>
+
+#include "src/allocator/event/stripe_put_event.h"
 #include "src/allocator/i_wbstripe_allocator.h"
 #include "src/allocator_service/allocator_service.h"
 #include "src/array_mgmt/array_manager.h"
 #include "src/bio/volume_io.h"
 #include "src/include/branch_prediction.h"
 #include "src/include/pos_event_id.hpp"
-#include "src/io/backend_io/stripe_map_update_request.h"
+#include "src/io/backend_io/flush_completion.h"
 #include "src/io/backend_io/flush_submission.h"
-#include "src/io/general_io/rba_state_service.h"
+#include "src/io/backend_io/stripe_map_update_request.h"
 #include "src/io/frontend_io/write_for_parity.h"
+#include "src/io/general_io/rba_state_service.h"
 #include "src/logger/logger.h"
 #include "src/spdk_wrapper/event_framework_api.h"
-#include "src/allocator/event/stripe_put_event.h"
-#include "src/io/backend_io/flush_completion.h"
 
 namespace pos
 {
@@ -101,6 +103,8 @@ WriteCompletion::_DoSpecificJob()
 
     volumeIo = nullptr;
 
+    airlog("CompleteUserWrite", "user", GetEventType(), 1);
+
     return executionSuccessful;
 }
 
@@ -124,7 +128,7 @@ WriteCompletion::_UpdateStripe(Stripe*& stripeToFlush)
     {
         VirtualBlkAddr startVsa = volumeIo->GetVsa();
         StripeId vsid = startVsa.stripeId;
-        POS_EVENT_ID eventId = POS_EVENT_ID::WRWRAPUP_STRIPE_NOT_FOUND;
+        POS_EVENT_ID eventId = EID(WRWRAPUP_STRIPE_NOT_FOUND);
         POS_TRACE_ERROR(static_cast<int>(eventId),
             "Stripe #{} not found at WriteWrapup state", vsid);
 
@@ -149,7 +153,7 @@ WriteCompletion::_RequestFlush(Stripe* stripe)
 
     if (unlikely(stripe->Flush(event) < 0))
     {
-        POS_EVENT_ID eventId = POS_EVENT_ID::WRWRAPUP_EVENT_ALLOC_FAILED;
+        POS_EVENT_ID eventId = EID(WRWRAPUP_EVENT_ALLOC_FAILED);
         POS_TRACE_ERROR(static_cast<int>(eventId),
             "Flush Event allocation failed at WriteWrapup state");
 

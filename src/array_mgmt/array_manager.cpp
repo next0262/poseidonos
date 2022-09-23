@@ -174,7 +174,7 @@ ArrayManager::Mount(string name, bool isWTEnabled)
             }
         }
         return ret;
-    }, name);
+    }, name, EID(MOUNT_ARRAY_ARRAY_NAME_DOES_NOT_EXIST));
 }
 
 int
@@ -191,7 +191,7 @@ ArrayManager::Unmount(string name)
             }
         }
         return ret;
-    }, name);
+    }, name, EID(UNMOUNT_ARRAY_ARRAY_NAME_DOES_NOT_EXIST));
 }
 
 int
@@ -200,7 +200,7 @@ ArrayManager::AddDevice(string name, string dev)
     return _ExecuteOrHandleErrors([&dev](ArrayComponents* array)
     {
         return array->GetArray()->AddSpare(dev);
-    }, name);
+    }, name, EID(ADD_SPARE_ARRAY_NAME_DOES_NOT_EXIST));
 }
 
 int
@@ -209,11 +209,29 @@ ArrayManager::RemoveDevice(string name, string dev)
     return _ExecuteOrHandleErrors([&dev](ArrayComponents* array)
     {
         return array->GetArray()->RemoveSpare(dev);
-    }, name);
+    }, name, EID(REMOVE_DEV_ARRAY_NAME_DOES_NOT_EXIST));
 }
 
 int
-ArrayManager::_ExecuteOrHandleErrors(std::function<int(ArrayComponents*)> f, string name)
+ArrayManager::ReplaceDevice(string name, string dev)
+{
+    return _ExecuteOrHandleErrors([&dev](ArrayComponents* array)
+    {
+        return array->GetArray()->ReplaceDevice(dev);
+    }, name, EID(REPLACE_DEV_ARRAY_NAME_DOES_NOT_EXIST));
+}
+
+int
+ArrayManager::Rebuild(string name)
+{
+    return _ExecuteOrHandleErrors([&](ArrayComponents* array)
+    {
+        return array->GetArray()->Rebuild();
+    }, name, EID(REBUILD_ARRAY_NAME_DOES_NOT_EXIST));
+}
+
+int
+ArrayManager::_ExecuteOrHandleErrors(std::function<int(ArrayComponents*)> f, string name, int eid)
 {
     ArrayComponents* array = _FindArray(name);
     if (array != nullptr)
@@ -222,7 +240,8 @@ ArrayManager::_ExecuteOrHandleErrors(std::function<int(ArrayComponents*)> f, str
     }
     else
     {
-        return EID(ARRAY_MGR_NO_ARRAY_MATCHING_REQ_NAME);
+        POS_TRACE_WARN(eid, "array_name:{}", name);
+        return eid;
     }
 }
 
@@ -236,7 +255,10 @@ ArrayManager::DeviceDetached(UblockSharedPtr dev)
     }
     else
     {
-        POS_TRACE_INFO(EID(ARRAY_EVENT_DEV_DETACHED), "No array found for device serial number {}. DeviceDetached event will be ignored.", dev->GetSN());
+        POS_TRACE_WARN(EID(ARRAY_EVENT_DEV_DETACHED),
+            "SSD is detached-There is no array to which {} ({}) belongs",
+            dev->GetName(), dev->GetSN());
+        deviceManager->RemoveDevice(dev);
     }
     return 0; // this function will be void type when device lock is removed
 }
@@ -244,7 +266,7 @@ ArrayManager::DeviceDetached(UblockSharedPtr dev)
 void
 ArrayManager::DeviceAttached(UblockSharedPtr dev)
 {
-    // do nothing. reserved for future.
+    abrManager->InitDisk(dev);
 }
 
 int
@@ -289,7 +311,7 @@ ArrayManager::PrepareRebuild(string name, bool& resume)
     ArrayComponents* array = _FindArray(name);
     if (array == nullptr)
     {
-        return EID(ARRAY_MGR_NO_ARRAY_MATCHING_REQ_NAME);
+        return EID(REBUILD_JOB_PREPARE_FAIL);
     }
 
     return array->PrepareRebuild(resume);
@@ -460,6 +482,20 @@ const map<string, ArrayComponents*>&
 ArrayManager::GetArrayComponentMap(void)
 {
     return arrayList;
+}
+
+void
+ArrayManager::SetTargetAddress(string name, string targetAddress)
+{
+    ArrayComponents* array = _FindArray(name);
+    array->SetTargetAddress(targetAddress);
+}
+
+string
+ArrayManager::GetTargetAddress(string name)
+{
+    ArrayComponents* array = _FindArray(name);
+    return array->GetTargetAddress();    
 }
 
 } // namespace pos

@@ -51,12 +51,14 @@ ArrayComponents::ArrayComponents(string arrayName, IArrayRebuilder* rebuilder, I
     nullptr /*state*/,
     nullptr /*array*/,
     nullptr /*volMgr*/,
+    nullptr /*replicatorVolumeSubscriber*/,
     nullptr /*gc*/,
     nullptr /*metadata*/,
     nullptr /*rbaStateMgr*/,
     nullptr /*metaFsFactory*/,
     nullptr /*nvmf*/,
     nullptr /*smartLogMetaIo*/,
+    nullptr /*stateObserverForIo*/,
     nullptr /*arrayMountSequence*/
     )
 {
@@ -85,12 +87,14 @@ ArrayComponents::ArrayComponents(string arrayName,
     IStateControl* state,
     Array* array,
     VolumeManager* volMgr,
+    ReplicatorVolumeSubscriber* replicatorVolumeSubscriber,
     GarbageCollector* gc,
     Metadata* meta,
     RBAStateManager* rbaStateMgr,
     function<MetaFs* (Array*, bool)> metaFsFactory,
     Nvmf* nvmf,
     SmartLogMetaIo* smartLogMetaIo,
+    StateObserverForIO* stateObserverForIO,
     ArrayMountSequence* arrayMountSequence)
 : arrayName(arrayName),
   state(state),
@@ -101,11 +105,13 @@ ArrayComponents::ArrayComponents(string arrayName,
   gc(gc),
   meta(meta),
   volMgr(volMgr),
+  replicatorVolumeSubscriber(replicatorVolumeSubscriber),
   rbaStateMgr(rbaStateMgr),
   nvmf(nvmf),
   smartLogMetaIo(smartLogMetaIo),
   arrayMountSequence(arrayMountSequence),
-  metaFsFactory(metaFsFactory)
+  metaFsFactory(metaFsFactory),
+  stateObserverForIO(stateObserverForIO)
 {
     // dependency injection for ut
 }
@@ -161,7 +167,7 @@ ArrayComponents::GetInfo(void)
 int
 ArrayComponents::Create(DeviceSet<string> nameSet, string metaFt, string dataFt)
 {
-    POS_TRACE_DEBUG(EID(CREATE_ARRAY_DEBUG_MSG), "Creating array component for {}", arrayName);
+    POS_TRACE_INFO(EID(CREATE_ARRAY_DEBUG_MSG), "Creating array component for {}", arrayName);
     int ret = array->Create(nameSet, metaFt, dataFt);
     if (ret != 0)
     {
@@ -171,14 +177,14 @@ ArrayComponents::Create(DeviceSet<string> nameSet, string metaFt, string dataFt)
     _InstantiateMetaComponentsAndMountSequenceInOrder(false/* array has not been loaded yet*/);
     _SetMountSequence();
 
-    POS_TRACE_DEBUG(EID(CREATE_ARRAY_DEBUG_MSG), "Array components for {} have been created.", arrayName);
+    POS_TRACE_INFO(EID(CREATE_ARRAY_DEBUG_MSG), "Array components for {} have been created.", arrayName);
     return 0;
 }
 
 int
 ArrayComponents::Load(void)
 {
-    POS_TRACE_DEBUG(EID(LOAD_ARRAY_DEBUG_MSG), "Loading array components for " + arrayName);
+    POS_TRACE_INFO(EID(LOAD_ARRAY_DEBUG_MSG), "Loading array components for " + arrayName);
     int ret = array->Load();
     if (ret != 0)
     {
@@ -188,13 +194,14 @@ ArrayComponents::Load(void)
     _InstantiateMetaComponentsAndMountSequenceInOrder(true/* array has been loaded already*/);
     _SetMountSequence();
 
-    POS_TRACE_DEBUG(EID(LOAD_ARRAY_DEBUG_MSG), "Array components for {} have been loaded.", arrayName);
+    POS_TRACE_INFO(EID(LOAD_ARRAY_DEBUG_MSG), "Array components for {} have been loaded.", arrayName);
     return 0;
 }
 
 int
 ArrayComponents::Mount(bool isWTEnabled)
 {
+    POS_TRACE_INFO(EID(MOUNT_ARRAY_DEBUG_MSG), "Trying to mount Array {}, isWT:{}", arrayName, isWTEnabled);
     array->SetPreferences(isWTEnabled);
     int ret = arrayMountSequence->Mount();
     if (ret == 0)
@@ -211,6 +218,10 @@ ArrayComponents::Unmount(void)
     if (ret == 0)
     {
         ret = arrayMountSequence->Unmount();
+    }
+    else
+    {
+        POS_TRACE_WARN(ret, "array_name:{}, array_state:{}", arrayName, array->GetState().ToString());
     }
     return ret;
 }
@@ -264,11 +275,13 @@ ArrayComponents::_SetMountSequence(void)
     mountSequence.push_back(nvmf);
     mountSequence.push_back(metafs);
     mountSequence.push_back(volMgr);
+    mountSequence.push_back(replicatorVolumeSubscriber);
     mountSequence.push_back(meta);
     mountSequence.push_back(rbaStateMgr);
     mountSequence.push_back(flowControl);
     mountSequence.push_back(gc);
     mountSequence.push_back(smartLogMetaIo);
+
     IStateControl* state = stateMgr->GetStateControl(arrayName);
     if (arrayMountSequence != nullptr)
     {
@@ -282,13 +295,15 @@ ArrayComponents::_InstantiateMetaComponentsAndMountSequenceInOrder(bool isArrayL
 {
     if (metafs != nullptr
         || volMgr != nullptr
+        || replicatorVolumeSubscriber != nullptr
         || nvmf != nullptr
         || meta != nullptr
         || rbaStateMgr != nullptr
         || flowControl != nullptr
         || gc != nullptr
         || info != nullptr
-        || smartLogMetaIo != nullptr)
+        || smartLogMetaIo != nullptr
+        || stateObserverForIO != nullptr)
     {
         POS_TRACE_WARN(EID(ARRAY_COMPO_DEBUG_MSG), "Meta Components exist already. Possible memory leak (or is it a mock?). Skipping.");
         return;
@@ -297,6 +312,7 @@ ArrayComponents::_InstantiateMetaComponentsAndMountSequenceInOrder(bool isArrayL
     // Please note that the order of creation should be like the following:
     metafs = metaFsFactory(array, isArrayLoaded);
     volMgr = new VolumeManager(array, state);
+    replicatorVolumeSubscriber = new ReplicatorVolumeSubscriber(array);
     nvmf = new Nvmf(array->GetName(), array->GetIndex());
     meta = new Metadata(array, state);
     rbaStateMgr = new RBAStateManager(array->GetName(), array->GetIndex());
@@ -304,12 +320,19 @@ ArrayComponents::_InstantiateMetaComponentsAndMountSequenceInOrder(bool isArrayL
     gc = new GarbageCollector(array, state);
     smartLogMetaIo = new SmartLogMetaIo(array->GetIndex(), SmartLogMgrSingleton::Instance());
     info = new ComponentsInfo(array, gc);
+    stateObserverForIO = new StateObserverForIO(state);
 }
 
 void
 ArrayComponents::_DestructMetaComponentsInOrder(void)
 {
     // Please note that the order of creation should be like the following:
+    if (smartLogMetaIo != nullptr)
+    {
+        delete smartLogMetaIo;
+        smartLogMetaIo = nullptr;
+        POS_TRACE_DEBUG(EID(ARRAY_COMPO_DEBUG_MSG), "SmartLogMetaIo for {} has been deleted.", arrayName);
+    }
     if (gc != nullptr)
     {
         delete gc;
@@ -345,6 +368,13 @@ ArrayComponents::_DestructMetaComponentsInOrder(void)
         POS_TRACE_DEBUG(EID(ARRAY_COMPO_DEBUG_MSG), "Nvmf for {} has been deleted.", arrayName);
     }
 
+    if (replicatorVolumeSubscriber != nullptr)
+    {
+        delete replicatorVolumeSubscriber;
+        replicatorVolumeSubscriber = nullptr;
+        POS_TRACE_DEBUG(EID(ARRAY_COMPO_DEBUG_MSG), "ReplicatorVolumeSubscriber for {} has been deleted.", arrayName);
+    }
+
     if (volMgr != nullptr)
     {
         delete volMgr;
@@ -358,6 +388,25 @@ ArrayComponents::_DestructMetaComponentsInOrder(void)
         metafs = nullptr;
         POS_TRACE_DEBUG(EID(ARRAY_COMPO_DEBUG_MSG), "MetaFs for {} has been deleted.", arrayName);
     }
+
+    if (stateObserverForIO != nullptr)
+    {
+        delete stateObserverForIO;
+        metafs = nullptr;
+        POS_TRACE_DEBUG(EID(ARRAY_COMPO_DEBUG_MSG), "stateObserverForIO for {} has been deleted.", arrayName);
+    }
+}
+
+void
+ArrayComponents::SetTargetAddress(string targetAddress)
+{
+    array->SetTargetAddress(targetAddress);
+}
+
+string
+ArrayComponents::GetTargetAddress(void)
+{
+    return array->GetTargetAddress();
 }
 
 } // namespace pos

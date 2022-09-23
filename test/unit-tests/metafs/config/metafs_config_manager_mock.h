@@ -1,6 +1,6 @@
 /*
  *   BSD LICENSE
- *   Copyright (c) 2021 Samsung Electronics Corporation
+ *   Copyright (c) 2022 Samsung Electronics Corporation
  *   All rights reserved.
  *
  *   Redistribution and use in source and binary forms, with or without
@@ -47,9 +47,20 @@ public:
     MOCK_METHOD(bool, Init, ());
     MOCK_METHOD(size_t, GetMioPoolCapacity, (), (const));
     MOCK_METHOD(size_t, GetMpioPoolCapacity, (), (const));
-    MOCK_METHOD(bool, IsWriteMpioCacheEnabled, (), (const));
     MOCK_METHOD(size_t, GetWriteMpioCacheCapacity, (), (const));
     MOCK_METHOD(bool, IsDirectAccessEnabled, (), (const));
     MOCK_METHOD(size_t, GetTimeIntervalInMillisecondsForMetric, (), (const));
+    MOCK_METHOD(size_t, GetSamplingSkipCount, (), (const));
+    MOCK_METHOD(size_t, GetWrrCountSpecialPurposeMap, (), (const));
+    MOCK_METHOD(size_t, GetWrrCountJournal, (), (const));
+    MOCK_METHOD(size_t, GetWrrCountMap, (), (const));
+    MOCK_METHOD(size_t, GetWrrCountGeneral, (), (const));
+    MOCK_METHOD(std::vector<int>, GetWrrWeight, (), (const));
+    MOCK_METHOD(bool, IsRocksdbEnabled, (), (const));
+    MOCK_METHOD(bool, IsSupportingNumaDedicatedScheduling, (), (const));
+    MOCK_METHOD(void, SetNumberOfScheduler, (const int count));
+    MOCK_METHOD(int, GetNumberOfScheduler, (), (const));
+    MOCK_METHOD(void, SetIgnoreNumaDedicatedScheduling, (const bool ignore));
+    MOCK_METHOD(bool, NeedToIgnoreNumaDedicatedScheduling, (), (const));
 };
 } // namespace pos

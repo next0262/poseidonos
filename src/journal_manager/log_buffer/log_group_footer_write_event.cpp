@@ -34,13 +34,13 @@
 #include "src/journal_manager/log_buffer/log_group_footer_write_event.h"
 
 #include "src/include/pos_event_id.h"
-#include "src/journal_manager/log_buffer/journal_log_buffer.h"
+#include "src/journal_manager/log_buffer/i_journal_log_buffer.h"
 #include "src/journal_manager/log_buffer/log_group_footer_write_context.h"
 #include "src/logger/logger.h"
 
 namespace pos
 {
-LogGroupFooterWriteEvent::LogGroupFooterWriteEvent(JournalLogBuffer* logBuffer,
+LogGroupFooterWriteEvent::LogGroupFooterWriteEvent(IJournalLogBuffer* logBuffer,
     LogGroupFooter footer, uint64_t footerOffset,
     int logGroupId, EventSmartPtr callback)
 : logBuffer(logBuffer),
@@ -60,13 +60,13 @@ LogGroupFooterWriteEvent::Execute(void)
     int result = logBuffer->InternalIo(context);
     if (result != 0)
     {
-        POS_TRACE_DEBUG(POS_EVENT_ID::JOUNRAL_WRITE_LOG_GROUP_FOOTER,
+        POS_TRACE_DEBUG(EID(JOUNRAL_WRITE_LOG_GROUP_FOOTER),
             "Failed to write log group footer");
         return false;
     }
     else
     {
-        POS_TRACE_DEBUG(POS_EVENT_ID::JOUNRAL_WRITE_LOG_GROUP_FOOTER,
+        POS_TRACE_DEBUG(EID(JOUNRAL_WRITE_LOG_GROUP_FOOTER),
             "Write log group footer (id {}, version {})", logGroupId, footer.lastCheckpointedSeginfoVersion);
         return true;
     }

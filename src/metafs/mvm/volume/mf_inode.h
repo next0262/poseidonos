@@ -80,7 +80,8 @@ public:
             MetaFileName fileName;              // 128    24...151
             FileSizeType fileByteSize;          // 8      152..159
             FileSizeType dataChunkSize;         // 8      160..167
-            MetaStorageIoProperty ioAttribute;  // 16     168..183
+            MetaStorageIoProperty ioAttribute;  // 12     168..179
+            uint8_t reserved0[4];               // 4      180..183
             uint32_t indexInInodeTable;         // 4      184..187
             uint16_t versionSignature;          // 2      188..189
             uint16_t version;                   // 2      190..191

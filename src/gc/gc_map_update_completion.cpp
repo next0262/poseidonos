@@ -32,43 +32,44 @@
 
 #include "src/gc/gc_map_update_completion.h"
 
-#include "src/logger/logger.h"
-#include "src/include/branch_prediction.h"
-#include "src/include/backend_event.h"
-#include "Air.h"
+#include <air/Air.h>
+
+#include <list>
+#include <string>
+
 #include "src/allocator/allocator.h"
 #include "src/allocator_service/allocator_service.h"
 #include "src/array_mgmt/array_manager.h"
 #include "src/event_scheduler/event_scheduler.h"
 #include "src/gc/copier_meta.h"
 #include "src/gc/gc_stripe_manager.h"
+#include "src/include/backend_event.h"
+#include "src/include/branch_prediction.h"
 #include "src/io/backend_io/flush_completion.h"
 #include "src/io/backend_io/stripe_map_update_request.h"
 #include "src/io/general_io/rba_state_manager.h"
 #include "src/io/general_io/rba_state_service.h"
+#include "src/logger/logger.h"
 #include "src/mapper/mapper.h"
 #include "src/mapper_service/mapper_service.h"
 #include "src/volume/volume_service.h"
 
-#include <list>
-#include <string>
-
 namespace pos
 {
-GcMapUpdateCompletion::GcMapUpdateCompletion(Stripe* stripe, std::string arrayName, IStripeMap* iStripeMap,
-                                            EventScheduler* eventScheduler, GcStripeManager* gcStripeManager)
+GcMapUpdateCompletion::GcMapUpdateCompletion(StripeSmartPtr stripe, std::string arrayName, IStripeMap* iStripeMap,
+    EventScheduler* eventScheduler, GcStripeManager* gcStripeManager)
 : GcMapUpdateCompletion(stripe, arrayName, iStripeMap, eventScheduler, gcStripeManager,
-                        ArrayMgr()->GetInfo(arrayName)->arrayInfo,
-                        RBAStateServiceSingleton::Instance()->GetRBAStateManager(ArrayMgr()->GetInfo(arrayName)->arrayInfo->GetIndex()),
-                        VolumeServiceSingleton::Instance()->GetVolumeManager(ArrayMgr()->GetInfo(arrayName)->arrayInfo->GetIndex()))
+      ArrayMgr()->GetInfo(arrayName)->arrayInfo,
+      RBAStateServiceSingleton::Instance()->GetRBAStateManager(ArrayMgr()->GetInfo(arrayName)->arrayInfo->GetIndex()),
+      VolumeServiceSingleton::Instance()->GetVolumeManager(ArrayMgr()->GetInfo(arrayName)->arrayInfo->GetIndex()))
 {
 }
 
-GcMapUpdateCompletion::GcMapUpdateCompletion(Stripe* stripe, std::string arrayName, IStripeMap* iStripeMap,
-                                            EventScheduler* eventScheduler, GcStripeManager* gcStripeManager,
-                                            IArrayInfo* inputIArrayInfo,
-                                            RBAStateManager* inputRbaStateManager,
-                                            IVolumeIoManager* inputVolumeManager)
+GcMapUpdateCompletion::GcMapUpdateCompletion(StripeSmartPtr stripe, std::string arrayName, IStripeMap* iStripeMap,
+    EventScheduler* eventScheduler, GcStripeManager* gcStripeManager,
+    IArrayInfo* inputIArrayInfo,
+    RBAStateManager* inputRbaStateManager,
+    IVolumeIoManager* inputVolumeManager)
 : Callback(false),
   stripe(stripe),
   arrayName(arrayName),
@@ -109,14 +110,15 @@ GcMapUpdateCompletion::_DoSpecificJob(void)
     std::tie(rba, volId) = stripe->GetReverseMapEntry(0);
     rbaStateManager->ReleaseOwnershipRbaList(volId, rbaList);
 
-    volumeManager->DecreasePendingIOCount(volId, VolumeStatus::Unmounted);
+    volumeManager->DecreasePendingIOCount(volId, VolumeIoType::InternalIo);
+    airlog("InternalIoPendingCnt", "user", volId, -1);
 
     gcStripeManager->SetFinished();
 
-    POS_TRACE_DEBUG((int)POS_EVENT_ID::GC_MAP_UPDATE_COMPLETION,
+    POS_TRACE_DEBUG(EID(GC_MAP_UPDATE_COMPLETION),
         "gc map update completion, arrayName:{}, stripeUserLsid:{}",
         arrayName, stripe->GetUserLsid());
-    delete stripe;
+
     return true;
 }
 

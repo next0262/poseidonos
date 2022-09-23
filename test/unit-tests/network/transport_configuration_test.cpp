@@ -114,7 +114,7 @@ TEST_F(TransportConfigurationFixture, ReadConfig_Success)
 
 TEST_F(TransportConfigurationFixture, ReadConfig_GetTrasnportTypeFailed)
 {
-    EXPECT_CALL(mockConfigManager, GetValue(_, _, _, _)).WillOnce(Return((int)POS_EVENT_ID::CONFIG_VALUE_TYPE_ERROR));
+    EXPECT_CALL(mockConfigManager, GetValue(_, _, _, _)).WillOnce(Return(EID(CONFIG_VALUE_TYPE_ERROR)));
     TransportConfiguration transportConfiguration(&mockConfigManager, mockSpdkRpcClient);
     transportConfiguration.ReadConfig();
 }
@@ -122,8 +122,8 @@ TEST_F(TransportConfigurationFixture, ReadConfig_GetTrasnportTypeFailed)
 TEST_F(TransportConfigurationFixture, ReadConfig_GetBufCacheSizeFailed)
 {
     EXPECT_CALL(mockConfigManager, GetValue(_, _, _, _)).WillOnce(Return(EID(SUCCESS)))
-                                                        .WillOnce(Return((int)POS_EVENT_ID::CONFIG_VALUE_TYPE_ERROR))
-                                                        .WillOnce(Return((int)POS_EVENT_ID::CONFIG_VALUE_TYPE_ERROR));
+                                                        .WillOnce(Return(EID(CONFIG_VALUE_TYPE_ERROR)))
+                                                        .WillOnce(Return(EID(CONFIG_VALUE_TYPE_ERROR)));
     TransportConfiguration transportConfiguration(&mockConfigManager, mockSpdkRpcClient);
     transportConfiguration.ReadConfig();
 }
@@ -132,7 +132,7 @@ TEST_F(TransportConfigurationFixture, ReadConfig_GetNumSharedBufferFailed)
 {
     EXPECT_CALL(mockConfigManager, GetValue(_, _, _, _)).WillOnce(Return(EID(SUCCESS)))
                                                         .WillOnce(Return(EID(SUCCESS)))
-                                                        .WillOnce(Return((int)POS_EVENT_ID::CONFIG_VALUE_TYPE_ERROR));
+                                                        .WillOnce(Return(EID(CONFIG_VALUE_TYPE_ERROR)));
     TransportConfiguration transportConfiguration(&mockConfigManager, mockSpdkRpcClient);
     transportConfiguration.ReadConfig();
 }
@@ -147,7 +147,7 @@ TEST_F(TransportConfigurationFixture, CreateTransport_Success)
         *targetToChange = true;
         return SUCCESS;
     }).WillRepeatedly(Return(SUCCESS));
-    EXPECT_CALL(*mockSpdkRpcClient, TransportCreate(_, _, _)).WillOnce(Return(value));
+    EXPECT_CALL(*mockSpdkRpcClient, TransportCreate(_, _, _, _)).WillOnce(Return(value));
 
     TransportConfiguration transportConfiguration(&mockConfigManager, mockSpdkRpcClient);
     transportConfiguration.CreateTransport();
@@ -155,7 +155,7 @@ TEST_F(TransportConfigurationFixture, CreateTransport_Success)
 
 TEST_F(TransportConfigurationFixture, CreateTransport_TransportConfigDisabled)
 {
-    EXPECT_CALL(mockConfigManager, GetValue(_, _, _, _)).WillOnce(Return((int)POS_EVENT_ID::CONFIG_VALUE_TYPE_ERROR));
+    EXPECT_CALL(mockConfigManager, GetValue(_, _, _, _)).WillOnce(Return(EID(CONFIG_VALUE_TYPE_ERROR)));
 
     TransportConfiguration transportConfiguration(&mockConfigManager, mockSpdkRpcClient);
     transportConfiguration.CreateTransport();
@@ -171,7 +171,7 @@ TEST_F(TransportConfigurationFixture, CreateTransport_CreateTransport_Fail)
         *targetToChange = true;
         return SUCCESS;
     }).WillRepeatedly(Return(SUCCESS));
-    EXPECT_CALL(*mockSpdkRpcClient, TransportCreate(_, _, _)).WillOnce(Return(value));
+    EXPECT_CALL(*mockSpdkRpcClient, TransportCreate(_, _, _, _)).WillOnce(Return(value));
 
     TransportConfiguration transportConfiguration(&mockConfigManager, mockSpdkRpcClient);
     transportConfiguration.CreateTransport();

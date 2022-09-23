@@ -35,6 +35,7 @@
 
 #include <list>
 #include <string>
+#include <vector>
 
 #include "src/array/partition/partition_services.h"
 #include "src/array/device/array_device_manager.h"
@@ -51,6 +52,7 @@
 #include "src/include/array_config.h"
 #include "src/array/service/array_service_layer.h"
 #include "src/array/device/i_array_device_manager.h"
+#include "src/array/array_metrics_publisher.h"
 
 using namespace std;
 
@@ -83,9 +85,12 @@ public:
     virtual int Delete(void);
     virtual int AddSpare(string devName);
     virtual int RemoveSpare(string devName);
+    virtual int ReplaceDevice(string devName);
+    virtual int Rebuild(void);
     virtual int DetachDevice(UblockSharedPtr uBlock);
     virtual void MountDone(void);
     virtual int CheckUnmountable(void);
+    virtual string Serialize(void);
 
     const PartitionLogicalSize* GetSizeInfo(PartitionType type) override;
     DeviceSet<string> GetDevNames(void) override;
@@ -101,11 +106,15 @@ public:
     uint32_t GetRebuildingProgress(void) override;
     IArrayDevMgr* GetArrayManager(void) override;
     bool IsWriteThroughEnabled(void) override;
-    bool IsRecoverable(IArrayDevice* target, UBlockDevice* uBlock) override;
+    int IsRecoverable(IArrayDevice* target, UBlockDevice* uBlock) override;
     IArrayDevice* FindDevice(string devSn) override;
-    virtual bool TriggerRebuild(ArrayDevice* target);
-    virtual bool ResumeRebuild(ArrayDevice* target);
+    virtual void InvokeRebuild(vector<IArrayDevice*> targets, bool isResume, bool force = false);
+    virtual bool TriggerRebuild(vector<IArrayDevice*> targets);
+    virtual bool ResumeRebuild(vector<IArrayDevice*> targets);
+    virtual void DoRebuildAsync(vector<IArrayDevice*> dst, vector<IArrayDevice*> src, RebuildTypeEnum rt);
     virtual void SetPreferences(bool isWT);
+    virtual void SetTargetAddress(string targetAddress);
+    virtual string GetTargetAddress();
 
 private:
     int _LoadImpl(void);
@@ -113,13 +122,12 @@ private:
     void _DeletePartitions(void);
     int _Flush(void);
     int _Flush(ArrayMeta& meta);
-    int _CheckRebuildNecessity(ArrayDevice* target);
-    void _RebuildDone(RebuildResult result);
+    void _RebuildDone(vector<IArrayDevice*> dst, vector<IArrayDevice*> src, RebuildResult result);
     void _DetachSpare(ArrayDevice* target);
     void _DetachData(ArrayDevice* target);
     int _RegisterService(void);
     void _UnregisterService(void);
-    void _CheckRebuildNecessity(void);
+    bool _CanAddSpare(void);
 
     ArrayState* state = nullptr;
     PartitionServices* svc = nullptr;
@@ -135,8 +143,10 @@ private:
     IAbrControl* abrControl = nullptr;
     EventScheduler* eventScheduler = nullptr;
     ArrayServiceLayer* arrayService = nullptr;
+    ArrayMetricsPublisher* publisher = nullptr;
     id_t uniqueId = 0;
     bool isWTEnabled = false;
+    string targetAddress = "";
 };
 } // namespace pos
 #endif // ARRAY_H_

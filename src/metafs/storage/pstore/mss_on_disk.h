@@ -33,6 +33,7 @@
 #ifndef _INCLUDE_MSS_ONDISK_INCLUDE_H
 #define _INCLUDE_MSS_ONDISK_INCLUDE_H
 
+#include <list>
 #include <vector>
 
 #include "meta_async_cb_cxt.h"
@@ -95,7 +96,6 @@ private:
     std::vector<uint32_t> maxPageCntLimitPerIO;
 
     static const uint32_t MAX_DATA_TRANSFER_BYTE_SIZE = 4 * 1024; // 128 * 1024; temporary changed to 4KB due to FT layer IssueUbio
-    uint32_t retryIoCnt = 0;
 };
 } // namespace pos
 

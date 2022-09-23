@@ -34,6 +34,8 @@
 
 #include <gtest/gtest.h>
 
+#include <cstring>
+
 #include "test/unit-tests/metafs/mai/metafs_file_control_api_mock.h"
 #include "test/unit-tests/metafs/mim/meta_io_manager_mock.h"
 #include "test/unit-tests/metafs/storage/mss_mock.h"
@@ -55,11 +57,11 @@ TEST(MetaFsIoApi, Read_testIfDataWillNotBeReturnedWhenTheModuleIsAbnormal_Fully)
     NiceMock<MockTelemetryPublisher>* tp = new NiceMock<MockTelemetryPublisher>();
     ConcurrentMetaFsTimeInterval* concurrentMetaFsTimeInterval = new ConcurrentMetaFsTimeInterval(5000);
 
-    MetaFsIoApi api(arrayId, ctrl, storage, tp, concurrentMetaFsTimeInterval);
+    MetaFsIoApi api(arrayId, ctrl, storage, tp, concurrentMetaFsTimeInterval, false);
 
     api.SetStatus(false);
 
-    EXPECT_EQ(api.Read(fd, nullptr, type), POS_EVENT_ID::MFS_MODULE_NOT_READY);
+    EXPECT_EQ(api.Read(fd, nullptr, type), EID(MFS_MODULE_NOT_READY));
 
     delete ctrl;
 }
@@ -74,11 +76,11 @@ TEST(MetaFsIoApi, Read_testIfDataWillNotBeReturnedWhenTheModuleIsAbnormal_Partia
     NiceMock<MockTelemetryPublisher>* tp = new NiceMock<MockTelemetryPublisher>();
     ConcurrentMetaFsTimeInterval* concurrentMetaFsTimeInterval = new ConcurrentMetaFsTimeInterval(5000);
 
-    MetaFsIoApi api(arrayId, ctrl, storage, tp, concurrentMetaFsTimeInterval);
+    MetaFsIoApi api(arrayId, ctrl, storage, tp, concurrentMetaFsTimeInterval, false);
 
     api.SetStatus(false);
 
-    EXPECT_EQ(api.Read(fd, 0, 0, nullptr, type), POS_EVENT_ID::MFS_MODULE_NOT_READY);
+    EXPECT_EQ(api.Read(fd, 0, 0, nullptr, type), EID(MFS_MODULE_NOT_READY));
 
     delete ctrl;
 }
@@ -93,13 +95,13 @@ TEST(MetaFsIoApi, Read_testIfDataWillNotBeReturnedWhenThereIsNoFileInfo_Fully)
     NiceMock<MockTelemetryPublisher>* tp = new NiceMock<MockTelemetryPublisher>();
     ConcurrentMetaFsTimeInterval* concurrentMetaFsTimeInterval = new ConcurrentMetaFsTimeInterval(5000);
 
-    MetaFsIoApi api(arrayId, ctrl, storage, tp, concurrentMetaFsTimeInterval);
+    MetaFsIoApi api(arrayId, ctrl, storage, tp, concurrentMetaFsTimeInterval, false);
 
     api.SetStatus(true);
 
     EXPECT_CALL(*ctrl, GetFileInfo).WillOnce(Return(nullptr));
 
-    EXPECT_EQ(api.Read(fd, nullptr, type), POS_EVENT_ID::MFS_FILE_NOT_FOUND);
+    EXPECT_EQ(api.Read(fd, nullptr, type), EID(MFS_FILE_NOT_FOUND));
 
     delete ctrl;
 }
@@ -114,13 +116,13 @@ TEST(MetaFsIoApi, Read_testIfDataWillNotBeReturnedWhenThereIsNoFileInfo_Partiall
     NiceMock<MockTelemetryPublisher>* tp = new NiceMock<MockTelemetryPublisher>();
     ConcurrentMetaFsTimeInterval* concurrentMetaFsTimeInterval = new ConcurrentMetaFsTimeInterval(5000);
 
-    MetaFsIoApi api(arrayId, ctrl, storage, tp, concurrentMetaFsTimeInterval);
+    MetaFsIoApi api(arrayId, ctrl, storage, tp, concurrentMetaFsTimeInterval, false);
 
     api.SetStatus(true);
 
     EXPECT_CALL(*ctrl, GetFileInfo).WillOnce(Return(nullptr));
 
-    EXPECT_EQ(api.Read(fd, 0, 0, nullptr, type), POS_EVENT_ID::MFS_FILE_NOT_FOUND);
+    EXPECT_EQ(api.Read(fd, 0, 0, nullptr, type), EID(MFS_FILE_NOT_FOUND));
 
     delete ctrl;
 }
@@ -132,12 +134,12 @@ TEST(MetaFsIoApi, Read_testIfDataWillBeReturned_Fully)
     MetaStorageType type = MetaStorageType::SSD;
     MetaLpnType lpnSize = 5;
     NiceMock<MockMetaStorageSubsystem>* storage = new NiceMock<MockMetaStorageSubsystem>(arrayId);
-    NiceMock<MockMetaIoManager>* io = new NiceMock<MockMetaIoManager>();
+    NiceMock<MockMetaIoManager>* io = new NiceMock<MockMetaIoManager>(false);
     NiceMock<MockMetaFsFileControlApi>* ctrl = new NiceMock<MockMetaFsFileControlApi>(arrayId, storage, nullptr);
     NiceMock<MockTelemetryPublisher>* tp = new NiceMock<MockTelemetryPublisher>();
     ConcurrentMetaFsTimeInterval* concurrentMetaFsTimeInterval = new ConcurrentMetaFsTimeInterval(5000);
 
-    MetaFsIoApi api(arrayId, ctrl, storage, tp, concurrentMetaFsTimeInterval, io);
+    MetaFsIoApi api(arrayId, ctrl, storage, tp, concurrentMetaFsTimeInterval, false, io);
 
     api.SetStatus(true);
 
@@ -147,21 +149,21 @@ TEST(MetaFsIoApi, Read_testIfDataWillBeReturned_Fully)
 
     MetaFileContext fileCtx;
     fileCtx.chunkSize = MetaFsIoConfig::DEFAULT_META_PAGE_DATA_CHUNK_SIZE;
-    fileCtx.extents = &extent;
     fileCtx.extentsCount = 1;
+    fileCtx.CopyExtentsFrom(&extent, fileCtx.extentsCount);
     fileCtx.fileBaseLpn = 0;
     fileCtx.isActivated = true;
     fileCtx.sizeInByte = MetaFsIoConfig::DEFAULT_META_PAGE_DATA_CHUNK_SIZE * lpnSize;
     fileCtx.storageType = MetaStorageType::SSD;
 
     EXPECT_CALL(*ctrl, GetFileInfo).WillOnce(Return(&fileCtx));
-    EXPECT_CALL(*io, CheckReqSanity).WillOnce(Return(POS_EVENT_ID::SUCCESS));
-    EXPECT_CALL(*io, ProcessNewReq).WillOnce(Return(POS_EVENT_ID::SUCCESS));
+    EXPECT_CALL(*io, CheckReqSanity).WillOnce(Return(EID(SUCCESS)));
+    EXPECT_CALL(*io, ProcessNewReq).WillOnce(Return(EID(SUCCESS)));
 
     char* rBuf = (char*)malloc(fileCtx.sizeInByte);
     memset(rBuf, 0, fileCtx.sizeInByte);
 
-    EXPECT_EQ(api.Read(fd, rBuf, type), POS_EVENT_ID::SUCCESS);
+    EXPECT_EQ(api.Read(fd, rBuf, type), EID(SUCCESS));
 
     free(rBuf);
     delete ctrl;
@@ -174,12 +176,12 @@ TEST(MetaFsIoApi, Read_testIfDataWillBeReturned_Partially)
     MetaStorageType type = MetaStorageType::SSD;
     MetaLpnType lpnSize = 5;
     NiceMock<MockMetaStorageSubsystem>* storage = new NiceMock<MockMetaStorageSubsystem>(arrayId);
-    NiceMock<MockMetaIoManager>* io = new NiceMock<MockMetaIoManager>();
+    NiceMock<MockMetaIoManager>* io = new NiceMock<MockMetaIoManager>(false);
     NiceMock<MockMetaFsFileControlApi>* ctrl = new NiceMock<MockMetaFsFileControlApi>(arrayId, storage, nullptr);
     NiceMock<MockTelemetryPublisher>* tp = new NiceMock<MockTelemetryPublisher>();
     ConcurrentMetaFsTimeInterval* concurrentMetaFsTimeInterval = new ConcurrentMetaFsTimeInterval(5000);
 
-    MetaFsIoApi api(arrayId, ctrl, storage, tp, concurrentMetaFsTimeInterval, io);
+    MetaFsIoApi api(arrayId, ctrl, storage, tp, concurrentMetaFsTimeInterval, false, io);
 
     api.SetStatus(true);
 
@@ -189,21 +191,21 @@ TEST(MetaFsIoApi, Read_testIfDataWillBeReturned_Partially)
 
     MetaFileContext fileCtx;
     fileCtx.chunkSize = MetaFsIoConfig::DEFAULT_META_PAGE_DATA_CHUNK_SIZE;
-    fileCtx.extents = &extent;
     fileCtx.extentsCount = 1;
+    fileCtx.CopyExtentsFrom(&extent, fileCtx.extentsCount);
     fileCtx.fileBaseLpn = 0;
     fileCtx.isActivated = true;
     fileCtx.sizeInByte = MetaFsIoConfig::DEFAULT_META_PAGE_DATA_CHUNK_SIZE * lpnSize;
     fileCtx.storageType = MetaStorageType::SSD;
 
     EXPECT_CALL(*ctrl, GetFileInfo).WillOnce(Return(&fileCtx));
-    EXPECT_CALL(*io, CheckReqSanity).WillOnce(Return(POS_EVENT_ID::SUCCESS));
-    EXPECT_CALL(*io, ProcessNewReq).WillOnce(Return(POS_EVENT_ID::SUCCESS));
+    EXPECT_CALL(*io, CheckReqSanity).WillOnce(Return(EID(SUCCESS)));
+    EXPECT_CALL(*io, ProcessNewReq).WillOnce(Return(EID(SUCCESS)));
 
     char* rBuf = (char*)malloc(fileCtx.sizeInByte);
     memset(rBuf, 0, fileCtx.sizeInByte);
 
-    EXPECT_EQ(api.Read(fd, 0, 0, rBuf, type), POS_EVENT_ID::SUCCESS);
+    EXPECT_EQ(api.Read(fd, 0, 0, rBuf, type), EID(SUCCESS));
 
     free(rBuf);
     delete ctrl;
@@ -219,11 +221,11 @@ TEST(MetaFsIoApi, Write_testIfDataWillNotBeStoredWhenTheModuleIsAbnormal_Fully)
     NiceMock<MockTelemetryPublisher>* tp = new NiceMock<MockTelemetryPublisher>();
     ConcurrentMetaFsTimeInterval* concurrentMetaFsTimeInterval = new ConcurrentMetaFsTimeInterval(5000);
 
-    MetaFsIoApi api(arrayId, ctrl, storage, tp, concurrentMetaFsTimeInterval);
+    MetaFsIoApi api(arrayId, ctrl, storage, tp, concurrentMetaFsTimeInterval, false);
 
     api.SetStatus(false);
 
-    EXPECT_EQ(api.Write(fd, nullptr, type), POS_EVENT_ID::MFS_MODULE_NOT_READY);
+    EXPECT_EQ(api.Write(fd, nullptr, type), EID(MFS_MODULE_NOT_READY));
 
     delete ctrl;
 }
@@ -238,11 +240,11 @@ TEST(MetaFsIoApi, Write_testIfDataWillNotBeStoredWhenTheModuleIsAbnormal_Partial
     NiceMock<MockTelemetryPublisher>* tp = new NiceMock<MockTelemetryPublisher>();
     ConcurrentMetaFsTimeInterval* concurrentMetaFsTimeInterval = new ConcurrentMetaFsTimeInterval(5000);
 
-    MetaFsIoApi api(arrayId, ctrl, storage, tp, concurrentMetaFsTimeInterval);
+    MetaFsIoApi api(arrayId, ctrl, storage, tp, concurrentMetaFsTimeInterval, false);
 
     api.SetStatus(false);
 
-    EXPECT_EQ(api.Write(fd, nullptr, type), POS_EVENT_ID::MFS_MODULE_NOT_READY);
+    EXPECT_EQ(api.Write(fd, nullptr, type), EID(MFS_MODULE_NOT_READY));
 
     delete ctrl;
 }
@@ -257,13 +259,13 @@ TEST(MetaFsIoApi, Write_testIfDataWillNotBeStoredWhenThereIsNoFileInfo_Fully)
     NiceMock<MockTelemetryPublisher>* tp = new NiceMock<MockTelemetryPublisher>();
     ConcurrentMetaFsTimeInterval* concurrentMetaFsTimeInterval = new ConcurrentMetaFsTimeInterval(5000);
 
-    MetaFsIoApi api(arrayId, ctrl, storage, tp, concurrentMetaFsTimeInterval);
+    MetaFsIoApi api(arrayId, ctrl, storage, tp, concurrentMetaFsTimeInterval, false);
 
     api.SetStatus(true);
 
     EXPECT_CALL(*ctrl, GetFileInfo).WillOnce(Return(nullptr));
 
-    EXPECT_EQ(api.Write(fd, nullptr, type), POS_EVENT_ID::MFS_FILE_NOT_FOUND);
+    EXPECT_EQ(api.Write(fd, nullptr, type), EID(MFS_FILE_NOT_FOUND));
 
     delete ctrl;
 }
@@ -278,13 +280,13 @@ TEST(MetaFsIoApi, Write_testIfDataWillNotBeStoredWhenThereIsNoFileInfo_Partially
     NiceMock<MockTelemetryPublisher>* tp = new NiceMock<MockTelemetryPublisher>();
     ConcurrentMetaFsTimeInterval* concurrentMetaFsTimeInterval = new ConcurrentMetaFsTimeInterval(5000);
 
-    MetaFsIoApi api(arrayId, ctrl, storage, tp, concurrentMetaFsTimeInterval);
+    MetaFsIoApi api(arrayId, ctrl, storage, tp, concurrentMetaFsTimeInterval, false);
 
     api.SetStatus(true);
 
     EXPECT_CALL(*ctrl, GetFileInfo).WillOnce(Return(nullptr));
 
-    EXPECT_EQ(api.Write(fd, nullptr, type), POS_EVENT_ID::MFS_FILE_NOT_FOUND);
+    EXPECT_EQ(api.Write(fd, nullptr, type), EID(MFS_FILE_NOT_FOUND));
 
     delete ctrl;
 }
@@ -296,12 +298,12 @@ TEST(MetaFsIoApi, Write_testIfDataWillBeStored_Fully)
     MetaStorageType type = MetaStorageType::SSD;
     MetaLpnType lpnSize = 5;
     NiceMock<MockMetaStorageSubsystem>* storage = new NiceMock<MockMetaStorageSubsystem>(arrayId);
-    NiceMock<MockMetaIoManager>* io = new NiceMock<MockMetaIoManager>();
+    NiceMock<MockMetaIoManager>* io = new NiceMock<MockMetaIoManager>(false);
     NiceMock<MockMetaFsFileControlApi>* ctrl = new NiceMock<MockMetaFsFileControlApi>(arrayId, storage, nullptr);
     NiceMock<MockTelemetryPublisher>* tp = new NiceMock<MockTelemetryPublisher>();
     ConcurrentMetaFsTimeInterval* concurrentMetaFsTimeInterval = new ConcurrentMetaFsTimeInterval(5000);
 
-    MetaFsIoApi api(arrayId, ctrl, storage, tp, concurrentMetaFsTimeInterval, io);
+    MetaFsIoApi api(arrayId, ctrl, storage, tp, concurrentMetaFsTimeInterval, false, io);
 
     api.SetStatus(true);
 
@@ -311,21 +313,21 @@ TEST(MetaFsIoApi, Write_testIfDataWillBeStored_Fully)
 
     MetaFileContext fileCtx;
     fileCtx.chunkSize = MetaFsIoConfig::DEFAULT_META_PAGE_DATA_CHUNK_SIZE;
-    fileCtx.extents = &extent;
     fileCtx.extentsCount = 1;
+    fileCtx.CopyExtentsFrom(&extent, fileCtx.extentsCount);
     fileCtx.fileBaseLpn = 0;
     fileCtx.isActivated = true;
     fileCtx.sizeInByte = MetaFsIoConfig::DEFAULT_META_PAGE_DATA_CHUNK_SIZE * lpnSize;
     fileCtx.storageType = MetaStorageType::SSD;
 
     EXPECT_CALL(*ctrl, GetFileInfo).WillOnce(Return(&fileCtx));
-    EXPECT_CALL(*io, CheckReqSanity).WillOnce(Return(POS_EVENT_ID::SUCCESS));
-    EXPECT_CALL(*io, ProcessNewReq).WillOnce(Return(POS_EVENT_ID::SUCCESS));
+    EXPECT_CALL(*io, CheckReqSanity).WillOnce(Return(EID(SUCCESS)));
+    EXPECT_CALL(*io, ProcessNewReq).WillOnce(Return(EID(SUCCESS)));
 
     char* rBuf = (char*)malloc(fileCtx.sizeInByte);
     memset(rBuf, 0, fileCtx.sizeInByte);
 
-    EXPECT_EQ(api.Write(fd, rBuf, type), POS_EVENT_ID::SUCCESS);
+    EXPECT_EQ(api.Write(fd, rBuf, type), EID(SUCCESS));
 
     free(rBuf);
     delete ctrl;
@@ -338,12 +340,12 @@ TEST(MetaFsIoApi, Write_testIfDataWillBeStored_Partially)
     MetaStorageType type = MetaStorageType::SSD;
     MetaLpnType lpnSize = 5;
     NiceMock<MockMetaStorageSubsystem>* storage = new NiceMock<MockMetaStorageSubsystem>(arrayId);
-    NiceMock<MockMetaIoManager>* io = new NiceMock<MockMetaIoManager>();
+    NiceMock<MockMetaIoManager>* io = new NiceMock<MockMetaIoManager>(false);
     NiceMock<MockMetaFsFileControlApi>* ctrl = new NiceMock<MockMetaFsFileControlApi>(arrayId, storage, nullptr);
     NiceMock<MockTelemetryPublisher>* tp = new NiceMock<MockTelemetryPublisher>();
     ConcurrentMetaFsTimeInterval* concurrentMetaFsTimeInterval = new ConcurrentMetaFsTimeInterval(5000);
 
-    MetaFsIoApi api(arrayId, ctrl, storage, tp, concurrentMetaFsTimeInterval, io);
+    MetaFsIoApi api(arrayId, ctrl, storage, tp, concurrentMetaFsTimeInterval, false, io);
 
     api.SetStatus(true);
 
@@ -353,21 +355,21 @@ TEST(MetaFsIoApi, Write_testIfDataWillBeStored_Partially)
 
     MetaFileContext fileCtx;
     fileCtx.chunkSize = MetaFsIoConfig::DEFAULT_META_PAGE_DATA_CHUNK_SIZE;
-    fileCtx.extents = &extent;
     fileCtx.extentsCount = 1;
+    fileCtx.CopyExtentsFrom(&extent, fileCtx.extentsCount);
     fileCtx.fileBaseLpn = 0;
     fileCtx.isActivated = true;
     fileCtx.sizeInByte = MetaFsIoConfig::DEFAULT_META_PAGE_DATA_CHUNK_SIZE * lpnSize;
     fileCtx.storageType = MetaStorageType::SSD;
 
     EXPECT_CALL(*ctrl, GetFileInfo).WillOnce(Return(&fileCtx));
-    EXPECT_CALL(*io, CheckReqSanity).WillOnce(Return(POS_EVENT_ID::SUCCESS));
-    EXPECT_CALL(*io, ProcessNewReq).WillOnce(Return(POS_EVENT_ID::SUCCESS));
+    EXPECT_CALL(*io, CheckReqSanity).WillOnce(Return(EID(SUCCESS)));
+    EXPECT_CALL(*io, ProcessNewReq).WillOnce(Return(EID(SUCCESS)));
 
     char* rBuf = (char*)malloc(fileCtx.sizeInByte);
     memset(rBuf, 0, fileCtx.sizeInByte);
 
-    EXPECT_EQ(api.Write(fd, rBuf, type), POS_EVENT_ID::SUCCESS);
+    EXPECT_EQ(api.Write(fd, rBuf, type), EID(SUCCESS));
 
     free(rBuf);
     delete ctrl;

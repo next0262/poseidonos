@@ -50,6 +50,7 @@ class FlushCmdManager;
 class FlushCount;
 class GarbageCollector;
 class IODispatcher;
+class IODispatcherSubmission;
 class IOSubmitHandlerCount;
 class Logger;
 class MapperService;
@@ -71,6 +72,9 @@ class TelemetryClient;
 class TelemetryManagerService;
 class TelemetryConfig;
 class MemoryManager;
+class PosReplicatorManager;
+class ResourceChecker;
+class IoTimeoutChecker;
 
 extern DebugInfo* debugInfo;
 
@@ -95,6 +99,7 @@ private:
     FlushCount* flushCount;
     GarbageCollector* garbageCollector;
     IODispatcher* ioDispatcher;
+    IODispatcherSubmission* ioDispatcherSubmission;
     IOSubmitHandlerCount* ioSubmitHandlerCount;
     Logger* logger;
     MapperService* mapperService;
@@ -114,6 +119,9 @@ private:
     TelemetryClient* telemetryClient;
     TelemetryConfig* telemetryConfig;
     MemoryManager* memoryManager;
+    PosReplicatorManager* posReplicatorManager;
+    ResourceChecker* resourceChecker;
+    IoTimeoutChecker* ioTimeoutChecker;
 };
 
 } // namespace pos

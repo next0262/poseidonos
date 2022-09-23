@@ -33,7 +33,6 @@
 #include "io_recover.h"
 
 #include "src/bio/ubio.h"
-#include "src/include/array_mgmt_policy.h"
 #include "src/include/pos_event_id.h"
 #include "src/logger/logger.h"
 
@@ -41,7 +40,6 @@ namespace pos
 {
 IORecover::IORecover(void)
 {
-    recoveries = new ArrayRecover[ArrayMgmtPolicy::MAX_ARRAY_CNT];
 }
 
 IORecover::~IORecover(void)
@@ -61,7 +59,7 @@ IORecover::Register(unsigned int arrayIndex, ArrayRecover recov)
 {
     if (recoveries[arrayIndex].empty())
     {
-        int eventId = (int)POS_EVENT_ID::IO_RECOVER_DEBUG_MSG;
+        int eventId = EID(IO_RECOVER_DEBUG_MSG);
         if (recov.empty())
         {
             POS_TRACE_WARN(eventId,
@@ -79,7 +77,7 @@ IORecover::Register(unsigned int arrayIndex, ArrayRecover recov)
 void
 IORecover::Unregister(unsigned int arrayIndex)
 {
-    POS_TRACE_INFO((int)POS_EVENT_ID::IO_RECOVER_DEBUG_MSG,
+    POS_TRACE_INFO(EID(IO_RECOVER_DEBUG_MSG),
         "IORecover::Unregister, array:{}", arrayIndex);
     recoveries[arrayIndex].clear();
 }

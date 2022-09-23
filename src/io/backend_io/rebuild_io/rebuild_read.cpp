@@ -49,10 +49,10 @@ namespace pos
 int
 RebuildRead::Recover(UbioSmartPtr ubio, BufferPool* bufferPool)
 {
+    int event = EID(IO_RECOVER_DEBUG_MSG);
     if (true == ubio->IsRetry())
     {
-        int event = 9999; // TODO(iopath) temporal event id
-        POS_TRACE_ERROR(event, "RebuildRead::GetRecoverMethod IsRetry");
+        POS_TRACE_ERROR(event, "RebuildRead, Failed again in retry");
         return event;
     }
 
@@ -77,13 +77,18 @@ RebuildRead::Recover(UbioSmartPtr ubio, BufferPool* bufferPool)
     uint32_t readSize = blockAlignment.GetBlockCount() * blockSize;
     uint32_t sectorCnt = rm.srcAddr.size() * readSize / sectorSize;
     void* mem = nullptr;
-    if (bufferPool == nullptr) // Degraded Or Timeout case
-    {
-        mem = Memory<sectorSize>::Alloc(sectorCnt);
-    }
-    else // Total Rebuild Case
+    if (bufferPool != nullptr)
     {
         mem = bufferPool->TryGetBuffer();
+        if (nullptr == mem)
+        {
+            POS_TRACE_WARN(EID(RESOURCE_BUFFER_POOL_EMPTY),
+                "Failed to get buffer during recover read. {} Pool is empty", bufferPool->GetOwner());
+        }
+    }
+    if (nullptr == mem)
+    {
+        mem = Memory<sectorSize>::Alloc(sectorCnt);
     }
 
     UbioSmartPtr rebuildUbio(new Ubio(mem, sectorCnt, ubio->GetArrayId()));
@@ -120,7 +125,6 @@ RebuildRead::Recover(UbioSmartPtr ubio, BufferPool* bufferPool)
         IODispatcher* ioDispatcher = IODispatcherSingleton::Instance();
         ioDispatcher->Submit(split);
     }
-
     return EID(SUCCESS);
 }
 } // namespace pos

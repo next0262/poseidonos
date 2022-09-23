@@ -107,7 +107,7 @@ VSAMapContent::SetEntry(BlkAddr rba, VirtualBlkAddr vsa)
         if (unlikely(mpage == nullptr))
         {
             map->ReleaseMpageLock(pageNr);
-            return -EID(VSAMAP_SET_FAILURE);
+            return ERRID(VSAMAP_SET_FAILURE);
         }
         mapHeader->SetMapAllocated(pageNr);
     }
@@ -195,7 +195,7 @@ VSAMapContent::InvalidateAllBlocks(ISegmentCtx* segmentCtx)
             if (IsUnMapVsa(vsa) == false)
             {
                 VirtualBlks vBlks = {.startVsa = vsa, .numBlks = 1};
-                bool allowVictimSegRelease = false;
+                bool allowVictimSegRelease = true;
                 segmentCtx->InvalidateBlks(vBlks, allowVictimSegRelease);
             }
         }

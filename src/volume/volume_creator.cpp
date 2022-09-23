@@ -43,7 +43,9 @@ namespace pos
 {
 
 VolumeCreator::VolumeCreator(VolumeList& volumeList, std::string arrayName, int arrayID, VolumeEventPublisher* volumeEventPublisher)
-: VolumeInterface(volumeList, arrayName, arrayID, volumeEventPublisher)
+: VolumeInterface(volumeList, arrayName, arrayID, volumeEventPublisher),
+  VolumeNamePolicy(EID(CREATE_VOL_NAME_INCLUDES_SPECIAL_CHAR), EID(CREATE_VOL_NAME_START_OR_END_WITH_SPACE),
+    EID(CREATE_VOL_NAME_TOO_LONG), EID(CREATE_VOL_NAME_TOO_SHORT))
 {
     vol = nullptr;
 }
@@ -67,16 +69,16 @@ VolumeCreator::_CheckRequestValidity(string name, uint64_t size)
 
 void
 VolumeCreator::_CreateVolume(string name, uint64_t size, uint64_t maxIops,
-        uint64_t maxBw, uint64_t minIops, uint64_t minBw)
+        uint64_t maxBw, uint64_t minIops, uint64_t minBw, bool checkWalVolume, std::string uuid)
 {
-    vol = new Volume(arrayName, arrayID, name, size);
+    VolumeAttribute volumeAttribute = (checkWalVolume ? VolumeAttribute::HAJournalData : VolumeAttribute::UserData);
+
+    vol = new Volume(arrayName, arrayID, name, uuid, size, maxIops, minIops, maxBw, minBw, volumeAttribute);
     if (vol == nullptr)
     {
         POS_TRACE_ERROR(EID(CREATE_VOL_MEM_ALLOC_FAIL), "Fail to allocate memory");
         throw EID(CREATE_VOL_MEM_ALLOC_FAIL);
     }
-
-    _SetVolumeQos(vol, maxIops, maxBw, minIops, minBw);
 
     int ret = volumeList.Add(vol);
     if (ret != EID(SUCCESS))
@@ -120,23 +122,26 @@ VolumeCreator::_RollbackCreatedVolume(int exceptionEvent)
     if (vol != nullptr)
     {
         volumeList.Remove(vol->ID);
-        delete vol;
     }
     }
     catch(int& exceptionEvent)
     {
         POS_TRACE_ERROR(EID(VOL_EVENT_ROLLBACK_FAIL), "event_id: {}", exceptionEvent);
+        if (vol != nullptr)
+        {
+            delete vol;
+        }
     }
 }
 
 int
-VolumeCreator::Do(string name, uint64_t size, uint64_t maxIops,
-        uint64_t maxBw, uint64_t minIops, uint64_t minBw)
+VolumeCreator::Do(string name, uint64_t size, uint64_t maxIops, uint64_t maxBw,
+        uint64_t minIops, uint64_t minBw, std::string uuid, bool checkWalVolume)
 {
     try
     {
         _CheckRequestValidity(name, size);
-        _CreateVolume(name, size, maxIops, maxBw, minIops, minBw);
+        _CreateVolume(name, size, maxIops, maxBw, minIops, minBw, checkWalVolume, uuid);
 
         _NotificationVolumeEvent();
 

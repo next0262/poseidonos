@@ -32,23 +32,20 @@
 
 #include "src/gc/gc_stripe_manager.h"
 
-#include "src/allocator_service/allocator_service.h"
-#include "src/io/general_io/translator.h"
-#include "src/include/meta_const.h"
-#include "src/gc/gc_flush_submission.h"
-
-#include "src/allocator/i_wbstripe_allocator.h"
-#include "src/allocator/i_block_allocator.h"
-#include "src/sys_event/volume_event_publisher.h"
-#include "src/resource_manager/buffer_pool.h"
-
-#include "src/include/branch_prediction.h"
-
-#include "src/logger/logger.h"
-
-#include "Air.h"
+#include <air/Air.h>
 
 #include <utility>
+
+#include "src/allocator/i_block_allocator.h"
+#include "src/allocator/i_wbstripe_allocator.h"
+#include "src/allocator_service/allocator_service.h"
+#include "src/gc/gc_flush_submission.h"
+#include "src/include/branch_prediction.h"
+#include "src/include/meta_const.h"
+#include "src/io/general_io/translator.h"
+#include "src/logger/logger.h"
+#include "src/resource_manager/buffer_pool.h"
+#include "src/sys_event/volume_event_publisher.h"
 
 namespace pos
 {
@@ -63,8 +60,7 @@ GcStripeManager::_SetBufferPool(void)
     BufferInfo info = {
         .owner = typeid(this).name(),
         .size = CHUNK_SIZE,
-        .count = udSize->chunksPerStripe * GC_WRITE_BUFFER_COUNT
-    };
+        .count = udSize->chunksPerStripe * GC_WRITE_BUFFER_COUNT};
 
     gcWriteBufferPool = memoryManager->CreateBufferPool(info);
     if (gcWriteBufferPool == nullptr)
@@ -75,8 +71,8 @@ GcStripeManager::_SetBufferPool(void)
 }
 
 GcStripeManager::GcStripeManager(IArrayInfo* iArrayInfo,
-                                VolumeEventPublisher* inputVolumeEventPublisher,
-                                MemoryManager* memoryManager)
+    VolumeEventPublisher* inputVolumeEventPublisher,
+    MemoryManager* memoryManager)
 : VolumeEvent("GcStripeManager", iArrayInfo->GetName(), iArrayInfo->GetIndex()),
   iArrayInfo(iArrayInfo),
   volumeEventPublisher(inputVolumeEventPublisher),
@@ -94,7 +90,7 @@ GcStripeManager::GcStripeManager(IArrayInfo* iArrayInfo,
     volumeEventPublisher->RegisterSubscriber(this, arrayName, arrayId);
     if (_SetBufferPool() == false)
     {
-        POS_TRACE_ERROR(POS_EVENT_ID::GC_ERROR_MSG,
+        POS_TRACE_ERROR(EID(GC_ERROR_MSG),
             "Failed to allocated memory in GC_STRIPE_MANAGER");
     }
 }
@@ -127,7 +123,7 @@ GcStripeManager::~GcStripeManager(void)
 int
 GcStripeManager::VolumeCreated(VolumeEventBase* volEventBase, VolumeEventPerf* volEventPerf, VolumeArrayInfo* volArrayInfo)
 {
-    return (int)POS_EVENT_ID::VOL_EVENT_OK;
+    return EID(VOL_EVENT_OK);
 }
 
 int
@@ -141,37 +137,37 @@ GcStripeManager::VolumeDeleted(VolumeEventBase* volEventBase, VolumeArrayInfo* v
         ReturnBuffer(writeBuffers);
         SetFinished();
     }
-    return (int)POS_EVENT_ID::VOL_EVENT_OK;
+    return EID(VOL_EVENT_OK);
 }
 
 int
 GcStripeManager::VolumeMounted(VolumeEventBase* volEventBase, VolumeEventPerf* volEventPerf, VolumeArrayInfo* volArrayInfo)
 {
-    return (int)POS_EVENT_ID::VOL_EVENT_OK;
+    return EID(VOL_EVENT_OK);
 }
 
 int
 GcStripeManager::VolumeUnmounted(VolumeEventBase* volEventBase, VolumeArrayInfo* volArrayInfo)
 {
-    return (int)POS_EVENT_ID::VOL_EVENT_OK;
+    return EID(VOL_EVENT_OK);
 }
 
 int
 GcStripeManager::VolumeLoaded(VolumeEventBase* volEventBase, VolumeEventPerf* volEventPerf, VolumeArrayInfo* volArrayInfo)
 {
-    return (int)POS_EVENT_ID::VOL_EVENT_OK;
+    return EID(VOL_EVENT_OK);
 }
 
 int
 GcStripeManager::VolumeUpdated(VolumeEventBase* volEventBase, VolumeEventPerf* volEventPerf, VolumeArrayInfo* volArrayInfo)
 {
-    return (int)POS_EVENT_ID::VOL_EVENT_OK;
+    return EID(VOL_EVENT_OK);
 }
 
 int
 GcStripeManager::VolumeDetached(vector<int> volList, VolumeArrayInfo* volArrayInfo)
 {
-    return (int)POS_EVENT_ID::VOL_EVENT_OK;
+    return EID(VOL_EVENT_OK);
 }
 
 GcWriteBuffer*
@@ -193,7 +189,7 @@ GcStripeManager::AllocateWriteBufferBlks(uint32_t volumeId, uint32_t numBlks)
         {
             gcAllocateBlks.startOffset = UINT32_MAX;
             gcAllocateBlks.numBlks = 0;
-            airlog("CNT_GcSM_AllocWriteBuf", "AIR_FALSE", 0, 1);
+            airlog("CNT_GcSM_AllocWriteBuf", "buf_full_create_fail", 0, 1);
             return gcAllocateBlks;
         }
         flushed[volumeId] = false;
@@ -205,10 +201,10 @@ GcStripeManager::AllocateWriteBufferBlks(uint32_t volumeId, uint32_t numBlks)
     gcAllocateBlks = _AllocateBlks(volumeId, numBlks);
     if (0 == gcAllocateBlks.numBlks)
     {
-        airlog("CNT_GcSM_AllocWriteBuf", "AIR_FALSE", 0, 1);
+        airlog("CNT_GcSM_AllocWriteBuf", "alloc_fail", 0, 1);
         return gcAllocateBlks;
     }
-    airlog("CNT_GcSM_AllocWriteBuf", "AIR_TRUE", 0, 1);
+    airlog("CNT_GcSM_AllocWriteBuf", "pass", 0, 1);
     return gcAllocateBlks;
 }
 

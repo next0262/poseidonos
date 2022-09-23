@@ -80,7 +80,7 @@ ArrayDeviceManager::ImportByName(DeviceSet<string> nameSet)
             return ret;
         }
     }
-
+    uint32_t dataIndex = 0;
     for (string devName : nameSet.data)
     {
         DevName name(devName);
@@ -91,11 +91,12 @@ ArrayDeviceManager::ImportByName(DeviceSet<string> nameSet)
             POS_TRACE_WARN(eventId, "devName: {}", devName);
             return eventId;
         }
-        ret = devs_->AddData((new ArrayDevice(uBlock)));
+        ret = devs_->AddData((new ArrayDevice(uBlock, ArrayDeviceState::NORMAL, dataIndex)));
         if (ret != 0)
         {
             return ret;
         }
+        dataIndex++;
     }
     for (string devName : nameSet.spares)
     {
@@ -134,6 +135,7 @@ ArrayDeviceManager::Import(DeviceSet<DeviceMeta> metaSet)
         devs_->SetNvm(new ArrayDevice(uBlock));
     }
 
+    uint32_t dataIndex = 0;
     for (DeviceMeta meta : metaSet.data)
     {
         ArrayDevice* dev = nullptr;
@@ -141,7 +143,7 @@ ArrayDeviceManager::Import(DeviceSet<DeviceMeta> metaSet)
 
         if (ArrayDeviceState::FAULT == meta.state)
         {
-            dev = new ArrayDevice(nullptr, ArrayDeviceState::FAULT);
+            dev = new ArrayDevice(nullptr, ArrayDeviceState::FAULT, dataIndex);
         }
         else
         {
@@ -156,9 +158,10 @@ ArrayDeviceManager::Import(DeviceSet<DeviceMeta> metaSet)
                     "Rebuilding device found {}", meta.uid);
             }
 
-            dev = new ArrayDevice(uBlock, meta.state);
+            dev = new ArrayDevice(uBlock, meta.state, dataIndex);
         }
         devs_->AddData(dev);
+        dataIndex++;
     }
 
     ret = _CheckActiveSsdsCount(devs_->GetDevs().data);
@@ -290,63 +293,64 @@ ArrayDeviceManager::RemoveSpare(string devName)
     tie(dev, devType) = this->GetDev(uBlock);
     if (dev == nullptr)
     {
-        int eventId = EID(REMOVE_SPARE_SSD_NAME_NOT_FOUND);
-        POS_TRACE_WARN(eventId, "devName: {}", devName);
+        int eventId = EID(REMOVE_DEV_SSD_NAME_NOT_FOUND);
+        POS_TRACE_WARN(eventId, "devName:{}", devName);
         return eventId;
     }
     return devs_->RemoveSpare(dev);
 }
 
 int
-ArrayDeviceManager::RemoveSpare(ArrayDevice* dev)
+ArrayDeviceManager::ReplaceWithSpare(ArrayDevice* target, ArrayDevice*& swapOut)
 {
-    return devs_->RemoveSpare(dev);
+    return devs_->SpareToData(target, swapOut);
 }
 
-int
-ArrayDeviceManager::ReplaceWithSpare(ArrayDevice* target)
-{
-    return devs_->SpareToData(target);
-}
-
-ArrayDevice*
+vector<IArrayDevice*>
 ArrayDeviceManager::GetFaulty(void)
 {
+    vector<IArrayDevice*> devs;
     for (ArrayDevice* dev : devs_->GetDevs().data)
     {
         if (ArrayDeviceState::FAULT == dev->GetState())
         {
-            return dev;
+            devs.push_back(dev);
         }
     }
-
-    return nullptr;
+    return devs;
 }
 
-ArrayDevice*
+vector<IArrayDevice*>
 ArrayDeviceManager::GetRebuilding(void)
 {
+    vector<IArrayDevice*> devs;
     for (ArrayDevice* dev : devs_->GetDevs().data)
     {
         if (ArrayDeviceState::REBUILD == dev->GetState())
         {
-            return dev;
+            devs.push_back(dev);
         }
     }
-
-    return nullptr;
+    return devs;
 }
 
 vector<ArrayDevice*>
 ArrayDeviceManager::GetDataDevices(void)
 {
-    vector<ArrayDevice*> dataDevs;
-    for (ArrayDevice* dev : devs_->GetDevs().data)
-    {
-        dataDevs.push_back(dev);
-    }
+    return devs_->GetDevs().data;
+}
 
-    return dataDevs;
+vector<ArrayDevice*>
+ArrayDeviceManager::GetSpareDevices(void)
+{
+    return devs_->GetDevs().spares;
+}
+
+vector<ArrayDevice*>
+ArrayDeviceManager::GetAvailableSpareDevices(void)
+{
+    return Enumerable::Where(devs_->GetDevs().spares,
+            [](auto d) { return d->GetState() == ArrayDeviceState::NORMAL; });
 }
 
 int
@@ -483,10 +487,18 @@ ArrayDeviceManager::GetDev(UblockSharedPtr uBlock)
 }
 
 tuple<ArrayDevice*, ArrayDeviceType>
-ArrayDeviceManager::GetDev(string devSn)
+ArrayDeviceManager::GetDevBySn(string devSn)
 {
     DevUid sn(devSn);
     UblockSharedPtr dev = sysDevMgr_->GetDev(sn);
+    return GetDev(dev);
+}
+
+tuple<ArrayDevice*, ArrayDeviceType>
+ArrayDeviceManager::GetDevByName(string devName)
+{
+    DevName name(devName);
+    UblockSharedPtr dev = sysDevMgr_->GetDev(name);
     return GetDev(dev);
 }
 

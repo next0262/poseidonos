@@ -29,13 +29,15 @@ poseidonos-cli volume [flags]
 ### Options inherited from parent commands
 
 ```
-      --debug         Print response for debug.
-      --fs string     Field separator for the output. (default "|")
-      --ip string     Set IPv4 address to PoseidonOS for this command. (default "127.0.0.1")
-      --json-req      Print request in JSON form.
-      --json-res      Print response in JSON form.
-      --port string   Set the port number to PoseidonOS for this command. (default "18716")
-      --unit          Display unit (B, KB, MB, ...) when displaying capacity.
+      --debug            Print response for debug.
+      --fs string        Field separator for the output. (default "|")
+      --ip string        Set IPv4 address to PoseidonOS for this command. (default "127.0.0.1")
+      --json-req         Print request in JSON form.
+      --json-res         Print response in JSON form.
+      --node string      Name of the node to send this command. When both --ip and this flag are specified, this flag is applied only.
+      --port string      Set the port number to PoseidonOS for this command. (default "18716")
+      --timeout uint32   Timeout for this command in seconds. (Note: array unmount command has 30 minutes timeout.) (default 180)
+      --unit             Display unit (B, KB, MB, ...) when displaying capacity.
 ```
 
 ### SEE ALSO
@@ -47,5 +49,6 @@ poseidonos-cli volume [flags]
 * [poseidonos-cli volume mount](poseidonos-cli_volume_mount.md)	 - Mount a volume to the host.
 * [poseidonos-cli volume mount-with-subsystem](poseidonos-cli_volume_mount-with-subsystem.md)	 - Create a subsystem and add listener automatically. Mount a volume to Host.
 * [poseidonos-cli volume rename](poseidonos-cli_volume_rename.md)	 - Rename a volume of PoseidonOS.
+* [poseidonos-cli volume set-property](poseidonos-cli_volume_set-property.md)	 - Set the properties of a volume.
 * [poseidonos-cli volume unmount](poseidonos-cli_volume_unmount.md)	 - Unmount a volume to the host.
 

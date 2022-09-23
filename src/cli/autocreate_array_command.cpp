@@ -85,23 +85,21 @@ string AutocreateArrayCommand::Execute(json& doc, string rid)
     }
 
     int dataCnt = 0;
-    if (doc["param"].contains("num_data"))
+    if (doc["param"].contains("numData"))
     {
-        dataCnt = doc["param"]["num_data"].get<int>();
+        dataCnt = doc["param"]["numData"].get<int>();
     }
 
     int spareCnt = 0;
-    if (doc["param"].contains("num_spare"))
+    if (doc["param"].contains("numSpare"))
     {
-        spareCnt = doc["param"]["num_spare"].get<int>();
+        spareCnt = doc["param"]["numSpare"].get<int>();
     }
 
     NumaAwaredArrayCreation creationDelegate(buffers, dataCnt, spareCnt, DeviceManagerSingleton::Instance());
     NumaAwaredArrayCreationResult res = creationDelegate.GetResult();
     if (res.code != 0)
     {
-        int event = EID(CLI_AUTOCREATE_ARRAY_FAILURE);
-        POS_TRACE_WARN(event, "");
         return jFormat.MakeResponse(
             "AUTOCREATEARRAY", rid, res.code,
                 "failed to create " + arrayName, GetPosInfo());
@@ -113,8 +111,6 @@ string AutocreateArrayCommand::Execute(json& doc, string rid)
 
     if (0 != ret)
     {
-        int event = EID(CLI_AUTOCREATE_ARRAY_FAILURE);
-        POS_TRACE_WARN(event, "");
         return jFormat.MakeResponse(
             "AUTOCREATEARRAY", rid, ret,
                 "failed to create " + arrayName, GetPosInfo());
@@ -122,8 +118,7 @@ string AutocreateArrayCommand::Execute(json& doc, string rid)
     else
     {
         QosManagerSingleton::Instance()->UpdateArrayMap(arrayName);
-        int event = EID(CLI_AUTOCREATE_ARRAY_SUCCESS);
-        POS_TRACE_INFO(event, "");
+        POS_TRACE_INFO(EID(CLI_AUTOCREATE_ARRAY_SUCCESS), "");
         return jFormat.MakeResponse("AUTOCREATEARRAY", rid, SUCCESS,
             arrayName + " has been created successfully", GetPosInfo());
     }

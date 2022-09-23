@@ -37,9 +37,9 @@ namespace pos
 DummyHaClient::DummyHaClient(std::shared_ptr<grpc::Channel> channel_)
 {
     // new grpc server setting
-    string serverAddr("0.0.0.0:50051");
+    string serverAddr(GRPC_HA_SUB_SERVER_SOCKET_ADDRESS);
 
-     std::shared_ptr<grpc::Channel> channel = channel_;
+    std::shared_ptr<grpc::Channel> channel = channel_;
     if (channel == nullptr)
     {
         channel = grpc::CreateChannel(serverAddr, grpc::InsecureChannelCredentials());

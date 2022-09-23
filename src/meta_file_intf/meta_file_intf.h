@@ -45,8 +45,8 @@ class MetaFileIntf
 {
 public:
     MetaFileIntf(void);
-    explicit MetaFileIntf(std::string fname, int arrayId,
-        MetaVolumeType volumeType = MetaVolumeType::SsdVolume);
+    explicit MetaFileIntf(const std::string fileName, const int arrayId,
+        const MetaFileType fileType, const MetaVolumeType volumeType = MetaVolumeType::SsdVolume);
     virtual ~MetaFileIntf(void);
 
     virtual int Create(uint64_t size) = 0;
@@ -69,6 +69,10 @@ public:
     {
         return fileName;
     }
+    virtual MetaFileType GetFileType(void)
+    {
+        return fileType;
+    }
     virtual MetaVolumeType GetVolumeType(void)
     {
         return volumeType;
@@ -86,6 +90,7 @@ protected:
     uint64_t size;
     bool isOpened;
     int fd;
+    MetaFileType fileType;
     MetaVolumeType volumeType;
     MetaFilePropertySet fileProperty;
 };

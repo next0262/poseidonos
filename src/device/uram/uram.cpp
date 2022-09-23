@@ -34,32 +34,31 @@
 
 #include <errno.h>
 #include <fcntl.h>
-#include <fstream>
 #include <numa.h>
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <unistd.h>
 
+#include <fstream>
 #include <iostream>
 #include <utility>
 
-#include "Air.h"
 #include "src/array/device/array_device.h"
 #include "src/bio/ubio.h"
 #include "src/cpu_affinity/affinity_manager.h"
 #include "src/event_scheduler/callback.h"
 #include "src/event_scheduler/spdk_event_scheduler.h"
+#include "src/include/branch_prediction.h"
 #include "src/include/core_const.h"
 #include "src/include/pos_event_id.hpp"
-#include "src/include/branch_prediction.h"
 #include "src/io_scheduler/io_dispatcher.h"
 #include "src/logger/logger.h"
 #include "src/master_context/config_manager.h"
 #include "src/spdk_wrapper/accel_engine_api.h"
 #include "src/spdk_wrapper/event_framework_api.h"
+#include "uram_device_context.h"
 #include "uram_drv.h"
 #include "uram_restore_completion.h"
-#include "uram_device_context.h"
 
 namespace pos
 {
@@ -93,11 +92,11 @@ Uram::~Uram(void)
 // LCOV_EXCL_STOP
 
 bool
-Uram::_RecoverBackup(DeviceContext* deviceContext)
+Uram::_RecoverBackup(void)
 {
     bool restoreSuccessful = true;
 
-    string backupFileName = "/tmp/" + property->name +".uram.data";
+    string backupFileName = "/tmp/" + property->name + ".uram.data";
     const uint32_t bytesPerHugepage = 2 * SZ_1MB;
     int fd = -1;
 
@@ -109,14 +108,14 @@ Uram::_RecoverBackup(DeviceContext* deviceContext)
             if (errno == ENOENT)
             {
                 POS_EVENT_ID eventId =
-                    POS_EVENT_ID::URAM_BACKUP_FILE_NOT_EXISTS;
+                    EID(URAM_BACKUP_FILE_NOT_EXISTS);
                 EventLevel eventLevel = EventLevel::INFO;
                 throw std::make_pair(eventId, eventLevel);
             }
             else
             {
                 POS_EVENT_ID eventId =
-                    POS_EVENT_ID::URAM_BACKUP_FILE_OPEN_FAILED;
+                    EID(URAM_BACKUP_FILE_OPEN_FAILED);
                 EventLevel eventLevel = EventLevel::WARNING;
                 throw std::make_pair(eventId, eventLevel);
             }
@@ -127,7 +126,7 @@ Uram::_RecoverBackup(DeviceContext* deviceContext)
         if (0 > rc)
         {
             POS_EVENT_ID eventId =
-                POS_EVENT_ID::URAM_BACKUP_FILE_STAT_FAILED;
+                EID(URAM_BACKUP_FILE_STAT_FAILED);
             EventLevel eventLevel = EventLevel::WARNING;
             throw std::make_pair(eventId, eventLevel);
         }
@@ -149,12 +148,12 @@ Uram::_RecoverBackup(DeviceContext* deviceContext)
             if (bytesPerHugepage == rc)
             {
                 UramRestoreCompletion::IncreasePendingUbio();
-                SubmitAsyncIO(ubio);
+                IODispatcherSingleton::Instance()->Submit(ubio);   
             }
             else
             {
                 POS_EVENT_ID eventId =
-                    POS_EVENT_ID::URAM_BACKUP_FILE_READ_FAILED;
+                    EID(URAM_BACKUP_FILE_READ_FAILED);
                 std::string additionalMessage(
                     "Read page # " + std::to_string(pageIndex) + " failed");
                 throw std::make_pair(eventId, additionalMessage);
@@ -164,9 +163,8 @@ Uram::_RecoverBackup(DeviceContext* deviceContext)
     catch (std::pair<POS_EVENT_ID, EventLevel> eventWithLevel)
     {
         POS_EVENT_ID eventId = eventWithLevel.first;
-        EventLevel eventLevel = eventWithLevel.second;
-        PosEventId::Print(eventId, eventLevel);
-        if (eventId != POS_EVENT_ID::URAM_BACKUP_FILE_NOT_EXISTS)
+        POS_TRACE_WARN(eventId, "");
+        if (eventId != EID(URAM_BACKUP_FILE_NOT_EXISTS))
         {
             restoreSuccessful = false;
         }
@@ -175,7 +173,7 @@ Uram::_RecoverBackup(DeviceContext* deviceContext)
     {
         POS_EVENT_ID eventId = eventWithMessage.first;
         std::string& additionalMessage = eventWithMessage.second;
-        PosEventId::Print(eventId, EventLevel::WARNING, additionalMessage);
+        POS_TRACE_WARN(eventId, "{}", additionalMessage);
         restoreSuccessful = false;
     }
 
@@ -212,22 +210,18 @@ Uram::_InitByteAddress(void)
     }
     else
     {
-        POS_TRACE_ERROR(POS_EVENT_ID::URAM_CONFIG_FILE_OPEN_FAILED,
+        POS_TRACE_ERROR(EID(URAM_CONFIG_FILE_OPEN_FAILED),
             "Cannot open uram config file");
     }
-    baseByteAddress = reinterpret_cast<void *>(byteAddressInt);
+    baseByteAddress = reinterpret_cast<void*>(byteAddressInt);
 }
+
 bool
-Uram::_WrapupOpenDeviceSpecific(DeviceContext* deviceContext)
+Uram::WrapupOpenDeviceSpecific(void)
 {
     // Reactor cannot handle Async operation for Uram in current implementation.
     // ioat poll cannot be called in Empty(), so, we restore the contents by IO worker.
-    if (EventFrameworkApiSingleton::Instance()->IsReactorNow())
-    {
-        return true;
-    }
-
-    bool restoreSuccessful = _RecoverBackup(deviceContext);
+    bool restoreSuccessful = _RecoverBackup();
     _InitByteAddress();
     return restoreSuccessful;
 }

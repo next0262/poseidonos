@@ -36,7 +36,7 @@
 #include <string>
 
 #include "src/journal_manager/config/journal_configuration.h"
-#include "src/journal_manager/log_buffer/journal_log_buffer.h"
+#include "src/journal_manager/log_buffer/i_journal_log_buffer.h"
 #include "src/journal_manager/replay/flush_metadata.h"
 #include "src/journal_manager/replay/flush_pending_stripes.h"
 #include "src/journal_manager/replay/read_log_buffer.h"
@@ -57,7 +57,7 @@ ReplayHandler::ReplayHandler(IStateControl* iState)
 
 void
 ReplayHandler::Init(JournalConfiguration* journalConfiguration,
-    JournalLogBuffer* journalLogBuffer, IVSAMap* vsaMap, IStripeMap* stripeMap,
+    IJournalLogBuffer* journalLogBuffer, IVSAMap* vsaMap, IStripeMap* stripeMap,
     IMapFlush* mapFlush, ISegmentCtx* segmentCtx,
     IWBStripeAllocator* wbStripeAllocator, IContextManager* contextManager,
     IContextReplayer* contextReplayer, IArrayInfo* arrayInfo, IVolumeInfoManager* volumeManager)
@@ -114,18 +114,18 @@ ReplayHandler::Start(void)
 {
     replayState.GetRecoverState();
 
-    int eventId = static_cast<int>(POS_EVENT_ID::JOURNAL_REPLAY_STARTED);
+    int eventId = static_cast<int>(EID(JOURNAL_REPLAY_STARTED));
     POS_TRACE_INFO(eventId, "Journal replay started");
 
     int result = _ExecuteReplayTasks();
     if (result < 0)
     {
-        POS_TRACE_CRITICAL((int)POS_EVENT_ID::JOURNAL_REPLAY_FAILED,
+        POS_TRACE_CRITICAL(EID(JOURNAL_REPLAY_FAILED),
             "Journal replay failed");
     }
     replayState.RemoveRecoverState();
 
-    eventId = static_cast<int>(POS_EVENT_ID::JOURNAL_REPLAY_COMPLETED);
+    eventId = static_cast<int>(EID(JOURNAL_REPLAY_COMPLETED));
     POS_TRACE_INFO(eventId, "Journal replay completed");
 
     return result;
@@ -146,8 +146,12 @@ ReplayHandler::_ExecuteReplayTasks(void)
             if (result > 0)
             {
                 reporter->CompleteAll();
+                return EID(SUCCESS);
             }
-            return result;
+            else
+            {
+                return result;
+            }
         }
     }
     return result;

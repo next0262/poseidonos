@@ -46,6 +46,7 @@
 #include "src/rebuild/array_rebuilder.h"
 #include "src/rebuild/interface/i_rebuild_notification.h"
 #include "src/telemetry/telemetry_client/telemetry_client.h"
+#include "src/cli/command_processor.h"
 
 using namespace std;
 
@@ -64,6 +65,7 @@ class ArrayManager : public IArrayMgmt, public IDeviceEvent, public IRebuildNoti
     friend class GcWbtCommand;
     friend class ParityLocationWbtCommand;
     friend class ::pos_cli::StopRebuildingCommand;
+    friend class ::CommandProcessor;
 
 public:
     ArrayManager();
@@ -77,6 +79,10 @@ public:
     virtual int Unmount(string name) override;
     virtual int AddDevice(string name, string dev) override;
     virtual int RemoveDevice(string name, string dev) override;
+    virtual int ReplaceDevice(string name, string dev) override;
+    virtual int Rebuild(string name) override;
+    virtual void SetTargetAddress(string name, string targetAddress) override;
+    virtual string GetTargetAddress(string name) override;
     virtual ComponentsInfo* GetInfo(string name) override;
     virtual ComponentsInfo* GetInfo(uint32_t arrayIdx) override;
 
@@ -100,7 +106,7 @@ private:
     ArrayComponents* _FindArray(string name);
     ArrayComponents* _FindArrayWithDevSN(string devName);
     int _Load(string name);
-    int _ExecuteOrHandleErrors(std::function<int(ArrayComponents* array)> f, string name);
+    int _ExecuteOrHandleErrors(std::function<int(ArrayComponents* array)> f, string name, int eid);
     int _DeleteFaultArray(string arrayName);
     map<string, ArrayComponents*> arrayList;
     ArrayRebuilder* arrayRebuilder = nullptr;

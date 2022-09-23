@@ -96,7 +96,11 @@ VolumeMetaIntf::LoadVolumes(VolumeList& volList, std::string arrayName, int arra
                     uint64_t total = doc["volumes"][i]["total"].GetUint64();
                     uint64_t maxiops = doc["volumes"][i]["maxiops"].GetUint64();
                     uint64_t maxbw = doc["volumes"][i]["maxbw"].GetUint64();
-                    VolumeBase* volume = new Volume(arrayName, arrayID, name, uuid, total, maxiops, maxbw);
+                    uint64_t miniops = doc["volumes"][i]["miniops"].GetUint64();
+                    uint64_t minbw = doc["volumes"][i]["minbw"].GetUint64();
+                    VolumeAttribute volumeAttribute = ((VolumeAttribute)doc["volumes"][i]["attribute"].GetInt());
+                    VolumeBase* volume = new Volume(arrayName, arrayID, name, uuid, total,
+                        maxiops, miniops, maxbw, minbw, volumeAttribute);
                     volList.Add(volume, id);
                 }
             }
@@ -144,6 +148,9 @@ VolumeMetaIntf::SaveVolumes(VolumeList& volList, std::string arrayName, int arra
                 elem.SetAttribute(JsonAttribute("total", std::to_string(vol->TotalSize())));
                 elem.SetAttribute(JsonAttribute("maxiops", std::to_string(vol->MaxIOPS())));
                 elem.SetAttribute(JsonAttribute("maxbw", std::to_string(vol->MaxBW())));
+                elem.SetAttribute(JsonAttribute("miniops", std::to_string(vol->MinIOPS())));
+                elem.SetAttribute(JsonAttribute("minbw", std::to_string(vol->MinBW())));
+                elem.SetAttribute(JsonAttribute("attribute", std::to_string(vol->GetAttribute())));
                 array.AddElement(elem);
             }
         }
@@ -154,7 +161,8 @@ VolumeMetaIntf::SaveVolumes(VolumeList& volList, std::string arrayName, int arra
     POS_EVENT_ID rc = metaFs->ctrl->CheckFileExist(volFile);
     if (EID(SUCCESS) != (int)rc)
     {
-        rc = metaFs->ctrl->Create(volFile, fileSize);
+        MetaFilePropertySet property(MetaFileType::General);
+        rc = metaFs->ctrl->Create(volFile, fileSize, property);
         if (EID(SUCCESS) != (int)rc)
         {
             POS_TRACE_ERROR(EID(VOL_UNABLE_TO_SAVE_CREATION_FAILED),

@@ -3,13 +3,9 @@
 #include <gtest/gtest.h>
 
 #include "src/allocator/include/allocator_const.h"
-#include "test/unit-tests/allocator/address/allocator_address_info_mock.h"
-#include "test/unit-tests/allocator/context_manager/rebuild_ctx/rebuild_ctx_mock.h"
 #include "test/unit-tests/allocator/context_manager/segment_ctx/segment_ctx_mock.h"
 #include "test/unit-tests/allocator/context_manager/segment_ctx/segment_info_mock.h"
 #include "test/unit-tests/allocator/context_manager/segment_ctx/segment_list_mock.h"
-#include "test/unit-tests/telemetry/telemetry_client/telemetry_publisher_mock.h"
-#include "test/unit-tests/allocator/context_manager/gc_ctx/gc_ctx_mock.h"
 
 using ::testing::_;
 using ::testing::AtLeast;
@@ -215,7 +211,7 @@ TEST_F(SegmentCtxTestFixture, InvalidateBlks_TestDecreaseValueWhenValidCountZero
 {
     EXPECT_CALL(addrInfo, GetstripesPerSegment).WillRepeatedly(Return(1024));
     EXPECT_CALL(segInfos, DecreaseValidBlockCount).WillOnce(Return(std::make_pair(true, SegmentState::SSD)));
-    EXPECT_CALL(segmentList[SegmentState::SSD], RemoveFromList).Times(1);
+    EXPECT_CALL(segmentList[SegmentState::SSD], RemoveFromList).WillOnce(Return(true));
     EXPECT_CALL(segmentList[SegmentState::FREE], AddToList).Times(1);
     EXPECT_CALL(rebuildSegmentList, RemoveFromList).WillOnce(Return(false));
 
@@ -232,7 +228,7 @@ TEST_F(SegmentCtxTestFixture, InvalidateBlks_testIfSegmentFreedAndRemovedFromThe
 {
     EXPECT_CALL(addrInfo, GetstripesPerSegment).WillRepeatedly(Return(1024));
     EXPECT_CALL(segInfos, DecreaseValidBlockCount).WillOnce(Return(std::make_pair(true, SegmentState::SSD)));
-    EXPECT_CALL(segmentList[SegmentState::SSD], RemoveFromList).Times(1);
+    EXPECT_CALL(segmentList[SegmentState::SSD], RemoveFromList).WillOnce(Return(true));
     EXPECT_CALL(segmentList[SegmentState::FREE], AddToList).Times(1);
     EXPECT_CALL(rebuildSegmentList, RemoveFromList).WillOnce(Return(true));
     EXPECT_CALL(rebuildCtx, FlushRebuildSegmentList).Times(1);
@@ -657,7 +653,7 @@ TEST(SegmentCtx, AllocateGCVictimSegment_testWhenVictimSegmentIsNotFound)
     delete tp;
 }
 
-TEST(SegmentCtx, ResetSegmentState_testIfSegmentStateChangedAsIntended)
+TEST(SegmentCtx, DISABLED_ResetSegmentState_testIfSegmentStateChangedAsIntended)
 {
     // given
     NiceMock<MockAllocatorAddressInfo> addrInfo;
@@ -787,7 +783,7 @@ TEST(SegmentCtx, MakeRebuildTarget_testWhenRebuildTargetListIsEmpty)
     EXPECT_CALL(rebuildSegmentList, GetNumSegments).WillRepeatedly(Return(0));
     int ret = segmentCtx.MakeRebuildTarget();
 
-    EXPECT_EQ(ret, (int)POS_EVENT_ID::ALLOCATOR_REBUILD_TARGET_SET_EMPTY);
+    EXPECT_EQ(ret, EID(ALLOCATOR_REBUILD_TARGET_SET_EMPTY));
 
     delete[] segInfos;
     delete tp;

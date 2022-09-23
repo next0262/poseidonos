@@ -32,7 +32,8 @@
 
 #include "src/admin/admin_command_handler.h"
 
-#include "Air.h"
+#include <air/Air.h>
+
 #include "lib/spdk/include/spdk/bdev_module.h"
 #include "spdk/pos.h"
 #include "src/admin/smart_log_mgr.h"
@@ -63,11 +64,13 @@ AdminCommandHandler::AdminCommandHandler(pos_io* posIo, uint32_t originCore, Cal
 
     req = (struct spdk_nvmf_request*)callerContext;
     cmd = &req->cmd->nvme_cmd;
+
+    airlog("RequestedUserAdminIo", "user", GetEventType(), 1);
 }
 
 AdminCommandHandler::AdminCommandHandler(pos_io* posIo, uint32_t originCore,
-        CallbackSmartPtr callback, IArrayInfo* info, IDevInfo* devInfo,
-        IIODispatcher* dispatcher, IArrayDevMgr* arrayDevMgr, SmartLogMgr* smartLogMgr, EventScheduler* eventSchedulerArg)
+    CallbackSmartPtr callback, IArrayInfo* info, IDevInfo* devInfo,
+    IIODispatcher* dispatcher, IArrayDevMgr* arrayDevMgr, SmartLogMgr* smartLogMgr, EventScheduler* eventSchedulerArg)
 : io(posIo),
   originCore(originCore),
   callback(callback),

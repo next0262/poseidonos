@@ -12,11 +12,13 @@ service PosCli {
       		get: "/v1/systeminfo"
     	};
 	}
-	rpc SystemStop (SystemStopRequest) returns (SystemStopResponse) {
+
+	rpc StopSystem (StopSystemRequest) returns (StopSystemResponse) {
 		option (google.api.http) = {
-      		get: "/v1/systemstop"
+      		get: "/v1/stopsystem"
     	};
 	}
+
 	rpc GetSystemProperty (GetSystemPropertyRequest) returns (GetSystemPropertyResponse) {
 		option (google.api.http) = {
       		get: "/v1/get_system_property"
@@ -28,6 +30,216 @@ service PosCli {
       		get: "/v1/set_system_property/{level}"
     	};
 	}
+
+	rpc StartTelemetry (StartTelemetryRequest) returns (StartTelemetryResponse) {
+		option (google.api.http) = {
+      		get: "/v1/start_telemetry"
+    	};
+	}
+
+	rpc StopTelemetry (StopTelemetryRequest) returns (StopTelemetryResponse) {
+		option (google.api.http) = {
+      		get: "/v1/stop_telemetry"
+    	};
+	}
+
+	rpc SetTelemetryProperty (SetTelemetryPropertyRequest) returns (SetTelemetryPropertyResponse) {
+		option (google.api.http) = {
+      		get: "/v1/set_telemetry_property"
+    	};
+	}
+
+	rpc GetTelemetryProperty (GetTelemetryPropertyRequest) returns (GetTelemetryPropertyResponse) {
+		option (google.api.http) = {
+      		get: "/v1/get_telemetry_property"
+    	};
+	}
+
+	rpc ResetEventWrr (ResetEventWrrRequest) returns (ResetEventWrrResponse);
+	rpc ResetMbr (ResetMbrRequest) returns (ResetMbrResponse);
+	rpc StopRebuilding (StopRebuildingRequest) returns (StopRebuildingResponse);
+	rpc UpdateEventWrr (UpdateEventWrrRequest) returns (UpdateEventWrrResponse);
+
+	// Array Commands
+	rpc AddSpare (AddSpareRequest) returns (AddSpareResponse) {
+		option (google.api.http) = {
+      		post: "/v1/addspare"
+    	};
+	}
+
+	rpc RemoveSpare (RemoveSpareRequest) returns (RemoveSpareResponse) {
+		option (google.api.http) = {
+      		post: "/v1/removespare"
+    	};
+	}
+
+	rpc ReplaceArrayDevice (ReplaceArrayDeviceRequest) returns (ReplaceArrayDeviceResponse) {
+		option (google.api.http) = {
+      		post: "/v1/removespare"
+    	};
+	}
+
+	rpc CreateArray (CreateArrayRequest) returns (CreateArrayResponse) {
+		option (google.api.http) = {
+      		post: "/v1/createarray"
+    	};
+	}
+
+	rpc AutocreateArray (AutocreateArrayRequest) returns (AutocreateArrayResponse) {
+		option (google.api.http) = {
+      		post: "/v1/autocreatearray"
+    	};
+	}
+
+	rpc DeleteArray (DeleteArrayRequest) returns (DeleteArrayResponse) {
+		option (google.api.http) = {
+      		post: "/v1/deletearray/"
+    	};
+	}
+
+	rpc MountArray (MountArrayRequest) returns (MountArrayResponse) {
+		option (google.api.http) = {
+      		post: "/v1/mountarray"
+    	};
+	}
+
+	rpc UnmountArray (UnmountArrayRequest) returns (UnmountArrayResponse) {
+		option (google.api.http) = {
+      		post: "/v1/unmountarray"
+    	};
+	}
+
+	rpc ListArray (ListArrayRequest) returns (ListArrayResponse) {
+		option (google.api.http) = {
+      		post: "/v1/listarray"
+    	};
+	}
+	
+	rpc ArrayInfo (ArrayInfoRequest) returns (ArrayInfoResponse) {
+		option (google.api.http) = {
+      		post: "/v1/arrayinfo"
+    	};
+	}
+	
+	rpc RebuildArray (RebuildArrayRequest) returns (RebuildArrayResponse) {
+		option (google.api.http) = {
+      		post: "/v1/rebuildarray"
+    	};
+	}
+
+	rpc SetLogPreference (SetLogPreferenceRequest) returns (SetLogPreferenceResponse) {
+		option (google.api.http) = {
+      		post: "/v1/setlogpreference"
+    	};
+	}
+
+	rpc SetLogLevel (SetLogLevelRequest) returns (SetLogLevelResponse) {
+		option (google.api.http) = {
+      		post: "/v1/setloglevel"
+    	};
+	}
+
+	rpc LoggerInfo (LoggerInfoRequest) returns (LoggerInfoResponse) {
+		option (google.api.http) = {
+      		post: "/v1/loggerinfo"
+    	};
+	}
+
+	rpc GetLogLevel (GetLogLevelRequest) returns (GetLogLevelResponse) {
+		option (google.api.http) = {
+      		post: "/v1/getloglevel"
+    	};
+	}
+
+	rpc ApplyLogFilter (ApplyLogFilterRequest) returns (ApplyLogFilterResponse) {
+		option (google.api.http) = {
+      		post: "/v1/applyfilter"
+    	};
+	}
+
+	rpc CreateDevice (CreateDeviceRequest) returns (CreateDeviceResponse) {
+		option (google.api.http) = {
+      		post: "/v1/createdevice"
+    	};
+	}
+
+	rpc ScanDevice (ScanDeviceRequest) returns (ScanDeviceResponse) {
+		option (google.api.http) = {
+      		post: "/v1/scandevice"
+    	};
+	}
+
+	rpc ListDevice (ListDeviceRequest) returns (ListDeviceResponse) {
+		option (google.api.http) = {
+      		post: "/v1/listdevice"
+    	};
+	}
+
+	rpc GetSmartLog (GetSmartLogRequest) returns (GetSmartLogResponse) {
+		option (google.api.http) = {
+      		post: "/v1/smartlog"
+    	};
+	}
+
+	rpc CreateSubsystem (CreateSubsystemRequest) returns (CreateSubsystemResponse) {
+		option (google.api.http) = {
+      		post: "/v1/createsubsystem"
+    	};
+	}
+
+	rpc DeleteSubsystem (DeleteSubsystemRequest) returns (DeleteSubsystemResponse) {
+		option (google.api.http) = {
+      		post: "/v1/deletesubsystem"
+    	};
+	}
+
+	rpc AddListener (AddListenerRequest) returns (AddListenerResponse) {
+		option (google.api.http) = {
+      		post: "/v1/addlistener"
+    	};
+	}
+
+	rpc ListSubsystem (ListSubsystemRequest) returns (ListSubsystemResponse) {
+		option (google.api.http) = {
+      		post: "/v1/listsubsystem"
+    	};
+	}
+
+	rpc SubsystemInfo (SubsystemInfoRequest) returns (SubsystemInfoResponse) {
+		option (google.api.http) = {
+      		post: "/v1/subsysteminfo"
+    	};
+	}
+
+	rpc CreateTransport (CreateTransportRequest) returns (CreateTransportResponse) {
+		option (google.api.http) = {
+      		post: "/v1/createtransport"
+    	};
+	}
+
+	rpc CreateVolume (CreateVolumeRequest) returns (CreateVolumeResponse) {
+		option (google.api.http) = {
+      		post: "/v1/createvolume"
+    	};
+	}
+
+	rpc DeleteVolume (DeleteVolumeRequest) returns (DeleteVolumeResponse) {
+		option (google.api.http) = {
+      		post: "/v1/deletevolume"
+    	};
+	}
+
+	rpc UnmountVolume (UnmountVolumeRequest) returns (UnmountVolumeResponse) {
+		option (google.api.http) = {
+      		post: "/v1/unmountvolume"
+    	};
+	}
+
+	rpc SetVolumeProperty (SetVolumePropertyRequest) returns (SetVolumePropertyResponse) {
+		option (google.api.http) = {
+      		post: "/v1/setvolumeproperty"
+    	};
+	}
 }
 
 message Status {
@@ -37,6 +249,7 @@ message Status {
 	optional string cause = 4;
 	optional string solution = 5;
 }
+
 
 message PosInfo {
 	string version = 1;
@@ -55,6 +268,20 @@ message SystemInfoResponse {
 		Status status = 1;
 		message Data {
 			string version = 1;
+			string biosVersion = 2;
+			string biosVendor = 3;
+			string biosReleaseDate = 4;
+			string systemManufacturer = 5;
+			string systemProductName = 6;
+			string systemSerialNumber = 7;
+			string systemUuid = 8;
+			string baseboardManufacturer = 9;
+			string baseboardProductName = 10;
+			string baseboardSerialNumber = 11;
+			string baseboardVersion = 12;
+			string processorManufacturer = 13;
+			string processorVersion = 14;
+			string processorFrequency = 15;
 		}
 		Data data = 2;
 	}
@@ -62,13 +289,13 @@ message SystemInfoResponse {
 	PosInfo info = 4;
 }
 
-message SystemStopRequest {
+message StopSystemRequest {
 	string command = 1;
 	string rid = 2;
 	string requestor = 3;
 }
 
-message SystemStopResponse {
+message StopSystemResponse {
 	string command = 1;
 	string rid = 2;
 	message Result {
@@ -109,6 +336,995 @@ message SetSystemPropertyRequest {
 }
 
 message SetSystemPropertyResponse {
+	string command = 1;
+	string rid = 2;
+	message Result {
+		Status status = 1;
+	}
+	Result result = 3;
+	PosInfo info = 4;
+}
+
+message StartTelemetryRequest {
+	string command = 1;
+	string rid = 2;
+	string requestor = 3;
+}
+
+message StartTelemetryResponse {
+	string command = 1;
+	string rid = 2;
+	message Result {
+		Status status = 1;
+	}
+	Result result = 3;
+	PosInfo info = 4;
+}
+
+message StopTelemetryRequest {
+	string command = 1;
+	string rid = 2;
+	string requestor = 3;
+}
+
+message StopTelemetryResponse {
+	string command = 1;
+	string rid = 2;
+	message Result {
+		Status status = 1;
+	}
+	Result result = 3;
+	PosInfo info = 4;
+}
+
+message SetTelemetryPropertyRequest {
+	string command = 1;
+	string rid = 2;
+	string requestor = 3;
+	message Param {
+		string publicationListPath = 1;
+	}
+	Param param = 4;
+}
+
+message SetTelemetryPropertyResponse {
+	string command = 1;
+	string rid = 2;
+	message Result {
+		Status status = 1;
+	}
+	Result result = 3;
+	PosInfo info = 4;
+}
+
+message GetTelemetryPropertyRequest {
+	string command = 1;
+	string rid = 2;
+	string requestor = 3;
+}
+
+message GetTelemetryPropertyResponse {
+	string command = 1;
+	string rid = 2;
+	message Result {
+		Status status = 1;
+		message TelemetryProperty {
+			bool status = 1;
+			string publicationListPath = 2;
+		}
+		TelemetryProperty data = 2;
+	}
+	Result result = 3;
+	PosInfo info = 4;
+}
+
+message ResetEventWrrRequest {
+	string command = 1;
+	string rid = 2;
+	string requestor = 3;
+}
+
+message ResetEventWrrResponse {
+	string command = 1;
+	string rid = 2;
+	message Result {
+		Status status = 1;
+	}
+	Result result = 3;
+	PosInfo info = 4;
+}
+
+message ResetMbrRequest {
+	string command = 1;
+	string rid = 2;
+	string requestor = 3;
+}
+
+message ResetMbrResponse {
+	string command = 1;
+	string rid = 2;
+	message Result {
+		Status status = 1;
+	}
+	Result result = 3;
+	PosInfo info = 4;
+}
+
+message StopRebuildingRequest {
+	string command = 1;
+	string rid = 2;
+	string requestor = 3;
+	message Param {
+		string name = 1;
+	}
+	Param param = 4;
+}
+
+message StopRebuildingResponse {
+	string command = 1;
+	string rid = 2;
+	message Result {
+		Status status = 1;
+	}
+	Result result = 3;
+	PosInfo info = 4;
+}
+
+message UpdateEventWrrRequest {
+	string command = 1;
+	string rid = 2;
+	string requestor = 3;
+	message Param {
+			string name = 1;
+			int64 weight = 2;
+	}
+	Param param = 4;
+}
+
+message UpdateEventWrrResponse {
+	string command = 1;
+	string rid = 2;
+	message Result {
+		Status status = 1;
+	}
+	Result result = 3;
+	PosInfo info = 4;
+}
+
+message AddSpareRequest {
+	string command = 1;
+	string rid = 2;
+	string requestor = 3;
+	message SpareDeviceName {
+		string deviceName = 1;
+	}
+	message Param {
+			string array = 1;
+			repeated SpareDeviceName spare = 3;
+	}
+	Param param = 4;
+}
+
+message AddSpareResponse {
+	string command = 1;
+	string rid = 2;
+	message Result {
+		Status status = 1;
+	}
+	Result result = 3;
+	PosInfo info = 4;
+}
+
+message DeviceNameList {
+	string deviceName = 1;
+}
+
+message RemoveSpareRequest {
+	string command = 1;
+	string rid = 2;
+	string requestor = 3;
+	message SpareDeviceName {
+		string deviceName = 1;
+	}
+	message Param {
+			string array = 1;
+			repeated SpareDeviceName spare = 2;
+	}
+	Param param = 4;
+}
+
+message RemoveSpareResponse {
+	string command = 1;
+	string rid = 2;
+	message Result {
+		Status status = 1;
+	}
+	Result result = 3;
+	PosInfo info = 4;
+}
+
+message ReplaceArrayDeviceRequest {
+	string command = 1;
+	string rid = 2;
+	string requestor = 3;
+	message Param {
+			string array = 1;
+			string device = 2;
+	}
+	Param param = 4;
+}
+
+message ReplaceArrayDeviceResponse {
+	string command = 1;
+	string rid = 2;
+	message Result {
+		Status status = 1;
+	}
+	Result result = 3;
+	PosInfo info = 4;
+}
+
+message CreateArrayRequest {
+	string command = 1;
+	string rid = 2;
+	string requestor = 3;
+	message Param {
+		string name = 1;
+		repeated DeviceNameList buffer = 2;
+		repeated DeviceNameList data = 3;
+		repeated DeviceNameList spare = 4;
+		string raidtype = 5;
+	}
+	Param param = 4;
+}
+
+message CreateArrayResponse {
+	string command = 1;
+	string rid = 2;
+	message Result {
+		Status status = 1;
+	}
+	Result result = 3;
+	PosInfo info = 4;
+}
+
+message AutocreateArrayRequest {
+	string command = 1;
+	string rid = 2;
+	string requestor = 3;
+	message Param {
+		string name = 1;
+		repeated DeviceNameList buffer = 2;
+		int32 numData = 3;
+		int32 numSpare = 4;
+		string raidtype = 5;
+	}
+	Param param = 4;
+}
+
+message AutocreateArrayResponse {
+	string command = 1;
+	string rid = 2;
+	message Result {
+		Status status = 1;
+	}
+	Result result = 3;
+	PosInfo info = 4;
+}
+
+message DeleteArrayRequest {
+	string command = 1;
+	string rid = 2;
+	string requestor = 3;
+	message Param {
+			string name = 1;
+	}
+	Param param = 4;
+}
+
+message DeleteArrayResponse {
+	string command = 1;
+	string rid = 2;
+	message Result {
+		Status status = 1;
+	}
+	Result result = 3;
+	PosInfo info = 4;
+}
+
+message MountArrayRequest {
+	string command = 1;
+	string rid = 2;
+	string requestor = 3;
+	message Param {
+			string name = 1;
+			optional bool enableWriteThrough = 2;
+			optional string targetAddress = 3;
+	}
+	Param param = 4;
+}
+
+message MountArrayResponse {
+	string command = 1;
+	string rid = 2;
+	message Result {
+		Status status = 1;
+	}
+	Result result = 3;
+	PosInfo info = 4;
+}
+
+message UnmountArrayRequest {
+	string command = 1;
+	string rid = 2;
+	string requestor = 3;
+	message Param {
+			string name = 1;
+	}
+	Param param = 4;
+}
+
+message UnmountArrayResponse {
+	string command = 1;
+	string rid = 2;
+	message Result {
+		Status status = 1;
+	}
+	Result result = 3;
+	PosInfo info = 4;
+}
+
+message Array {
+	int32 index = 1;
+	int32 unique_id = 2;
+	string name = 3;
+	string status = 4;
+	string state = 5;
+	string situation = 6;
+	string createDatetime = 7;
+	string updateDatetime = 8;
+	string rebuildingProgress = 9;
+	uint64 capacity = 10;
+	uint64 used = 11;
+	string gcMode = 12;
+	string metaRaid = 13;
+	string dataRaid = 14;
+	bool writeThroughEnabled = 15;
+	repeated Device devicelist = 16;
+}
+
+message ListArrayRequest {
+	string command = 1;
+	string rid = 2;
+	string requestor = 3;
+}
+
+message ListArrayResponse {
+	string command = 1;
+	string rid = 2;
+	message Result {
+		Status status = 1;
+		message ArrayList {
+			repeated Array arrayList = 1;
+		}
+		ArrayList data = 2;
+	}
+	Result result = 3;
+	PosInfo info = 4;
+}
+
+message ArrayInfoRequest {
+	string command = 1;
+	string rid = 2;
+	string requestor = 3;
+	message Param {
+			string name = 1;
+	}
+	Param param = 4;
+}
+
+message ArrayInfoResponse {
+	string command = 1;
+	string rid = 2;
+	message Result {
+		Status status = 1;
+		Array data = 2;
+	}
+	Result result = 3;
+	PosInfo info = 4;
+}
+
+message RebuildArrayRequest {
+	string command = 1;
+	string rid = 2;
+	string requestor = 3;
+	message Param {
+			string name = 1;
+	}
+	Param param = 4;
+}
+
+message RebuildArrayResponse {
+	string command = 1;
+	string rid = 2;
+	message Result {
+		Status status = 1;
+	}
+	Result result = 3;
+	PosInfo info = 4;
+}
+
+message ListNodeRequest {
+	string command = 1;
+	string rid = 2;
+	string requestor = 3;
+}
+
+message ListNodeResponse {
+	string command = 1;
+	string rid = 2;
+	message Result {
+		Status status = 1;
+		message Node {
+			string name = 1;
+			string ip = 2;
+			string lastseen = 3;
+		}
+		repeated Node data = 2;
+	}
+	Result result = 3;
+	PosInfo info = 4;
+}
+
+message ListHaVolumeRequest {
+	string command = 1;
+	string rid = 2;
+	string requestor = 3;
+}
+
+message ListHaVolumeResponse {
+	string command = 1;
+	string rid = 2;
+	message Result {
+		Status status = 1;
+		message Volume {
+			int32 id = 1;
+			string name = 2;
+			string nodeName = 3;
+			string arrayName = 4;
+			int64 size = 5;
+			string lastseen = 6;
+		}
+		repeated Volume data = 2;
+	}
+	Result result = 3;
+	PosInfo info = 4;
+}
+
+message ListHaReplicationRequest {
+	string command = 1;
+	string rid = 2;
+	string requestor = 3;
+}
+
+message ListHaReplicationResponse {
+	string command = 1;
+	string rid = 2;
+	message Result {
+		Status status = 1;
+		message Replication {
+			int32 id = 1;
+			int32 sourceVolumeId = 2;
+			int32 sourceWalVolume_id = 3;
+			int32 destinationVolumeId = 4;
+			int32 destinationWalVolumeId = 5;
+		}
+		repeated Replication data = 2;
+	}
+	Result result = 3;
+	PosInfo info = 4;
+}
+
+message StartHaReplicationRequest {
+	string command = 1;
+	string rid = 2;
+	string requestor = 3;
+	message Param {
+			string primaryNodeName = 1;
+			string primaryArrayName = 2;
+			string primaryVolumeName = 3;
+			string primaryWalVolumeName = 4;
+			string secondaryNodeName = 5;
+			string secondaryArrayName = 6;
+			string secondaryVolumeName = 7;
+			string secondaryWalVolumeName = 8;
+			string stuats = 9;
+			string timestamp = 10;
+	}
+	Param param = 4;
+}
+
+message StartHaReplicationResponse {
+	string command = 1;
+	string rid = 2;
+	message Result {
+		Status status = 1;
+	}
+	Result result = 3;
+	PosInfo info = 4;
+}
+
+message SetLogLevelRequest {
+	string command = 1;
+	string rid = 2;
+	string requestor = 3;
+	message Param {
+			string level = 1;
+	}
+	Param param = 4;
+}
+
+message SetLogLevelResponse {
+	string command = 1;
+	string rid = 2;
+	message Result {
+		Status status = 1;
+	}
+	Result result = 3;
+	PosInfo info = 4;
+}
+
+message SetLogPreferenceRequest {
+	string command = 1;
+	string rid = 2;
+	string requestor = 3;
+	message Param {
+		string structuredLogging = 1;
+	}
+	Param param = 4;
+}
+
+message SetLogPreferenceResponse {
+	string command = 1;
+	string rid = 2;
+	message Result {
+		Status status = 1;
+	}
+	Result result = 3;
+	PosInfo info = 4;
+}
+
+message LoggerInfoRequest {
+	string command = 1;
+	string rid = 2;
+	string requestor = 3;
+}
+
+message LoggerInfoResponse {
+	string command = 1;
+	string rid = 2;
+	message Result {
+		Status status = 1;
+		message LoggerInfo {
+			string minorLogPath = 1;
+			string majorLogPath = 2;
+			string logfileSizeInMb = 3;
+			int32 logfileRotationCount = 4;
+			string minAllowableLogLevel = 5;
+			int32 filterEnabled = 6;
+			string filterIncluded = 7;
+			string filterExcluded = 8;
+			bool structuredLogging = 9;
+		}
+		LoggerInfo data = 2;
+	}
+	Result result = 3;
+	PosInfo info = 4;
+}
+
+message GetLogLevelRequest {
+	string command = 1;
+	string rid = 2;
+	string requestor = 3;
+}
+
+message GetLogLevelResponse {
+	string command = 1;
+	string rid = 2;
+	message Result {
+		Status status = 1;
+		message LogLevel {
+			string level = 1;
+		}
+		LogLevel data = 2;
+	}
+	Result result = 3;
+	PosInfo info = 4;
+}
+
+message ApplyLogFilterRequest {
+	string command = 1;
+	string rid = 2;
+	string requestor = 3;
+}
+
+message ApplyLogFilterResponse {
+	string command = 1;
+	string rid = 2;
+	message Result {
+		Status status = 1;
+	}
+	Result result = 3;
+	PosInfo info = 4;
+}
+
+message CreateDeviceRequest {
+	string command = 1;
+	string rid = 2;
+	string requestor = 3;
+	message Param {
+		string name = 1;
+		uint32 numBlocks = 2;
+		uint32 blockSize = 3;
+		string devType = 4;
+		uint32 numa = 5;
+	}
+	Param param = 4;
+}
+
+message CreateDeviceResponse {
+	string command = 1;
+	string rid = 2;
+	message Result {
+		Status status = 1;
+	}
+	Result result = 3;
+	PosInfo info = 4;
+}
+
+message ScanDeviceRequest {
+	string command = 1;
+	string rid = 2;
+	string requestor = 3;
+}
+
+message ScanDeviceResponse {
+	string command = 1;
+	string rid = 2;
+	message Result {
+		Status status = 1;
+	}
+	Result result = 3;
+	PosInfo info = 4;
+}
+
+message Device {
+	string name = 1;
+	string type = 2;
+	string address = 3;
+	string class = 4;
+	string modelNumber = 5;
+	string numa = 6;
+	uint64 size = 7;
+	string serialNumber = 8;
+}
+
+message ListDeviceRequest {
+	string command = 1;
+	string rid = 2;
+	string requestor = 3;
+}
+
+message ListDeviceResponse {
+	string command = 1;
+	string rid = 2;
+	message Result {
+		Status status = 1;
+		message DeviceList {
+			repeated Device devicelist = 1;
+		}
+		DeviceList data = 2;
+	}
+	Result result = 3;
+	PosInfo info = 4;
+}
+
+message SmartLog {
+	string availableSpareSpace = 1;
+	string temperature = 2;
+	string deviceReliability = 3;
+	string readOnly = 4;
+	string volatileMemoryBackup = 5;
+	string currentTemperature = 6;
+	string availableSpare = 7;
+	string availableSpareThreshold = 8;
+	string lifePercentageUsed = 9;
+	string dataUnitsRead = 10;
+	string dataUnitsWritten = 11;
+	string hostReadCommands = 12;
+	string hostWriteCommands = 13;
+	string controllerBusyTime = 14;
+	string powerCycles = 15;
+	string powerOnHours = 16;
+	string unsafeShutdowns = 17;
+	string unrecoverableMediaErrors = 18;
+	string lifetimeErrorLogEntries = 19;
+	string warningTemperatureTime = 20;
+	string criticalTemperatureTime = 21;
+	repeated string temperatureSensor = 22;
+}
+
+message GetSmartLogRequest {
+	string command = 1;
+	string rid = 2;
+	string requestor = 3;
+	message Param {
+		string name = 1;
+	}
+	Param param = 4;
+}
+
+message GetSmartLogResponse {
+	string command = 1;
+	string rid = 2;
+	message Result {
+		Status status = 1;
+		SmartLog data = 2;
+	}
+	Result result = 3;
+	PosInfo info = 4;
+}
+
+message CreateSubsystemRequest {
+	string command = 1;
+	string rid = 2;
+	string requestor = 3;
+	message Param {
+		string nqn = 1;
+		string serialNumber = 2;
+		string modelNumber = 3;
+		uint32 maxNamespaces = 4;
+		bool allowAnyHost = 5;
+		bool anaReporting = 6;
+	}
+	Param param = 4;
+}
+
+message CreateSubsystemResponse {
+	string command = 1;
+	string rid = 2;
+	message Result {
+		Status status = 1;
+	}
+	Result result = 3;
+	PosInfo info = 4;
+}
+
+message DeleteSubsystemRequest {
+	string command = 1;
+	string rid = 2;
+	string requestor = 3;
+	message Param {
+		string subnqn = 1;
+	}
+	Param param = 4;
+}
+
+message DeleteSubsystemResponse {
+	string command = 1;
+	string rid = 2;
+	message Result {
+		Status status = 1;
+	}
+	Result result = 3;
+	PosInfo info = 4;
+}
+
+message AddListenerRequest {
+	string command = 1;
+	string rid = 2;
+	string requestor = 3;
+	message Param {
+		string subnqn = 1;
+		string transportType = 2;
+		string targetAddress = 3;
+		string transportServiceId = 4;
+	}
+	Param param = 4;
+}
+
+message AddListenerResponse {
+	string command = 1;
+	string rid = 2;
+	message Result {
+		Status status = 1;
+	}
+	Result result = 3;
+	PosInfo info = 4;
+}
+
+message Subsystem {
+	string nqn = 1;
+	string subtype = 2;
+	message AddressInfo {
+		string transportType = 1;
+		string addressFamily = 2;
+		string targetAddress = 3;
+		string transportServiceId = 4;
+	}
+	repeated AddressInfo listenAddresses = 3;
+	int32 allowAnyHost = 4;
+	message Host {
+		string nqn = 1;
+	}
+	repeated Host hosts = 5;
+	string serialNumber = 6;
+	string modelNumber = 7;
+	int32 maxNamespaces = 8;
+	message Namespace {
+		int32 nsid = 1;
+		string bdevName = 2;
+		string uuid = 3;
+	}
+	repeated Namespace namespaces = 9;
+}
+
+message ListSubsystemRequest {
+	string command = 1;
+	string rid = 2;
+	string requestor = 3;
+}
+
+message ListSubsystemResponse {
+	string command = 1;
+	string rid = 2;
+	message Result {
+		Status status = 1;
+		message SubsystemList {
+			repeated Subsystem subsystemlist = 1;
+		}
+		SubsystemList data = 2;
+	}
+	Result result = 3;
+	PosInfo info = 4;
+}
+
+message SubsystemInfoRequest {
+	string command = 1;
+	string rid = 2;
+	string requestor = 3;
+	message Param {
+		string subnqn = 1;
+	}
+	Param param = 4;
+}
+
+message SubsystemInfoResponse {
+	string command = 1;
+	string rid = 2;
+	message Result {
+		Status status = 1;
+		message SubsystemList {
+			repeated Subsystem subsystemlist = 1;
+		}
+		SubsystemList data = 2;
+	}
+	Result result = 3;
+	PosInfo info = 4;
+}
+
+message CreateTransportRequest {
+	string command = 1;
+	string rid = 2;
+	string requestor = 3;
+	message Param {
+		string transportType = 1;
+		int32 bufCacheSize = 2;
+		int32 numSharedBuf = 3;
+	}
+	Param param = 4;
+}
+
+message CreateTransportResponse {
+	string command = 1;
+	string rid = 2;
+	message Result {
+		Status status = 1;
+	}
+	Result result = 3;
+	PosInfo info = 4;
+}
+
+message CreateVolumeRequest {
+	string command = 1;
+	string rid = 2;
+	string requestor = 3;
+	message Param {
+		string name = 1;
+		string array = 2;
+		uint64 size = 3;
+		uint64 maxiops = 4;
+		uint64 maxbw = 5;
+		bool iswalvol = 6;
+		string uuid = 7;
+	}
+	Param param = 4;
+}
+
+message CreateVolumeResponse {
+	string command = 1;
+	string rid = 2;
+	message Result {
+		Status status = 1;
+		message CreateVolumeData {
+			string targetAddress = 1;
+		}
+		CreateVolumeData data = 2;
+	}
+	Result result = 3;
+	PosInfo info = 4;
+}
+
+message DeleteVolumeRequest {
+	string command = 1;
+	string rid = 2;
+	string requestor = 3;
+	message Param {
+		string name = 1;
+		string array = 2;
+	}
+	Param param = 4;
+}
+
+message DeleteVolumeResponse {
+	string command = 1;
+	string rid = 2;
+	message Result {
+		Status status = 1;
+	}
+	Result result = 3;
+	PosInfo info = 4;
+}
+
+message UnmountVolumeRequest {
+	string command = 1;
+	string rid = 2;
+	string requestor = 3;
+	message Param {
+		string name = 1;
+		string array = 2;
+	}
+	Param param = 4;
+}
+
+message UnmountVolumeResponse {
+	string command = 1;
+	string rid = 2;
+	message Result {
+		Status status = 1;
+	}
+	Result result = 3;
+	PosInfo info = 4;
+}
+
+message SetVolumePropertyRequest {
+	string command = 1;
+	string rid = 2;
+	string requestor = 3;
+	message Param {
+		string name = 1;
+		string array = 2;
+		string newVolumeName = 3;
+		uint64 size = 4;
+		uint64 maxiops = 5;
+		uint64 maxbw = 6;
+		bool updateprimaryvol = 7;
+		bool isprimaryvol = 8;
+	}
+	Param param = 4;
+}
+
+message SetVolumePropertyResponse {
 	string command = 1;
 	string rid = 2;
 	message Result {

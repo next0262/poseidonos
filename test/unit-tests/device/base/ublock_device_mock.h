@@ -31,14 +31,13 @@ public:
     MOCK_METHOD(int, GetNuma, (), (override));
     MOCK_METHOD(DeviceProperty, GetProperty, (), (override));
     MOCK_METHOD(void, SetClass, (DeviceClass cls), (override));
-    MOCK_METHOD(void, ProfilePendingIoCount, (uint32_t pendingIOCount), (override));
     MOCK_METHOD(void, AddPendingErrorCount, (uint32_t errorsToAdd), (override));
     MOCK_METHOD(void, SubtractPendingErrorCount, (uint32_t errorsToSubtract), (override));
     MOCK_METHOD(void, SetDedicatedIOWorker, (IOWorker * ioWorker), (override));
     MOCK_METHOD(IOWorker*, GetDedicatedIOWorker, (), (override));
     MOCK_METHOD(DeviceContext*, _AllocateDeviceContext, (), (override));
     MOCK_METHOD(void, _ReleaseDeviceContext, (DeviceContext * deviceContextToRelease), (override));
-    MOCK_METHOD(bool, _WrapupOpenDeviceSpecific, (DeviceContext * devicecontext), (override));
+    MOCK_METHOD(bool, WrapupOpenDeviceSpecific, (), (override));
     MOCK_METHOD(void*, GetByteAddress, (), (override));
 };
 

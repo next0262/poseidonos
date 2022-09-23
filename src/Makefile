@@ -17,7 +17,6 @@ SUBDIRS = allocator \
         gc \
         gc/flow_control \
         pos_replicator \
-        pos_replicator/dummy_ha \
         array \
         array/device \
         array/ft \
@@ -33,6 +32,7 @@ SUBDIRS = allocator \
         array_components \
         array_mgmt \
         rebuild \
+        rebuild/rebuild_methods \
         volume \
         device \
         spdk_wrapper \
@@ -63,6 +63,7 @@ SUBDIRS = allocator \
         metafs/storage \
         logger \
         meta_file_intf \
+        rocksdb_log_buffer \
         journal_manager \
         helper \
         helper/enumerable \
@@ -83,7 +84,10 @@ SUBDIRS = allocator \
         telemetry/telemetry_config \
         telemetry/telemetry_config/configs \
         dpdk_wrapper \
-        memory_checker
+        memory_checker \
+        resource_checker \
+        event \
+        trace 
 
 .PHONY: $(SUBDIRS)
 

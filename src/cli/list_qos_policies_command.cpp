@@ -72,7 +72,7 @@ QosListPoliciesCommand::Execute(json& doc, string rid)
         arrayName = doc["param"]["array"].get<std::string>();
         if (0 == arrayName.compare(""))
         {
-            return jFormat.MakeResponse("LISTQOSPOLICIES", rid, static_cast<int>(POS_EVENT_ID::QOS_CLI_WRONG_MISSING_PARAMETER), "Array Name Missing", GetPosInfo());
+            return jFormat.MakeResponse("LISTQOSPOLICIES", rid, static_cast<int>(EID(QOS_CLI_WRONG_MISSING_PARAMETER)), "Array Name Missing", GetPosInfo());
         }
     }
     JsonElement data("data");
@@ -113,11 +113,11 @@ QosListPoliciesCommand::Execute(json& doc, string rid)
     rebuildImpact.AddElement(rebuild);
     data.SetArray(rebuildImpact);
 
-    IVolumeManager* volMgr =
+    IVolumeInfoManager* volMgr =
         VolumeServiceSingleton::Instance()->GetVolumeManager(arrayName);
     if (nullptr == volMgr)
     {
-        return jFormat.MakeResponse("LISTQOSPOLICIES", rid, static_cast<int>(POS_EVENT_ID::QOS_CLI_WRONG_MISSING_PARAMETER), "Invalid Array Name", GetPosInfo());
+        return jFormat.MakeResponse("LISTQOSPOLICIES", rid, static_cast<int>(EID(QOS_CLI_WRONG_MISSING_PARAMETER)), "Invalid Array Name", GetPosInfo());
     }
     if (doc["param"].contains("vol"))
     {
@@ -128,11 +128,11 @@ QosListPoliciesCommand::Execute(json& doc, string rid)
         }
         for (auto vol = volumeNames.begin(); vol != volumeNames.end(); vol++)
         {
-            validVol = volMgr->GetVolumeID(*vol);
-            if (-1 == validVol)
+            validVol = volMgr->CheckVolumeValidity(*vol);
+            if (EID(SUCCESS) != validVol)
             {
                 errorMsg = "Invalid Volume Name " + (*vol);
-                return jFormat.MakeResponse("LISTQOSPOLICIES", rid, static_cast<int>(POS_EVENT_ID::QOS_CLI_WRONG_MISSING_PARAMETER), errorMsg, GetPosInfo());
+                return jFormat.MakeResponse("LISTQOSPOLICIES", rid, static_cast<int>(EID(QOS_CLI_WRONG_MISSING_PARAMETER)), errorMsg, GetPosInfo());
             }
             else
             {
@@ -164,14 +164,14 @@ QosListPoliciesCommand::_GetRebuildImpactString(uint8_t impact)
 {
     switch (impact)
     {
-        case PRIORITY_HIGHEST:
-            return "highest";
+        case PRIORITY_HIGH:
+            return "high";
 
         case PRIORITY_MEDIUM:
             return "medium";
 
-        case PRIORITY_LOWEST:
-            return "lowest";
+        case PRIORITY_LOW:
+            return "low";
 
         default:
             return "unknown";

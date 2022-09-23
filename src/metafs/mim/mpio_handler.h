@@ -1,6 +1,6 @@
 /*
  *   BSD LICENSE
- *   Copyright (c) 2021 Samsung Electronics Corporation
+ *   Copyright (c) 2022 Samsung Electronics Corporation
  *   All rights reserved.
  *
  *   Redistribution and use in source and binary forms, with or without
@@ -32,12 +32,12 @@
 
 #pragma once
 
-#include <chrono>
 #include <string>
 
 #include "mpio_allocator.h"
+#include "src/metafs/include/mf_property.h"
 #include "src/metafs/lib/metafs_time_interval.h"
-#include "src/metafs/mim/metafs_io_multilevel_q.h"
+#include "src/metafs/mim/metafs_io_wrr_q.h"
 #include "src/telemetry/telemetry_client/telemetry_publisher.h"
 
 namespace pos
@@ -49,7 +49,7 @@ class MpioHandler
 public:
     explicit MpioHandler(const int threadId, const int coreId,
         MetaFsConfigManager* configManager, TelemetryPublisher* tp = nullptr,
-        MetaFsIoMultilevelQ<Mpio*, RequestPriority>* doneQ = nullptr);
+        MetaFsIoWrrQ<Mpio*, MetaFileType>* doneQ = nullptr);
     virtual ~MpioHandler(void);
 
     virtual void EnqueuePartialMpio(Mpio* mpio);
@@ -57,14 +57,25 @@ public:
     virtual void BottomhalfMioProcessing(void);
 
 private:
-    void _SendPeriodicMetrics(void);
+    void _UpdateMetricsConditionally(Mpio* mpio);
+    void _PublishPeriodicMetrics(void);
 
-    MetaFsIoMultilevelQ<Mpio*, RequestPriority>* partialMpioDoneQ;
+    MetaFsIoWrrQ<Mpio*, MetaFileType>* partialMpioDoneQ;
     MpioAllocator* mpioAllocator;
     int coreId;
     TelemetryPublisher* telemetryPublisher;
-    int64_t metricSumOfSpendTime;
-    int64_t metricSumOfMpioCount;
+    int64_t sampledTimeSpentProcessingAllStages;
+    int64_t sampledTimeSpentFromWriteToRelease;
+    int64_t sampledTimeSpentFromPushToPop;
+    int64_t totalProcessedMpioCount;
+    int64_t sampledProcessedMpioCount;
     MetaFsTimeInterval metaFsTimeInterval;
+    size_t skipCount;
+    const size_t SAMPLING_SKIP_COUNT;
+
+    static const uint32_t NUM_STORAGE = (int)MetaStorageType::Max;
+    static const uint32_t NUM_FILE_TYPE = (int)MetaFileType::MAX;
+    int64_t doneCountByStorage[NUM_STORAGE];
+    int64_t doneCountByFileType[NUM_FILE_TYPE];
 };
 } // namespace pos

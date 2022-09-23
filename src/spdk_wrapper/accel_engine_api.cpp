@@ -85,12 +85,12 @@ AccelEngineApi::Initialize(void)
     _SetIoat();
     if (IsIoatEnable() == false)
     {
-        POS_TRACE_INFO((int)POS_EVENT_ID::IOATAPI_DISABLED,
+        POS_TRACE_INFO(EID(IOATAPI_DISABLED),
             "Ioat Copy Engine Offload Disabled");
     }
     else
     {
-        POS_TRACE_INFO((int)POS_EVENT_ID::IOATAPI_DISABLED,
+        POS_TRACE_INFO(EID(IOATAPI_DISABLED),
             "Ioat Copy Engine Offload Enabled");
     }
     uint32_t nextCore = EventFrameworkApiSingleton::Instance()->GetFirstReactor();
@@ -98,7 +98,7 @@ AccelEngineApi::Initialize(void)
         _HandleInitialize, nullptr);
     if (success == false)
     {
-        POS_TRACE_INFO((int)POS_EVENT_ID::IOATAPI_DISABLED,
+        POS_TRACE_INFO(EID(IOATAPI_DISABLED),
             "Ioat Copy Engine Offload Disabled Due To Lack Of Spdk Events");
         return;
     }
@@ -119,7 +119,7 @@ AccelEngineApi::_SetChannel(void)
     if (spdkChannel == nullptr)
     {
         POS_EVENT_ID eventId =
-            POS_EVENT_ID::IOATAPI_FAIL_TO_INITIALIZE;
+            EID(IOATAPI_FAIL_TO_INITIALIZE);
         POS_TRACE_ERROR(static_cast<int>(eventId),
             "Spdk cannot obtain any io channel from accel engine.");
         assert(0);
@@ -137,7 +137,7 @@ AccelEngineApi::_SetChannel(void)
             if (get_ioat_count_per_numa(detected_numa_count) == 0)
             {
                 POS_EVENT_ID eventId =
-                    POS_EVENT_ID::IOATAPI_FAIL_TO_INITIALIZE;
+                    EID(IOATAPI_FAIL_TO_INITIALIZE);
                 POS_TRACE_ERROR(static_cast<int>(eventId),
                     "Spdk's ioat count from probe() and get_io_channel() is mismatched!");
             }
@@ -202,7 +202,7 @@ AccelEngineApi::_HandleInitialize(void* arg1)
             _HandleInitialize, nullptr);
         if (unlikely(false == success))
         {
-            POS_EVENT_ID eventId = POS_EVENT_ID::IOATAPI_FAIL_TO_INITIALIZE;
+            POS_EVENT_ID eventId = EID(IOATAPI_FAIL_TO_INITIALIZE);
             POS_TRACE_ERROR(static_cast<int>(eventId),
                 "Fail to initialize IOAT");
         }
@@ -305,7 +305,7 @@ AccelEngineApi::_HandleFinalize(void* arg1)
             _HandleFinalize, nullptr);
         if (unlikely(false == success))
         {
-            POS_EVENT_ID eventId = POS_EVENT_ID::IOATAPI_FAIL_TO_FINALIZE;
+            POS_EVENT_ID eventId = EID(IOATAPI_FAIL_TO_FINALIZE);
             POS_TRACE_ERROR(static_cast<int>(eventId),
                 "Fail to finalize IOAT");
         }
@@ -326,7 +326,7 @@ AccelEngineApi::Finalize(EventFrameworkApi* eventFrameworkApi)
 
     if (unlikely(false == success))
     {
-        POS_EVENT_ID eventId = POS_EVENT_ID::IOATAPI_FAIL_TO_FINALIZE;
+        POS_EVENT_ID eventId = EID(IOATAPI_FAIL_TO_FINALIZE);
         POS_TRACE_ERROR(static_cast<int>(eventId),
             "Fail to finalize IOAT");
         return;

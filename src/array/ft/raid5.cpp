@@ -42,8 +42,9 @@
 
 namespace pos
 {
-Raid5::Raid5(const PartitionPhysicalSize* pSize)
-: Method(RaidTypeEnum::RAID5)
+Raid5::Raid5(const PartitionPhysicalSize* pSize, uint64_t bufferCntPerNuma)
+: Method(RaidTypeEnum::RAID5),
+  parityBufferCntPerNuma(bufferCntPerNuma)
 {
     ftSize_ = {
         .minWriteBlkCnt = 0,
@@ -96,7 +97,7 @@ Raid5::Translate(const LogicalEntry& le)
 }
 
 list<FtBlkAddr>
-Raid5::GetRebuildGroup(FtBlkAddr fba)
+Raid5::GetRebuildGroup(FtBlkAddr fba, const vector<uint32_t>& abnormals)
 {
     uint32_t blksPerChunk = ftSize_.blksPerChunk;
     uint32_t offsetInChunk = fba.offset % blksPerChunk;
@@ -117,7 +118,7 @@ Raid5::GetRebuildGroup(FtBlkAddr fba)
 }
 
 RaidState
-Raid5::GetRaidState(vector<ArrayDeviceState> devs)
+Raid5::GetRaidState(const vector<ArrayDeviceState>& devs)
 {
     auto&& abnormalDevs = Enumerable::Where(devs,
         [](auto d) { return d != ArrayDeviceState::NORMAL; });
@@ -158,9 +159,40 @@ Raid5::CheckNumofDevsToConfigure(uint32_t numofDevs)
     return numofDevs >= minRequiredNumofDevsforRAID5;
 }
 
+vector<pair<vector<uint32_t>, vector<uint32_t>>>
+Raid5::GetRebuildGroupPairs(vector<uint32_t>& targetIndexs)
+{
+    assert(targetIndexs.size() == 1);
+
+    vector<pair<vector<uint32_t>, vector<uint32_t>>> rgPair;
+    uint32_t dst = targetIndexs.front();
+    vector<uint32_t> srcIdx;
+    for (uint32_t i = 0; i < ftSize_.chunksPerStripe; i++)
+    {
+        if (i != dst)
+        {
+            srcIdx.push_back(i);
+        }
+    }
+    rgPair.emplace_back(make_pair(srcIdx, targetIndexs));
+    return rgPair;
+}
+
 BufferEntry
 Raid5::_AllocChunk()
 {
+    if (parityPools.size() == 0 && parityBufferCntPerNuma > 0)
+    {
+        POS_TRACE_WARN(EID(RAID_DEBUG_MSG),
+            "Attempt to reallocate ParityPool because it is not allocated during creation, req_buffersPerNuma:{}",
+            parityBufferCntPerNuma);
+        bool ret = AllocParityPools(parityBufferCntPerNuma);
+        if (ret == false)
+        {
+            int eventId = EID(CREATE_ARRAY_INSUFFICIENT_MEMORY_UNABLE_TO_ALLOC_PARITY_POOL);
+            POS_TRACE_ERROR(eventId, "required number of buffers:{}", parityBufferCntPerNuma);
+        }
+    }
     uint32_t numa = affinityManager->GetNumaIdFromCurrentThread();
     BufferPool* bufferPool = parityPools.at(numa);
     void* mem = bufferPool->TryGetBuffer();
@@ -259,7 +291,6 @@ Raid5::AllocParityPools(uint64_t maxParityBufferCntPerNuma,
         * ArrayConfig::BLOCKS_PER_CHUNK;
 
     uint32_t totalNumaCount = affinityManager->GetNumaCount();
-    parityPools.clear();
 
     for (uint32_t numa = 0; numa < totalNumaCount; numa++)
     {
@@ -271,10 +302,11 @@ Raid5::AllocParityPools(uint64_t maxParityBufferCntPerNuma,
         BufferPool* pool = memoryManager->CreateBufferPool(info, numa);
         if (pool == nullptr)
         {
-            parityPools.clear();
+            ClearParityPools();
             return false;
         }
         parityPools.push_back(pool);
+        POS_TRACE_DEBUG(EID(RAID_DEBUG_MSG), "BufferPool for RAID5 is created, {}", pool->GetOwner());
     }
     return true;
 }
@@ -286,6 +318,8 @@ Raid5::ClearParityPools()
     {
         if (parityPools[i] != nullptr)
         {
+            POS_TRACE_DEBUG(EID(RAID_DEBUG_MSG), "ParityPool {} is cleared",
+                parityPools[i]->GetOwner());
             memoryManager->DeleteBufferPool(parityPools[i]);
             parityPools[i] = nullptr;
         }
@@ -304,6 +338,10 @@ Raid5::GetParityPoolSize()
     return parityPools.size();
 }
 
-
+RecoverFunc
+Raid5::GetRecoverFunc(vector<uint32_t> targets, vector<uint32_t> abnormals)
+{
+    return recoverFunc;
+}
 } // namespace pos
 

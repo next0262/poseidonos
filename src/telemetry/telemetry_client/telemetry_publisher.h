@@ -37,6 +37,10 @@
 #include "src/telemetry/telemetry_client/telemetry_data_pool.h"
 #include <string>
 #include <vector>
+#include <yaml-cpp/yaml.h>
+#include <unordered_map>
+
+#define DEFAULT_PUBLICATION_LIST_FILE_PATH "/etc/pos/publication_list_default.yaml"
 
 namespace pos
 {
@@ -53,7 +57,6 @@ public:
     virtual void StopUsingDataPool(void);
 
     virtual void SetMaxEntryLimit(int limit);
-    virtual int GetNumEntries(void);
     void SetName(std::string name_);
     virtual std::string GetName(void);
 
@@ -63,14 +66,22 @@ public:
     virtual POSMetricVector* AllocatePOSMetricVector(void);
     virtual void SetGlobalPublisher(IGlobalPublisher* gp);
     virtual int AddDefaultLabel(std::string key, std::string value);
+    void LoadPublicationList(std::string filePath);
 
 private:
+    const std::string PUBLICATION_LIST_ROOT = "metrics_to_publish";
+    bool selectivePublication = false;
     std::string name;
     IGlobalPublisher* globalPublisher;
     TelemetryDataPool dataPool;
     bool turnOn;
     bool useDataPool;
     MetricLabelMap defaultlabelList;
+
+    bool _ShouldPublish(std::string metricId);
+    void _LoadPublicationList(std::string filePath);
+    void _RemoveMetricNotToPublish(POSMetricVector* metricList);
+    std::unordered_map<std::string, bool> publicationList;
 };
 
 } // namespace pos

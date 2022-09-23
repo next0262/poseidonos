@@ -32,21 +32,22 @@
 
 #include "callback.h"
 
-#include "Air.h"
-#include "src/event_scheduler/event_scheduler.h"
+#include <air/Air.h>
+
+#include "src/dump/dump_buffer.h"
+#include "src/dump/dump_module.h"
+#include "src/dump/dump_module.hpp"
 #include "src/dump/dump_shared_ptr.h"
+#include "src/event_scheduler/event_scheduler.h"
+#include "src/include/backend_event.h"
 #include "src/include/branch_prediction.h"
 #include "src/include/pos_event_id.hpp"
 #include "src/lib/system_timeout_checker.h"
 #include "src/logger/logger.h"
-#include "src/dump/dump_module.h"
-#include "src/dump/dump_module.hpp"
-#include "src/dump/dump_buffer.h"
 #include "src/signal_handler/user_signal_interface.h"
 
 namespace pos
 {
-
 const uint32_t Callback::CALLER_FRAME = 0;
 // 30 sec, default timeout
 const uint64_t Callback::DEFAULT_TIMEOUT_NS = 5ULL * 1000 * 1000 * 1000;
@@ -74,7 +75,8 @@ Callback::Callback(bool isFrontEnd, CallbackType type, uint32_t weight, SystemTi
   eventScheduler(eventSchedulerArg)
 {
     objectAddress = reinterpret_cast<uint64_t>(this);
-    airlog("LAT_Callback", "AIR_NEW", type, objectAddress);
+    airlog("LAT_Callback", "alloc", type, objectAddress);
+    airlog("Callback_Constructor", "internal", type, 1);
     if (DumpSharedModuleInstanceEnable::debugLevelEnable)
     {
         returnAddress = __builtin_return_address(Callback::CALLER_FRAME);
@@ -88,15 +90,22 @@ Callback::Callback(bool isFrontEnd, CallbackType type, uint32_t weight, SystemTi
     {
         eventScheduler = EventSchedulerSingleton::Instance();
     }
+
+    ioTimeoutChecker = IoTimeoutCheckerSingleton::Instance();
+
+    createdTime = ioTimeoutChecker->GetCurrentRoughTime();
+    ioTimeoutChecker->IncreasePendingCnt(type, createdTime);
+    
 }
 
 // LCOV_EXCL_START
 Callback::~Callback(void)
 {
-    airlog("LAT_Callback", "AIR_FREE", type, objectAddress);
+    airlog("LAT_Callback", "free", type, objectAddress);
+    airlog("Callback_Destructor", "internal", type, 1);
     if (unlikely(executed == false))
     {
-        POS_EVENT_ID eventId = POS_EVENT_ID::CALLBACK_DESTROY_WITHOUT_EXECUTED;
+        POS_EVENT_ID eventId = EID(CALLBACK_DESTROY_WITHOUT_EXECUTED);
         POS_TRACE_WARN(
             eventId,
             "Callback destroy without executed : {}",
@@ -107,7 +116,7 @@ Callback::~Callback(void)
 
     if (unlikely(errorCount > 0))
     {
-        POS_EVENT_ID eventId = POS_EVENT_ID::CALLBACK_DESTROY_WITH_ERROR;
+        POS_EVENT_ID eventId = EID(CALLBACK_DESTROY_WITH_ERROR);
         POS_TRACE_WARN(
             eventId,
             "Callback Error : Type : {}, Critical Error : {}",
@@ -122,7 +131,7 @@ Callback::~Callback(void)
         {
             try
             {
-                POS_EVENT_ID eventId = POS_EVENT_ID::CALLBACK_TIMEOUT;
+                POS_EVENT_ID eventId = EID(CALLBACK_TIMEOUT);
                 POS_TRACE_DEBUG_IN_MEMORY(
                     ModuleInDebugLogDump::CALLBACK_TIMEOUT,
                     eventId,
@@ -133,13 +142,15 @@ Callback::~Callback(void)
                     "Callback Timeout. Caller : {}",
                     returnAddress);
             }
-            catch(...)
+            catch (...)
             {
             }
         }
         delete timeoutChecker;
         timeoutChecker = nullptr;
     }
+
+    ioTimeoutChecker->DecreasePendingCnt(type, createdTime);
 }
 // LCOV_EXCL_STOP
 
@@ -159,7 +170,7 @@ Callback::SetTimeout(uint64_t timeoutSec)
 bool
 Callback::Execute(void)
 {
-    airlog("LAT_Callback", "AIR_EXE_BEGIN", type, objectAddress);
+    airlog("LAT_Callback", "exe_begin", type, objectAddress);
     bool done = _DoSpecificJob();
 
     if (done)
@@ -168,7 +179,7 @@ Callback::Execute(void)
         executed = true;
     }
 
-    airlog("LAT_Callback", "AIR_EXE_END", type, objectAddress);
+    airlog("LAT_Callback", "exe_end", type, objectAddress);
     return done;
 }
 
@@ -209,15 +220,18 @@ Callback::_InvokeCallee(void)
     }
 
     bool isOkToCall = callee->_RecordCallerCompletionAndCheckOkToCall(
-            errorCount, errorBitMap, weight);
+        errorCount, errorBitMap, weight);
     if (isOkToCall == true)
     {
         _PreCallExecuteCallee();
-        bool done = callee->Execute();
-
-        if (likely(done))
+        bool done = false;
+        if (GetEventType() != BackendEvent_UserdataRebuild)
         {
-            return;
+            done = callee->Execute();
+            if (likely(done))
+            {
+                return;
+            }
         }
 
         eventScheduler->EnqueueEvent(callee);
@@ -235,7 +249,7 @@ Callback::SetCallee(CallbackSmartPtr inputCallee)
 {
     if (unlikely(nullptr == inputCallee))
     {
-        POS_EVENT_ID eventId = POS_EVENT_ID::CALLBACK_INVALID_CALLEE;
+        POS_EVENT_ID eventId = EID(CALLBACK_INVALID_CALLEE);
         POS_TRACE_ERROR(static_cast<uint32_t>(eventId),
             "Invalid callee for callback");
         return;
@@ -243,7 +257,7 @@ Callback::SetCallee(CallbackSmartPtr inputCallee)
 
     if (unlikely(nullptr != callee))
     {
-        POS_EVENT_ID eventId = POS_EVENT_ID::CALLBACK_INVALID_CALLEE;
+        POS_EVENT_ID eventId = EID(CALLBACK_INVALID_CALLEE);
         POS_TRACE_ERROR(static_cast<uint32_t>(eventId),
             "Invalid callee for callback");
         return;
@@ -271,7 +285,7 @@ Callback::_RecordCallerCompletionAndCheckOkToCall(uint32_t transferredErrorCount
     }
     else if (unlikely(increasedCompletionCount > localWaitingCount))
     {
-        POS_EVENT_ID eventId = POS_EVENT_ID::CALLBACK_INVALID_COUNT;
+        POS_EVENT_ID eventId = EID(CALLBACK_INVALID_COUNT);
         POS_TRACE_ERROR(static_cast<uint32_t>(eventId),
             "CompletionCount exceeds WaitingCount");
     }

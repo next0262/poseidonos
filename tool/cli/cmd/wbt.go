@@ -29,8 +29,7 @@ var argList = []arg{
 	{"input", "i", ""},
 	{"output", "o", ""},
 	{"integrity", "", ""},
-	{"access", "", ""},
-	{"operation", "", ""},
+	{"filetype", "", ""},
 	{"rba", "", ""},
 	{"lba", "", ""},
 	{"vsid", "", ""},
@@ -60,6 +59,10 @@ var argList = []arg{
 	{"ses", "", ""},
 	{"array", "", ""},
 	{"volume", "", ""},
+	{"module", "", ""},
+	{"key", "", ""},
+	{"value", "", ""},
+	{"type", "", ""},
 }
 
 var WbtCmd = &cobra.Command{

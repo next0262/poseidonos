@@ -23,6 +23,7 @@ if [ -f /etc/debian_version ]; then
     apt-get install -y libnuma-dev uuid-dev ibverbs-utils perftest
     # Additional dependencies for iBOF OS
     apt-get install -y python3 python-pip
+    apt-get install -y python3 python3-pip
     apt-get install -y iperf
     # for ibof logging
     apt-get install -y cmake libsystemd-dev
@@ -68,7 +69,17 @@ if [ -f /etc/debian_version ]; then
     name=$(uname -r); apt-get install -y linux-modules-extra-${name}
     # for tcmalloc
     apt install -y libgoogle-perftools-dev
-
+    # for rocksdb
+    apt install -y librocksdb-dev
+    # for markdownTable
+    pip3 install py-markdown-table
+    # for pyyaml
+    pip3 install pyyaml
+    # for isal
+    apt install -y libisal-dev
+    # for address sanitizer
+    apt install -y libasan4
+    apt install -y libasan4-dbg
 
 else
     echo "pkgdep: unknown system type."

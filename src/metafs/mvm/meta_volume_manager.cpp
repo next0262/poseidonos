@@ -38,21 +38,21 @@
 namespace pos
 {
 MetaVolumeManager::MetaVolumeManager(const int arrayId,
-    MetaStorageSubsystem* metaStorage,
+    MetaStorageSubsystem* metaStorage, TelemetryPublisher* tp,
     MetaVolumeHandler* _volHandler,
     MetaVolumeContainer* _volContainer)
 : volumeSpcfReqHandler{},
   globalRequestHandler{},
-  metaStorage(metaStorage)
+  volHandler(_volHandler),
+  volContainer(_volContainer),
+  metaStorage(metaStorage),
+  tp(tp)
 {
-    volHandler = _volHandler;
-    volContainer = _volContainer;
-
     if (nullptr == volContainer)
         volContainer = new MetaVolumeContainer(arrayId);
 
     if (nullptr == volHandler)
-        volHandler = new MetaVolumeHandler(volContainer);
+        volHandler = new MetaVolumeHandler(volContainer, tp);
 
     _InitRequestHandler();
 }
@@ -143,13 +143,13 @@ MetaVolumeManager::CheckReqSanity(MetaFsRequestBase& reqMsg)
 
     if (false == msg->IsValid())
     {
-        MFS_TRACE_ERROR((int)POS_EVENT_ID::MFS_INVALID_PARAMETER,
+        MFS_TRACE_ERROR(EID(MFS_INVALID_PARAMETER),
             "Given request is incorrect. Please check parameters.");
 
-        return POS_EVENT_ID::MFS_INVALID_PARAMETER;
+        return EID(MFS_INVALID_PARAMETER);
     }
 
-    return POS_EVENT_ID::SUCCESS;
+    return EID(SUCCESS);
 }
 
 void
@@ -157,7 +157,7 @@ MetaVolumeManager::InitVolume(MetaVolumeType volumeType, int arrayId, MetaLpnTyp
 {
     if (true == volContainer->IsGivenVolumeExist(volumeType))
     {
-        MFS_TRACE_WARN((int)POS_EVENT_ID::MFS_MODULE_ALREADY_READY,
+        MFS_TRACE_WARN(EID(MFS_MODULE_ALREADY_READY),
             "You attempted to init. volumeMgr duplicately for the given volume type={}",
             (uint32_t)volumeType);
 
@@ -172,13 +172,13 @@ MetaVolumeManager::CreateVolume(MetaVolumeType volumeType)
 {
     if (false == volContainer->CreateVolume(volumeType))
     {
-        MFS_TRACE_ERROR((int)POS_EVENT_ID::MFS_META_VOLUME_CREATE_FAILED,
+        MFS_TRACE_ERROR(EID(MFS_META_VOLUME_CREATE_FAILED),
             "Meta volume creation has been failed.");
 
         return false;
     }
 
-    MFS_TRACE_DEBUG((int)POS_EVENT_ID::MFS_DEBUG_MESSAGE,
+    MFS_TRACE_DEBUG(EID(MFS_DEBUG_MESSAGE),
         "Meta volume has been created (volumeType={})",
         (uint32_t)volumeType);
 
@@ -190,13 +190,13 @@ MetaVolumeManager::OpenVolume(bool isNPOR)
 {
     if (false == volContainer->OpenAllVolumes(isNPOR))
     {
-        MFS_TRACE_ERROR((int)POS_EVENT_ID::MFS_META_VOLUME_OPEN_FAILED,
+        MFS_TRACE_ERROR(EID(MFS_META_VOLUME_OPEN_FAILED),
             "Failed to open meta volumes");
 
         return false;
     }
 
-    POS_TRACE_DEBUG((int)POS_EVENT_ID::MFS_DEBUG_MESSAGE,
+    POS_TRACE_DEBUG(EID(MFS_DEBUG_MESSAGE),
         "Successfully opened all meta volumes");
 
     return true;
@@ -207,14 +207,14 @@ MetaVolumeManager::CloseVolume(bool& resetCxt)
 {
     if (false == volContainer->CloseAllVolumes(resetCxt /* output */))
     {
-        MFS_TRACE_ERROR((int)POS_EVENT_ID::MFS_META_VOLUME_CLOSE_FAILED,
+        MFS_TRACE_ERROR(EID(MFS_META_VOLUME_CLOSE_FAILED),
             "Meta volume close has been failed.");
 
         return false;
     }
     else
     {
-        MFS_TRACE_DEBUG((int)POS_EVENT_ID::MFS_DEBUG_MESSAGE,
+        MFS_TRACE_DEBUG(EID(MFS_DEBUG_MESSAGE),
             "Meta volume has been closed successfully.");
 
         return true;
@@ -224,7 +224,7 @@ MetaVolumeManager::CloseVolume(bool& resetCxt)
 POS_EVENT_ID
 MetaVolumeManager::_CheckRequest(MetaFsFileControlRequest& reqMsg)
 {
-    POS_EVENT_ID rc = POS_EVENT_ID::SUCCESS;
+    POS_EVENT_ID rc = EID(SUCCESS);
 
     // based on reqMsg, select metaVolMgr to assign proper instance to handle the request
     switch (reqMsg.reqType)
@@ -232,9 +232,9 @@ MetaVolumeManager::_CheckRequest(MetaFsFileControlRequest& reqMsg)
         case MetaFsFileControlType::FileCreate:
             if (0 == reqMsg.fileByteSize)
             {
-                POS_TRACE_ERROR((int)POS_EVENT_ID::MFS_INVALID_PARAMETER,
+                POS_TRACE_ERROR(EID(MFS_INVALID_PARAMETER),
                     "The file size cannot be zero, fileSize={}", reqMsg.fileByteSize);
-                rc = POS_EVENT_ID::MFS_INVALID_PARAMETER;
+                rc = EID(MFS_INVALID_PARAMETER);
                 break;
             }
             // fall-through
@@ -243,9 +243,9 @@ MetaVolumeManager::_CheckRequest(MetaFsFileControlRequest& reqMsg)
             rc = volContainer->DetermineVolumeToCreateFile(reqMsg.fileByteSize,
                 reqMsg.fileProperty, reqMsg.volType);
 
-            if (rc != POS_EVENT_ID::SUCCESS)
+            if (rc != EID(SUCCESS))
             {
-                MFS_TRACE_INFO((int)POS_EVENT_ID::MFS_META_VOLUME_NOT_ENOUGH_SPACE,
+                MFS_TRACE_INFO(EID(MFS_META_VOLUME_NOT_ENOUGH_SPACE),
                     "There is no NVRAM and SSD free space");
             }
             break;
@@ -254,11 +254,11 @@ MetaVolumeManager::_CheckRequest(MetaFsFileControlRequest& reqMsg)
             rc = volContainer->LookupMetaVolumeType(*reqMsg.fileName,
                 reqMsg.volType);
 
-            if (rc != POS_EVENT_ID::SUCCESS)
+            if (rc != EID(SUCCESS))
             {
                 reqMsg.completionData.openfd = -1;
 
-                MFS_TRACE_ERROR((int)POS_EVENT_ID::MFS_FILE_NOT_OPENED,
+                MFS_TRACE_ERROR(EID(MFS_FILE_NOT_OPENED),
                     "Cannot find \'{}\' file in array \'{}\'",
                     *reqMsg.fileName, reqMsg.arrayId);
             }
@@ -268,9 +268,9 @@ MetaVolumeManager::_CheckRequest(MetaFsFileControlRequest& reqMsg)
             rc = volContainer->LookupMetaVolumeType(*reqMsg.fileName,
                 reqMsg.volType);
 
-            if (rc != POS_EVENT_ID::SUCCESS)
+            if (rc != EID(SUCCESS))
             {
-                MFS_TRACE_ERROR((int)POS_EVENT_ID::MFS_FILE_DELETE_FAILED,
+                MFS_TRACE_ERROR(EID(MFS_FILE_DELETE_FAILED),
                     "Cannot find \'{}\' file", *reqMsg.fileName);
             }
             break;
@@ -286,9 +286,9 @@ MetaVolumeManager::_CheckRequest(MetaFsFileControlRequest& reqMsg)
         default:
             rc = volContainer->LookupMetaVolumeType(reqMsg.fd, reqMsg.volType);
 
-            if (rc != POS_EVENT_ID::SUCCESS)
+            if (rc != EID(SUCCESS))
             {
-                MFS_TRACE_ERROR((int)POS_EVENT_ID::MFS_INVALID_PARAMETER,
+                MFS_TRACE_ERROR(EID(MFS_INVALID_PARAMETER),
                     "Cannot find the file, fd={}, request={}",
                     reqMsg.fd, reqMsg.reqType);
             }
@@ -318,21 +318,21 @@ MetaVolumeManager::_IsVolumeSpecificRequest(MetaFsFileControlType reqType)
 POS_EVENT_ID
 MetaVolumeManager::ProcessNewReq(MetaFsRequestBase& reqMsg)
 {
-    POS_EVENT_ID rc = POS_EVENT_ID::SUCCESS;
+    POS_EVENT_ID rc = EID(SUCCESS);
     MetaFsFileControlRequest* msg = static_cast<MetaFsFileControlRequest*>(&reqMsg);
 
     if (_IsVolumeSpecificRequest(msg->reqType))
     {
         if (!_IsValidVolumeType(msg->volType))
         {
-            MFS_TRACE_ERROR((int)POS_EVENT_ID::MFS_INVALID_PARAMETER,
+            MFS_TRACE_ERROR(EID(MFS_INVALID_PARAMETER),
                 "The volume type is invalid, fd={}, type={}",
                 msg->fd, msg->volType);
-            return POS_EVENT_ID::MFS_INVALID_PARAMETER;
+            return EID(MFS_INVALID_PARAMETER);
         }
 
         POS_EVENT_ID result = _CheckRequest(*msg);
-        if (result != POS_EVENT_ID::SUCCESS)
+        if (result != EID(SUCCESS))
         {
             return result;
         }
@@ -384,12 +384,12 @@ MetaVolumeManager::CheckFileAccessible(FileDescriptorType fd, MetaVolumeType vol
     req.volType = volType;
 
     POS_EVENT_ID ret = ProcessNewReq(req);
-    if (ret == POS_EVENT_ID::SUCCESS)
+    if (ret == EID(SUCCESS))
     {
         if (true == req.completionData.fileAccessible)
-            return POS_EVENT_ID::SUCCESS;
+            return EID(SUCCESS);
         else
-            return POS_EVENT_ID::MFS_FILE_INACTIVATED;
+            return EID(MFS_FILE_INACTIVATED);
     }
     else
         return ret;
@@ -405,7 +405,7 @@ MetaVolumeManager::GetFileSize(FileDescriptorType fd, MetaVolumeType volType,
     req.volType = volType;
 
     POS_EVENT_ID ret = ProcessNewReq(req);
-    if (ret == POS_EVENT_ID::SUCCESS)
+    if (ret == EID(SUCCESS))
     {
         outFileByteSize = req.completionData.fileSize;
     }
@@ -427,7 +427,7 @@ MetaVolumeManager::GetDataChunkSize(FileDescriptorType fd, MetaVolumeType volTyp
     req.volType = volType;
 
     POS_EVENT_ID ret = ProcessNewReq(req);
-    if (ret == POS_EVENT_ID::SUCCESS)
+    if (ret == EID(SUCCESS))
     {
         outDataChunkSize = req.completionData.dataChunkSize;
     }
@@ -443,7 +443,7 @@ MetaVolumeManager::GetTargetMediaType(FileDescriptorType fd, MetaVolumeType volT
     req.fd = fd;
     req.volType = volType;
     POS_EVENT_ID ret = ProcessNewReq(req);
-    if (ret == POS_EVENT_ID::SUCCESS)
+    if (ret == EID(SUCCESS))
     {
         outTargetMediaType = req.completionData.targetMediaType;
     }
@@ -459,7 +459,7 @@ MetaVolumeManager::GetFileBaseLpn(FileDescriptorType fd, MetaVolumeType volType,
     req.fd = fd;
     req.volType = volType;
     POS_EVENT_ID ret = ProcessNewReq(req);
-    if (ret == POS_EVENT_ID::SUCCESS)
+    if (ret == EID(SUCCESS))
     {
         outFileBaseLpn = req.completionData.fileBaseLpn;
     }

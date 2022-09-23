@@ -292,7 +292,7 @@ TEST(ArrayState, CanRemoveSpare_testIfWeCannotRemoveSpareWhenArrayIsNotMounted)
         int actual = arrayState.CanRemoveSpare();
 
         // Then
-        ASSERT_EQ(EID(REMOVE_SPARE_CAN_ONLY_BE_WHILE_ONLINE), actual);
+        ASSERT_EQ(EID(REMOVE_DEV_CAN_ONLY_BE_WHILE_ONLINE), actual);
     }
 }
 
@@ -335,7 +335,14 @@ TEST(ArrayState, IsUnmountable_testIfErrorEventIsReturnedWhenArrayIsNotMountedYe
         int actual = arrayState.IsUnmountable();
 
         // Then
-        ASSERT_EQ(EID(UNMOUNT_ARRAY_ALREADY_UNMOUNTED), actual);
+        if (ArrayStateEnum::BROKEN == arrayStateEnum)
+        {
+            ASSERT_EQ(EID(UNMOUNT_ARRAY_BROKEN_ARRAY_CANNOT_BE_UNMOUNTED), actual);
+        }
+        else
+        {
+            ASSERT_EQ(EID(UNMOUNT_ARRAY_ALREADY_UNMOUNTED), actual);
+        }
     }
 }
 

@@ -63,10 +63,10 @@ enum class MpioType
 
 enum class MpioCacheState
 {
-    Init,
-    FirstRead,
-    MergeSingle,
-    Mergeable,
+    Init,   // mpio is not cached
+    Read,   // cached, need to read
+    Merge,  // cached, need to merge after reading
+    Write,  // cached, mergeable, all other data in the meta lpn have been already read
 };
 
 class Mpio;
@@ -89,10 +89,21 @@ public:
     virtual MpioType GetType(void) const = 0;
 
     virtual void SetPartialDoneNotifier(PartialMpioDoneCb& partialMpioDoneNotifier);
-    virtual bool IsPartialIO(void);
+    virtual bool IsPartialIO(void) const;
 
-    virtual MpioCacheState GetCacheState(void);
-    virtual void SetCacheState(const MpioCacheState state)
+    virtual bool IsCacheableVolumeType(void) const
+    {
+        return (MetaStorageType::SSD != io.targetMediaType);
+    }
+    virtual bool IsCached(void) const
+    {
+        return (MpioCacheState::Init != cacheState);
+    }
+    virtual bool IsMergeable(void) const
+    {
+        return (MpioCacheState::Write == cacheState);
+    }
+    virtual void ChangeCacheStateTo(const MpioCacheState state)
     {
         cacheState = state;
     }
@@ -108,21 +119,17 @@ public:
     {
         return {error, errorStopState};
     }
-    virtual void SetPriority(const RequestPriority p)
-    {
-        priority = p;
-    }
-    virtual RequestPriority GetPriority(void) const
-    {
-        return priority;
-    }
     virtual uint64_t GetId(void) const
     {
         return UNIQUE_ID;
     }
+    virtual MetaFileType GetFileType(void) const
+    {
+        return fileType;
+    }
     void PrintLog(const std::string& str, const int array, const int lpn) const
     {
-        MFS_TRACE_DEBUG((int)POS_EVENT_ID::MFS_DEBUG_MESSAGE,
+        MFS_TRACE_DEBUG(EID(MFS_DEBUG_MESSAGE),
             str + " id: {}, array: {}, lpn: {}", GetId(), array, lpn);
     }
 
@@ -140,7 +147,7 @@ protected:
     MetaAsyncCbCxt aioCbCxt;
 
     MpioCacheState cacheState;
-    RequestPriority priority;
+    MetaFileType fileType;
 
     virtual void _InitStateHandler(void) = 0;
     bool _DoMemCpy(void* dst, void* src, const size_t nbytes);
