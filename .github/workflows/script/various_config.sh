@@ -2,7 +2,7 @@ target_fabric_ip=127.0.0.1
 pos_working_dir="$1" #추후 수정
 config_dir=/etc/pos/pos.conf
 
-# back up config file 3
+# back up config file 3 3
 cp ${config_dir} /etc/pos/pos.conf_bak
 
 # test for linear flow control
