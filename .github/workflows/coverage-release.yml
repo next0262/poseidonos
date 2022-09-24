@@ -32,23 +32,6 @@ jobs:
         chmod +x .github/workflows/script/build_setup.sh
         .github/workflows/script/build_setup.sh -r ${{github.sha}} -d ${{github.workspace}} -c --with-fpic 
 
-    - name: Setup Monitoring Stack
-      uses: ./.github/actions/setup-monitoring-stack
-      with:
-        GA_DETAIL: "NULL"
-
-        POS_EXPORTER_PORT: ${{secrets.POS_EXPORTER_PORT}}
-
-        AMP_REMOTE_WRITE_URL: ${{secrets.AMP_REMOTE_WRITE_URL}}
-        AMP_SIGV4_REGION: ${{secrets.AMP_SIGV4_REGION}}
-        AMP_SIGV4_ACCESS_KEY: ${{secrets.AMP_SIGV4_ACCESS_KEY}}
-        AMP_SIGV4_SECRET_KEY: ${{secrets.AMP_SIGV4_SECRET_KEY}}
-
-        LOGSTASH_PORT: ${{secrets.LOGSTASH_PORT}}
-
-        OS_DOMAIN_ENDPOINT: ${{secrets.OS_DOMAIN_ENDPOINT}}
-        OS_REGION: ${{secrets.OS_REGION}}
-
     - name: Build UT and Run
       id: build_ut_and_run
       working-directory: ${{github.workspace}}
